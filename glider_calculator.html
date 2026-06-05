@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Underwater Glider Calculator</title>
+<style>
+  :root{
+    --bg:#0b1f2a; --bg2:#0f2a38; --card:#13323f; --card2:#163a49;
+    --ink:#e8f4f8; --muted:#9fc1cf; --line:#23505f;
+    --accent:#37c0d8; --accent2:#5be0c0;
+    --good:#46d39a; --warn:#ffcf5c; --bad:#ff6b6b;
+    --shadow:0 6px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:linear-gradient(180deg,#08161e 0%,#0b1f2a 40%,#0a2230 100%);
+    color:var(--ink); min-height:100vh; line-height:1.45;
+  }
+  header{
+    padding:26px 20px 14px; text-align:center;
+  }
+  header h1{margin:0 0 4px; font-size:clamp(22px,4vw,34px); letter-spacing:.3px}
+  header h1 .wave{color:var(--accent)}
+  header p{margin:0; color:var(--muted); font-size:14px}
+  .wrap{max-width:1180px; margin:0 auto; padding:8px 16px 60px}
+  .toolbar{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:10px 0 18px}
+  button.tool{
+    background:var(--card2); color:var(--ink); border:1px solid var(--line);
+    padding:8px 14px; border-radius:10px; cursor:pointer; font-size:13px; transition:.15s;
+  }
+  button.tool:hover{background:#1d4a5b; border-color:var(--accent)}
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:16px}
+  .card{
+    background:linear-gradient(180deg,var(--card) 0%,var(--card2) 100%);
+    border:1px solid var(--line); border-radius:16px; padding:16px 16px 14px;
+    box-shadow:var(--shadow);
+  }
+  .card h2{
+    margin:0 0 12px; font-size:16px; display:flex; align-items:center; gap:8px;
+    border-bottom:1px solid var(--line); padding-bottom:10px;
+  }
+  .card h2 .ic{font-size:18px}
+  .card.span2{grid-column:1/-1}
+  label{display:block; font-size:12px; color:var(--muted); margin:9px 0 3px}
+  .row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+  input[type=number],select{
+    width:100%; background:#0c2530; border:1px solid var(--line); color:var(--ink);
+    padding:8px 9px; border-radius:9px; font-size:14px; outline:none;
+  }
+  input[type=number]:focus,select:focus{border-color:var(--accent); box-shadow:0 0 0 2px rgba(55,192,216,.18)}
+  input:disabled{opacity:.5}
+  .chk{display:flex; align-items:center; gap:8px; margin:12px 0 2px; font-size:13px; color:var(--ink)}
+  .chk input{width:16px; height:16px; accent-color:var(--accent)}
+  .out{margin-top:14px; border-top:1px dashed var(--line); padding-top:10px}
+  .kv{display:flex; justify-content:space-between; gap:10px; padding:3px 0; font-size:13px}
+  .kv .k{color:var(--muted)}
+  .kv .v{font-variant-numeric:tabular-nums; font-weight:600; text-align:right}
+  .badge{display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:700}
+  .badge.good{background:rgba(70,211,154,.16); color:var(--good)}
+  .badge.warn{background:rgba(255,207,92,.16); color:var(--warn)}
+  .badge.bad{background:rgba(255,107,107,.16); color:var(--bad)}
+  .hint{font-size:11px; color:var(--muted); margin-top:2px}
+  .warnbar{margin:0 0 16px}
+  .warnbar .card{border-color:var(--warn)}
+  .warnlist{list-style:none; margin:0; padding:0}
+  .warnlist li{padding:6px 0; font-size:13px; color:var(--warn); display:flex; gap:8px}
+  .warnlist li::before{content:"\26A0\FE0F"}
+  .ok-msg{color:var(--good); font-size:13px; display:flex; gap:8px; align-items:center}
+  .ok-msg::before{content:"\2705"}
+  canvas{width:100%; height:300px; background:#0a222e; border-radius:12px; border:1px solid var(--line)}
+  .legend{display:flex; gap:18px; justify-content:center; margin-top:8px; font-size:12px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .swatch{width:14px; height:4px; border-radius:2px; display:inline-block}
+  footer{text-align:center; color:var(--muted); font-size:12px; padding:18px}
+  details summary{cursor:pointer; color:var(--accent); font-size:12px; margin-top:8px}
+  .sub{font-size:11px; color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="wave">🌊</span> Underwater Glider Calculator</h1>
+  <p>Live design calculations — buoyancy, glide, stability, pressure hull, power &amp; range. Everything updates as you type.</p>
+</header>
+
+<div class="wrap">
+  <div class="toolbar">
+    <button class="tool" id="btnExample">↺ Load example glider</button>
+    <button class="tool" id="btnReset">🗑 Clear saved values</button>
+    <button class="tool" id="btnUnits">📋 Copy report</button>
+  </div>
+
+  <div class="warnbar" id="warnbar"></div>
+
+  <div class="grid">
+
+    <!-- WATER -->
+    <section class="card" id="card-water">
+      <h2><span class="ic">💧</span> Water &amp; environment</h2>
+      <div class="row">
+        <div>
+          <label>Surface water density (kg/m³)</label>
+          <input type="number" id="surfaceDensity" value="1025" step="1">
+          <div class="hint">Seawater ≈ 1025, fresh water ≈ 998</div>
+        </div>
+        <div>
+          <label>Gravity (m/s²)</label>
+          <input type="number" id="g" value="9.80665" step="0.001">
+        </div>
+      </div>
+      <div class="chk"><input type="checkbox" id="useWater" checked>
+        <label style="margin:0">Account for density rising with depth (compressibility)</label></div>
+      <div class="row">
+        <div>
+          <label>Working depth for buoyancy (m)</label>
+          <input type="number" id="workingDepth" value="200" step="10">
+          <div class="hint">Depth where the glider is trimmed neutral</div>
+        </div>
+        <div>
+          <label>Density gradient (kg/m³ per m)</label>
+          <input type="number" id="gradient" value="" step="0.0001" placeholder="auto">
+          <div class="hint">Blank = auto from 2.2 GPa bulk modulus</div>
+        </div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Local density at depth</span><span class="v" id="o_localrho">–</span></div>
+        <div class="kv"><span class="k">Mean density (0→depth)</span><span class="v" id="o_meanrho">–</span></div>
+        <div class="kv"><span class="k">Pressure at working depth</span><span class="v" id="o_wpress">–</span></div>
+      </div>
+    </section>
+
+    <!-- BUOYANCY -->
+    <section class="card" id="card-buoy">
+      <h2><span class="ic">⚖️</span> Buoyancy &amp; ballast</h2>
+      <div class="row">
+        <div>
+          <label>Vehicle mass (kg)</label>
+          <input type="number" id="mass" value="52" step="0.1">
+        </div>
+        <div>
+          <label>Displaced volume (litres)</label>
+          <input type="number" id="volL" value="50.7" step="0.1">
+          <div class="hint">External volume that pushes water aside</div>
+        </div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Buoyancy force</span><span class="v" id="o_B">–</span></div>
+        <div class="kv"><span class="k">Weight force</span><span class="v" id="o_W">–</span></div>
+        <div class="kv"><span class="k">Net force</span><span class="v" id="o_net">–</span></div>
+        <div class="kv"><span class="k">Net (mass equivalent)</span><span class="v" id="o_netg">–</span></div>
+        <div class="kv"><span class="k">State</span><span class="v" id="o_state">–</span></div>
+        <div class="kv"><span class="k">Volume change to neutral</span><span class="v" id="o_toneutral">–</span></div>
+      </div>
+    </section>
+
+    <!-- GLIDE -->
+    <section class="card" id="card-glide">
+      <h2><span class="ic">✈️</span> Glide performance</h2>
+      <div class="row3">
+        <div><label>Wing area (m²)</label><input type="number" id="wingArea" value="0.10" step="0.01"></div>
+        <div><label>Parasite drag C<sub>D0</sub></label><input type="number" id="cd0" value="0.10" step="0.01"></div>
+        <div><label>Induced factor k</label><input type="number" id="k" value="0.30" step="0.01"></div>
+      </div>
+      <div class="chk"><input type="checkbox" id="useBestCl" checked>
+        <label style="margin:0">Fly at best glide ratio (auto C<sub>L</sub>)</label></div>
+      <div><label>Lift coefficient C<sub>L</sub></label><input type="number" id="cl" value="0.577" step="0.01" disabled></div>
+      <div class="out">
+        <div class="kv"><span class="k">C<sub>L</sub> used / C<sub>D</sub></span><span class="v" id="o_clcd">–</span></div>
+        <div class="kv"><span class="k">Glide ratio (L/D)</span><span class="v" id="o_lr">–</span></div>
+        <div class="kv"><span class="k">Glide angle</span><span class="v" id="o_angle">–</span></div>
+        <div class="kv"><span class="k">Path speed</span><span class="v" id="o_speed">–</span></div>
+        <div class="kv"><span class="k">Horizontal speed</span><span class="v" id="o_vh">–</span></div>
+        <div class="kv"><span class="k">Vertical speed</span><span class="v" id="o_vv">–</span></div>
+      </div>
+    </section>
+
+    <!-- STABILITY -->
+    <section class="card" id="card-stab">
+      <h2><span class="ic">🧭</span> Stability &amp; pitch trim</h2>
+      <div class="row">
+        <div><label>CG height z (m, − = below axis)</label><input type="number" id="cgz" value="-0.015" step="0.005"></div>
+        <div><label>CB height z (m)</label><input type="number" id="cbz" value="0" step="0.005"></div>
+      </div>
+      <div class="row">
+        <div><label>CG fore/aft x (m, + = forward)</label><input type="number" id="cgx" value="0" step="0.01"></div>
+        <div><label>CB fore/aft x (m)</label><input type="number" id="cbx" value="0" step="0.01"></div>
+      </div>
+      <div class="row3">
+        <div><label>Moving mass (kg)</label><input type="number" id="moveMass" value="12" step="0.5"></div>
+        <div><label>Slides by (mm)</label><input type="number" id="moveDist" value="50" step="5"></div>
+        <div><label>Target pitch (°)</label><input type="number" id="targetPitch" value="25" step="1"></div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">BG (CB above CG)</span><span class="v" id="o_bg">–</span></div>
+        <div class="kv"><span class="k">Stability</span><span class="v" id="o_stable">–</span></div>
+        <div class="kv"><span class="k">Righting stiffness</span><span class="v" id="o_stiff">–</span></div>
+        <div class="kv"><span class="k">Pitch from the slide above</span><span class="v" id="o_pitch">–</span></div>
+        <div class="kv"><span class="k">Travel for target pitch</span><span class="v" id="o_travel">–</span></div>
+      </div>
+    </section>
+
+    <!-- HULL -->
+    <section class="card" id="card-hull">
+      <h2><span class="ic">🛢️</span> Pressure hull</h2>
+      <div class="row">
+        <div><label>Shape</label>
+          <select id="shape"><option value="cylinder">Cylinder</option><option value="sphere">Sphere</option></select></div>
+        <div><label>Operating depth (m)</label><input type="number" id="hullDepth" value="200" step="10"></div>
+      </div>
+      <div class="row3">
+        <div><label>Radius (mm)</label><input type="number" id="radius" value="100" step="1"></div>
+        <div><label>Wall (mm)</label><input type="number" id="thickness" value="6" step="0.5"></div>
+        <div><label>Poisson ν</label><input type="number" id="poisson" value="0.33" step="0.01"></div>
+      </div>
+      <div class="row">
+        <div><label>Yield strength (MPa)</label><input type="number" id="yieldMPa" value="276" step="1"><div class="hint">6061-T6 alu ≈ 276</div></div>
+        <div><label>Young's modulus (GPa)</label><input type="number" id="youngGPa" value="69" step="1"><div class="hint">6061-T6 alu ≈ 69</div></div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Pressure at depth</span><span class="v" id="o_hp">–</span></div>
+        <div class="kv"><span class="k">Wall stress</span><span class="v" id="o_hoop">–</span></div>
+        <div class="kv"><span class="k">Yield safety factor</span><span class="v" id="o_ysf">–</span></div>
+        <div class="kv"><span class="k">Buckling safety factor</span><span class="v" id="o_bsf">–</span></div>
+        <div class="kv"><span class="k">Collapse depth (limiting)</span><span class="v" id="o_collapse">–</span></div>
+      </div>
+    </section>
+
+    <!-- ENERGY -->
+    <section class="card" id="card-energy">
+      <h2><span class="ic">🔋</span> Power, range &amp; endurance</h2>
+      <div class="row">
+        <div><label>Battery (Wh)</label><input type="number" id="batteryWh" value="200" step="10"></div>
+        <div><label>Ballast per inflation (L)</label><input type="number" id="ballastL" value="0.5" step="0.05"></div>
+      </div>
+      <div class="row3">
+        <div><label>Depth band (m)</label><input type="number" id="depthBand" value="200" step="10"></div>
+        <div><label>Hotel load (W)</label><input type="number" id="hotelW" value="0.5" step="0.1"></div>
+        <div><label>Pump efficiency</label><input type="number" id="pumpEff" value="0.5" step="0.05"></div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Pump energy / cycle</span><span class="v" id="o_pump">–</span></div>
+        <div class="kv"><span class="k">Cycle time</span><span class="v" id="o_ctime">–</span></div>
+        <div class="kv"><span class="k">Number of cycles</span><span class="v" id="o_cycles">–</span></div>
+        <div class="kv"><span class="k">Range per cycle</span><span class="v" id="o_rpc">–</span></div>
+        <div class="kv"><span class="k">Total range</span><span class="v" id="o_range">–</span></div>
+        <div class="kv"><span class="k">Endurance</span><span class="v" id="o_endur">–</span></div>
+      </div>
+    </section>
+
+    <!-- POLAR CHART -->
+    <section class="card span2" id="card-polar">
+      <h2><span class="ic">📈</span> Glide polar — efficiency vs. speed across lift coefficient</h2>
+      <canvas id="polar" width="1100" height="300"></canvas>
+      <div class="legend">
+        <span><i class="swatch" style="background:#37c0d8"></i> Glide ratio (L/D, left axis)</span>
+        <span><i class="swatch" style="background:#5be0c0"></i> Horizontal speed (m/s, right axis)</span>
+        <span><i class="swatch" style="background:#ffcf5c"></i> Best glide ratio</span>
+      </div>
+      <div class="hint" style="text-align:center;margin-top:6px">C<sub>L</sub> on the horizontal axis. The peak of the blue curve is the most efficient glide; moving right trades efficiency for slower, steeper flight.</div>
+    </section>
+
+  </div>
+
+  <footer>
+    First-order design formulas for exploring trade-offs — not a substitute for FEA, tank testing or certification.
+    All inputs are saved in your browser automatically.
+  </footer>
+</div>
+
+<script>
+"use strict";
+const ATM = 101325, BULK = 2.2e9;
+const $ = id => document.getElementById(id);
+const num = id => parseFloat($(id).value);
+const fmt = (x,d=2) => (isFinite(x)? x.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}) : "–");
+
+// ---- physics (ported from the glidercalc Python package) ----
+function gradientAuto(surface,g){ return surface*surface*g/BULK; }
+function seawaterDensity(depth,surface,grad){ return surface + grad*depth; }
+function meanDensity(depth,surface,grad){ return surface + 0.5*grad*depth; }
+function pressureVar(depth,surface,grad,g){ return g*(surface*depth + 0.5*grad*depth*depth); }
+
+let report = {};
+
+function compute(){
+  const g = num('g');
+  const surface = num('surfaceDensity');
+  const useWater = $('useWater').checked;
+  const gradInput = $('gradient').value.trim();
+  const grad = useWater ? (gradInput!=="" ? parseFloat(gradInput) : gradientAuto(surface,g)) : 0;
+  const workingDepth = num('workingDepth');
+
+  // water column
+  const localRho = seawaterDensity(workingDepth,surface,grad);
+  const meanRho  = meanDensity(workingDepth,surface,grad);
+  const wPress   = pressureVar(workingDepth,surface,grad,g);
+  $('o_localrho').textContent = fmt(localRho,2)+" kg/m³  (+"+fmt(localRho-surface,2)+")";
+  $('o_meanrho').textContent  = fmt(meanRho,2)+" kg/m³";
+  $('o_wpress').textContent   = fmt(wPress/1e6,3)+" MPa  ("+fmt(wPress/1e5,1)+" bar)";
+
+  // density used for buoyancy
+  const rho = useWater ? localRho : surface;
+
+  // buoyancy
+  const mass = num('mass'), volL = num('volL'), vol = volL/1000;
+  const B = rho*g*vol, W = mass*g, net = B-W;
+  const neutralVol = mass/rho, toNeutralL = (neutralVol-vol)*1000;
+  $('o_B').textContent = fmt(B,2)+" N";
+  $('o_W').textContent = fmt(W,2)+" N";
+  $('o_net').textContent = (net>=0?"+":"")+fmt(net,3)+" N";
+  $('o_netg').textContent = (net>=0?"+":"")+fmt(net/g*1000,1)+" g";
+  let stateBadge;
+  if(net>1e-6) stateBadge='<span class="badge good">rises ↑</span>';
+  else if(net<-1e-6) stateBadge='<span class="badge warn">sinks ↓</span>';
+  else stateBadge='<span class="badge good">neutral ⟷</span>';
+  $('o_state').innerHTML = stateBadge;
+  $('o_toneutral').textContent = (toNeutralL>=0?"+":"")+fmt(toNeutralL,4)+" L";
+
+  const netMag = Math.abs(net);
+
+  // glide
+  const wingArea=num('wingArea'), cd0=num('cd0'), k=num('k');
+  const useBest=$('useBestCl').checked;
+  let cl;
+  if(useBest && cd0>0 && k>0){ cl=Math.sqrt(cd0/k); $('cl').value=cl.toFixed(3); }
+  else cl=num('cl');
+  $('cl').disabled = useBest;
+  let glideRatio=NaN, gamma=NaN, V=NaN, vh=NaN, vv=NaN, cd=NaN;
+  if(cl>0 && wingArea>0 && netMag>1e-9){
+    cd = cd0 + k*cl*cl;
+    glideRatio = cl/cd;
+    gamma = Math.atan2(cd,cl);
+    V = Math.sqrt(2*netMag*Math.cos(gamma)/(rho*wingArea*cl));
+    vh = V*Math.cos(gamma); vv = V*Math.sin(gamma);
+    $('o_clcd').textContent = fmt(cl,3)+" / "+fmt(cd,3);
+    $('o_lr').textContent = fmt(glideRatio,2)+" : 1";
+    $('o_angle').textContent = fmt(gamma*180/Math.PI,1)+"° below horizontal";
+    $('o_speed').textContent = fmt(V,3)+" m/s";
+    $('o_vh').textContent = fmt(vh,3)+" m/s  ("+fmt(vh*3.6,2)+" km/h)";
+    $('o_vv').textContent = fmt(vv,3)+" m/s";
+  } else {
+    ['o_clcd','o_lr','o_angle','o_speed','o_vh','o_vv'].forEach(i=>$(i).textContent="– (need net buoyancy)");
+  }
+
+  // stability
+  const cgz=num('cgz'), cbz=num('cbz'), cgx=num('cgx'), cbx=num('cbx');
+  const bg = cbz - cgz; // BG = cb_z - cg_z
+  const stiffness = B*bg;
+  const longOffset = cgx - cbx;
+  const naturalPitch = bg!==0 ? Math.atan2(longOffset,bg)*180/Math.PI : 0;
+  $('o_bg').textContent = (bg>=0?"+":"")+fmt(bg*1000,1)+" mm";
+  $('o_stable').innerHTML = bg>0 ? '<span class="badge good">stable</span>'
+    : '<span class="badge bad">UNSTABLE</span>';
+  $('o_stiff').textContent = fmt(stiffness,3)+" N·m/rad";
+  const moveMass=num('moveMass'), moveDist=num('moveDist')/1000, targetPitch=num('targetPitch');
+  if(bg>0){
+    const dxcg = moveMass*moveDist/mass;
+    const pitch = Math.atan2(dxcg,bg)*180/Math.PI;
+    $('o_pitch').textContent = (pitch>=0?"+":"")+fmt(pitch,2)+"°";
+    const travel = bg*Math.tan(targetPitch*Math.PI/180)*mass/moveMass;
+    $('o_travel').textContent = (travel>=0?"+":"")+fmt(travel*1000,0)+" mm  (move "+fmt(moveMass,1)+" kg)";
+  } else { $('o_pitch').textContent="– (unstable)"; $('o_travel').textContent="– (unstable)"; }
+
+  // hull
+  const shape=$('shape').value, radius=num('radius')/1000, thickness=num('thickness')/1000;
+  const hullDepth=num('hullDepth'), yieldPa=num('yieldMPa')*1e6, E=num('youngGPa')*1e9, nu=num('poisson');
+  const hp = useWater ? pressureVar(hullDepth,surface,grad,g) : surface*g*hullDepth;
+  const tr = thickness/radius;
+  let hoop, pBuckle, pYield;
+  if(shape==='cylinder'){
+    hoop = hp*radius/thickness;
+    pBuckle = E/(4*(1-nu*nu))*tr*tr*tr;
+    pYield = yieldPa*thickness/radius;
+  } else {
+    hoop = hp*radius/(2*thickness);
+    pBuckle = 2*E/Math.sqrt(3*(1-nu*nu))*tr*tr;
+    pYield = 2*yieldPa*thickness/radius;
+  }
+  const ysf = hoop>0? yieldPa/hoop : Infinity;
+  const bsf = hp>0? pBuckle/hp : Infinity;
+  const collapseYield = pYield/(surface*g);
+  const collapseBuckle = pBuckle/(surface*g);
+  const collapse = Math.min(collapseYield,collapseBuckle);
+  const governs = collapseBuckle<collapseYield ? "buckling" : "yielding";
+  $('o_hp').textContent = fmt(hp/1e6,3)+" MPa  ("+fmt(hp/1e5,1)+" bar)";
+  $('o_hoop').textContent = fmt(hoop/1e6,1)+" MPa";
+  $('o_ysf').innerHTML = sfBadge(ysf,1.5);
+  $('o_bsf').innerHTML = sfBadge(bsf,2.0);
+  $('o_collapse').textContent = fmt(collapse,0)+" m  ("+governs+" governs)";
+
+  // energy
+  const batteryJ=num('batteryWh')*3600, ballast=num('ballastL')/1000;
+  const depthBand=num('depthBand'), hotelW=num('hotelW'), pumpEff=num('pumpEff');
+  const pumpPerCycle = (rho*g*depthBand + ATM)*ballast/pumpEff;
+  let cycles=NaN, totalRange=NaN, endurance=NaN, cycleTime=NaN, rangePerCycle=NaN;
+  if(isFinite(glideRatio) && vh>0){
+    rangePerCycle = 2*depthBand*glideRatio;
+    cycleTime = rangePerCycle/vh;
+    const totalPerCycle = pumpPerCycle + hotelW*cycleTime;
+    cycles = batteryJ/totalPerCycle;
+    totalRange = cycles*rangePerCycle;
+    endurance = cycles*cycleTime;
+    $('o_pump').textContent = fmt(pumpPerCycle,1)+" J";
+    $('o_ctime').textContent = fmt(cycleTime/3600,2)+" h";
+    $('o_cycles').textContent = fmt(cycles,0);
+    $('o_rpc').textContent = fmt(rangePerCycle/1000,2)+" km";
+    $('o_range').textContent = fmt(totalRange/1000,1)+" km";
+    $('o_endur').textContent = fmt(endurance/86400,1)+" days  ("+fmt(endurance/3600,0)+" h)";
+  } else {
+    ['o_pump','o_ctime','o_cycles','o_rpc','o_range','o_endur'].forEach(i=>$(i).textContent="– (need glide)");
+    $('o_pump').textContent = fmt(pumpPerCycle,1)+" J";
+  }
+
+  // warnings
+  const warns=[];
+  if(net>1e-6) warns.push("Vehicle is positively buoyant — it will float. For a glider you usually want it slightly heavy or actively trimmed.");
+  if(bg<=0) warns.push("Statically UNSTABLE: the centre of buoyancy is not above the centre of gravity. Lower the CG (add ballast low) or raise the CB.");
+  if(ysf<1.5) warns.push("Hull yield safety factor is "+fmt(ysf,2)+" (< 1.5) — wall too thin or material too weak for this depth.");
+  if(bsf<2.0) warns.push("Hull buckling safety factor is "+fmt(bsf,2)+" (< 2.0) — buckling is the usual failure mode for thin hulls; add margin.");
+  if(pumpEff<=0||pumpEff>1) warns.push("Pump efficiency should be between 0 and 1.");
+  renderWarns(warns);
+
+  // polar chart
+  drawPolar(netMag,wingArea,cd0,k,rho);
+
+  // assemble copyable report
+  report = buildReport({surface,grad,useWater,workingDepth,localRho,wPress,mass,volL,B,W,net,
+    cl,cd,glideRatio,gamma,V,vh,vv,bg,naturalPitch,shape,hp,hoop,ysf,bsf,collapse,governs,
+    batteryWh:num('batteryWh'),cycles,totalRange,endurance});
+
+  save();
+}
+
+function sfBadge(sf,thresh){
+  const cls = sf>=thresh*1.33 ? "good" : sf>=thresh ? "warn" : "bad";
+  const txt = isFinite(sf)? fmt(sf,2) : "∞";
+  return '<span class="badge '+cls+'">'+txt+'</span>';
+}
+
+function renderWarns(warns){
+  const bar=$('warnbar');
+  if(!warns.length){ bar.innerHTML='<div class="card"><div class="ok-msg">All checks look reasonable for these inputs.</div></div>'; return; }
+  bar.innerHTML='<div class="card"><h2><span class="ic">⚠️</span> Things to check</h2><ul class="warnlist">'+
+    warns.map(w=>'<li>'+w+'</li>').join('')+'</ul></div>';
+}
+
+// ---- polar chart ----
+function drawPolar(netMag,S,cd0,k,rho){
+  const c=$('polar'), ctx=c.getContext('2d');
+  const W=c.width, H=c.height; ctx.clearRect(0,0,W,H);
+  const padL=52,padR=56,padT=18,padB=34;
+  const x0=padL,x1=W-padR,y0=H-padB,y1=padT;
+  if(!(netMag>1e-9 && S>0 && cd0>0 && k>0)){
+    ctx.fillStyle="#9fc1cf"; ctx.font="14px system-ui"; ctx.textAlign="center";
+    ctx.fillText("Enter a non-zero net buoyancy and drag polar to see the glide curve.",W/2,H/2);
+    return;
+  }
+  const clMin=0.1, clMax=1.3, N=120;
+  const pts=[];
+  for(let i=0;i<N;i++){
+    const cl=clMin+(clMax-clMin)*i/(N-1);
+    const cd=cd0+k*cl*cl, lr=cl/cd, gamma=Math.atan2(cd,cl);
+    const V=Math.sqrt(2*netMag*Math.cos(gamma)/(rho*S*cl)), vh=V*Math.cos(gamma);
+    pts.push({cl,lr,vh});
+  }
+  const lrMax=Math.max(...pts.map(p=>p.lr)), vhMax=Math.max(...pts.map(p=>p.vh));
+  const bestCl=Math.sqrt(cd0/k);
+  const X=cl=>x0+(cl-clMin)/(clMax-clMin)*(x1-x0);
+  const YL=lr=>y0-(lr/(lrMax*1.1))*(y0-y1);
+  const YR=vh=>y0-(vh/(vhMax*1.1))*(y0-y1);
+  // grid + axes
+  ctx.strokeStyle="#23505f"; ctx.lineWidth=1; ctx.fillStyle="#9fc1cf"; ctx.font="11px system-ui";
+  ctx.textAlign="center";
+  for(let cl=0.2;cl<=clMax;cl+=0.2){ const x=X(cl); ctx.beginPath(); ctx.moveTo(x,y0); ctx.lineTo(x,y1); ctx.globalAlpha=.25; ctx.stroke(); ctx.globalAlpha=1; ctx.fillText(cl.toFixed(1),x,y0+16); }
+  ctx.fillText("Lift coefficient  C_L",(x0+x1)/2,H-6);
+  // left axis ticks (glide ratio)
+  ctx.textAlign="right"; ctx.fillStyle="#37c0d8";
+  for(let i=0;i<=4;i++){ const lr=lrMax*1.1*i/4, y=YL(lr); ctx.fillText(lr.toFixed(1),x0-6,y+3); }
+  // right axis ticks (speed)
+  ctx.textAlign="left"; ctx.fillStyle="#5be0c0";
+  for(let i=0;i<=4;i++){ const vh=vhMax*1.1*i/4, y=YR(vh); ctx.fillText(vh.toFixed(2),x1+6,y+3); }
+  // axis frame
+  ctx.strokeStyle="#3a6c7d"; ctx.beginPath(); ctx.moveTo(x0,y1); ctx.lineTo(x0,y0); ctx.lineTo(x1,y0); ctx.lineTo(x1,y1); ctx.stroke();
+  // speed curve
+  line(ctx,pts.map(p=>[X(p.cl),YR(p.vh)]),"#5be0c0",2);
+  // glide ratio curve
+  line(ctx,pts.map(p=>[X(p.cl),YL(p.lr)]),"#37c0d8",2.4);
+  // best marker
+  if(bestCl>=clMin && bestCl<=clMax){
+    const x=X(bestCl), y=YL(lrMax);
+    ctx.strokeStyle="#ffcf5c"; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(x,y0); ctx.lineTo(x,y1); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle="#ffcf5c"; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill();
+    ctx.textAlign="center"; ctx.fillText("best L/D "+lrMax.toFixed(2),x,y-8);
+  }
+}
+function line(ctx,pts,color,w){
+  ctx.strokeStyle=color; ctx.lineWidth=w; ctx.beginPath();
+  pts.forEach((p,i)=> i? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1]));
+  ctx.stroke();
+}
+
+// ---- report text ----
+function buildReport(r){
+  const L=[];
+  L.push("UNDERWATER GLIDER — DESIGN REPORT");
+  L.push("Water: surface "+fmt(r.surface,1)+" kg/m³"+(r.useWater?(", local@"+r.workingDepth+"m "+fmt(r.localRho,2)):"")+
+    ", pressure@"+r.workingDepth+"m "+fmt(r.wPress/1e6,3)+" MPa");
+  L.push("Buoyancy: mass "+fmt(r.mass,2)+" kg, displ "+fmt(r.volL,2)+" L, net "+(r.net>=0?"+":"")+fmt(r.net,3)+" N");
+  if(isFinite(r.glideRatio)) L.push("Glide: CL "+fmt(r.cl,3)+", L/D "+fmt(r.glideRatio,2)+", angle "+fmt(r.gamma*180/Math.PI,1)+"°, Vh "+fmt(r.vh,3)+" m/s");
+  L.push("Stability: BG "+fmt(r.bg*1000,1)+" mm "+(r.bg>0?"(stable)":"(UNSTABLE)")+", natural pitch "+fmt(r.naturalPitch,2)+"°");
+  L.push("Hull: "+r.shape+", P "+fmt(r.hp/1e6,3)+" MPa, hoop "+fmt(r.hoop/1e6,1)+" MPa, yieldSF "+fmt(r.ysf,2)+", buckleSF "+fmt(r.bsf,2)+", collapse "+fmt(r.collapse,0)+" m ("+r.governs+")");
+  if(isFinite(r.cycles)) L.push("Energy: "+fmt(r.batteryWh,0)+" Wh -> "+fmt(r.cycles,0)+" cycles, range "+fmt(r.totalRange/1000,1)+" km, endurance "+fmt(r.endurance/86400,1)+" days");
+  return L.join("\n");
+}
+
+// ---- persistence & controls ----
+const IDS=['surfaceDensity','g','useWater','workingDepth','gradient','mass','volL','wingArea','cd0','k',
+  'useBestCl','cl','cgz','cbz','cgx','cbx','moveMass','moveDist','targetPitch','shape','hullDepth',
+  'radius','thickness','poisson','yieldMPa','youngGPa','batteryWh','ballastL','depthBand','hotelW','pumpEff'];
+function save(){
+  const s={}; IDS.forEach(id=>{const el=$(id); s[id]= el.type==='checkbox'? el.checked : el.value;});
+  try{ localStorage.setItem('glider', JSON.stringify(s)); }catch(e){}
+}
+function load(){
+  try{ const s=JSON.parse(localStorage.getItem('glider')); if(!s) return;
+    IDS.forEach(id=>{ if(s[id]===undefined) return; const el=$(id);
+      if(el.type==='checkbox') el.checked=s[id]; else el.value=s[id]; });
+  }catch(e){}
+}
+function example(){ localStorage.removeItem('glider'); location.reload(); }
+
+IDS.forEach(id=> $(id).addEventListener('input', compute));
+$('btnExample').addEventListener('click', example);
+$('btnReset').addEventListener('click', ()=>{ localStorage.removeItem('glider'); location.reload(); });
+$('btnUnits').addEventListener('click', ()=>{
+  navigator.clipboard.writeText(report).then(()=>{
+    const b=$('btnUnits'); const t=b.textContent; b.textContent="✓ Copied!"; setTimeout(()=>b.textContent=t,1400);
+  }).catch(()=>alert(report));
+});
+window.addEventListener('resize', compute);
+
+load();
+compute();
+</script>
+</body>
+</html>

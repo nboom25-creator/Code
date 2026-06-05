@@ -4,7 +4,22 @@ A command-line tool for the engineering calculations you need when designing and
 building an **underwater glider** — an autonomous vehicle that moves by changing
 its buoyancy and using wings to turn that vertical motion into forward glide.
 
-It covers four design domains:
+## 🌊 No-install web app (easiest way to use it)
+
+Open **[`glider_calculator.html`](glider_calculator.html)** in any web browser —
+just double-click the file. It's a single self-contained page (no install, no
+Python, works offline on a phone, tablet or laptop) with friendly input fields,
+**live-updating** results, colour-coded safety warnings, and an interactive
+glide-polar chart. Your inputs are saved automatically in the browser, and a
+"Copy report" button puts a text summary on your clipboard.
+
+The web app reimplements the same physics as the Python package below, so the
+numbers match. Use the web app for quick interactive design; use the CLI/library
+below for scripting, automation, or batch studies.
+
+## Command-line tool
+
+It covers six design domains:
 
 | Domain | What it answers |
 | ------ | --------------- |
