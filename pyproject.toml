@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "glidercalc"
+version = "0.1.0"
+description = "Engineering calculations for designing an underwater glider"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=5.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+glider = "glidercalc.cli:main"
+
+[tool.setuptools]
+packages = ["glidercalc"]

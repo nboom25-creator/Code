@@ -1,0 +1,34 @@
+# Example underwater glider configuration.
+# Run with:  python -m glidercalc report examples/glider.yaml
+#
+# Loosely inspired by a small Slocum-class coastal glider. Replace every value
+# with your own measured/target numbers.
+
+water_density: 1025        # kg/m^3 (seawater); use 998 for fresh water
+gravity: 9.80665           # m/s^2
+
+buoyancy:
+  mass_kg: 52.0            # total dry mass of the assembled vehicle
+  displaced_volume_l: 50.7 # external volume that displaces water (litres)
+
+glide:
+  wing_area_m2: 0.10       # combined planform wing area
+  cd0: 0.10                # parasite drag coefficient
+  k: 0.30                  # induced-drag factor (C_D = C_D0 + k*C_L^2)
+  # cl: 0.5                # optional: omit to solve at the best glide ratio
+
+hull:
+  shape: cylinder          # cylinder or sphere
+  radius_mm: 100           # internal radius
+  thickness_mm: 6          # wall thickness
+  depth_m: 200             # target operating depth
+  yield_strength_mpa: 276  # e.g. 6061-T6 aluminium ~276 MPa
+  youngs_modulus_gpa: 69   # e.g. 6061-T6 aluminium ~69 GPa
+  poisson_ratio: 0.33
+
+energy:
+  battery_wh: 200          # usable battery energy
+  ballast_volume_l: 0.5    # ballast water moved per inflation
+  # depth_band_m: 200      # optional: defaults to hull depth above
+  hotel_power_w: 0.5       # continuous electronics draw
+  pump_efficiency: 0.5     # overall buoyancy-pump efficiency
