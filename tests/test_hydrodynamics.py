@@ -36,3 +36,25 @@ def test_perpendicular_force_balance():
     gamma = math.radians(res.glide_angle_deg)
     lift = 0.5 * rho * res.speed_mps ** 2 * res.wing_area_m2 * res.cl
     assert math.isclose(lift, res.net_force_n * math.cos(gamma), rel_tol=1e-9)
+
+
+def test_polar_sweep_spans_endpoints():
+    res = hd.polar_sweep(10.0, 0.1, 0.1, 0.3, cl_min=0.2, cl_max=1.0, steps=5)
+    assert len(res) == 5
+    assert math.isclose(res[0].cl, 0.2, rel_tol=1e-9)
+    assert math.isclose(res[-1].cl, 1.0, rel_tol=1e-9)
+
+
+def test_polar_sweep_peak_near_best_glide():
+    cd0, k = 0.1, 0.3
+    res = hd.polar_sweep(10.0, 0.1, cd0, k, cl_min=0.1, cl_max=1.5, steps=200)
+    best = max(res, key=lambda r: r.glide_ratio)
+    assert math.isclose(best.cl, hd.best_glide_cl(cd0, k), abs_tol=0.02)
+
+
+def test_polar_csv_has_header_and_rows():
+    res = hd.polar_sweep(10.0, 0.1, 0.1, 0.3, steps=4)
+    csv = hd.polar_csv(res)
+    lines = csv.splitlines()
+    assert lines[0].startswith("cl,cd,glide_ratio")
+    assert len(lines) == 5  # header + 4 rows

@@ -7,6 +7,12 @@
 water_density: 1025        # kg/m^3 (seawater); use 998 for fresh water
 gravity: 9.80665           # m/s^2
 
+water:                     # depth-varying density (omit to use water_density)
+  surface_density: 1025    # kg/m^3 at the surface
+  # gradient: 0.0047       # kg/m^3 per m; omit to derive from bulk modulus
+  bulk_modulus_pa: 2.2e9   # seawater compressibility
+  working_depth_m: 200     # depth where the glider is trimmed neutral
+
 buoyancy:
   mass_kg: 52.0            # total dry mass of the assembled vehicle
   displaced_volume_l: 50.7 # external volume that displaces water (litres)
@@ -32,3 +38,14 @@ energy:
   # depth_band_m: 200      # optional: defaults to hull depth above
   hotel_power_w: 0.5       # continuous electronics draw
   pump_efficiency: 0.5     # overall buoyancy-pump efficiency
+
+stability:                 # static stability & pitch trim
+  # Either give CG/CB directly...
+  # cg: {x_m: 0.0, z_m: -0.015}   # vehicle CG (z negative = below axis)
+  # cb: {x_m: 0.0, z_m: 0.0}      # centre of buoyancy
+  # ...or list mass components and let the tool find the CG:
+  components:
+    - {name: pressure_hull, mass_kg: 30.0, x_m: 0.00, z_m: 0.000}
+    - {name: battery_pack,  mass_kg: 12.0, x_m: 0.10, z_m: -0.030}
+    - {name: payload,       mass_kg: 10.0, x_m: -0.12, z_m: -0.010}
+  cb: {x_m: 0.0, z_m: 0.0}        # centre of buoyancy (geometric centroid)

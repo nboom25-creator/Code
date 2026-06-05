@@ -130,13 +130,19 @@ def analyze(shape: str,
             youngs_modulus_pa: float,
             poisson_ratio: float = 0.33,
             water_density: float = constants.DEFAULT_WATER_DENSITY,
-            g: float = constants.GRAVITY) -> HullResult:
-    """Analyse a thin-wall pressure hull for yield and buckling at depth."""
+            g: float = constants.GRAVITY,
+            pressure_pa: float | None = None) -> HullResult:
+    """Analyse a thin-wall pressure hull for yield and buckling at depth.
+
+    ``pressure_pa`` overrides the computed pressure at depth; pass a value from
+    :mod:`glidercalc.water` to account for depth-varying density.
+    """
     shape = shape.lower()
     if radius_m <= 0 or thickness_m <= 0:
         raise ValueError("radius and thickness must be positive")
 
-    p = pressure_at_depth(depth_m, water_density, g)
+    p = pressure_pa if pressure_pa is not None else pressure_at_depth(
+        depth_m, water_density, g)
     hoop = _hoop_stress(shape, p, radius_m, thickness_m)
     p_buckle = _buckling_pressure(shape, radius_m, thickness_m,
                                   youngs_modulus_pa, poisson_ratio)
