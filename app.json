@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Snake",
+    "slug": "snake",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#0f1115",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.snake.game"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
