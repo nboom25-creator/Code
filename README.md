@@ -8,10 +8,20 @@ its buoyancy and using wings to turn that vertical motion into forward glide.
 
 Open **[`glider_calculator.html`](glider_calculator.html)** in any web browser —
 just double-click the file. It's a single self-contained page (no install, no
-Python, works offline on a phone, tablet or laptop) with friendly input fields,
-**live-updating** results, colour-coded safety warnings, and an interactive
-glide-polar chart. Your inputs are saved automatically in the browser, and a
-"Copy report" button puts a text summary on your clipboard.
+Python, works offline on a phone, tablet or laptop) with friendly input fields
+and **live-updating** results. It also includes:
+
+- **Colour-coded safety warnings** and a **Recommendations** panel that turns
+  the numbers into concrete actions (e.g. *“increase the wall to 7.2 mm for
+  buckling SF 2.0”*), each with a one-click **Apply** button.
+- A **design-target solver** — pick a goal (glide ratio, speed, range, rated
+  depth or pitch) and it solves the input that hits it.
+- **Saved designs**: name and store several configurations in the browser,
+  reload them, and **compare two side by side** in a metrics table.
+- An interactive **glide-polar chart**, plus **Copy report**, **Download .txt**
+  and **Save as PDF** (print) export.
+
+Your inputs are saved automatically in the browser.
 
 The web app reimplements the same physics as the Python package below, so the
 numbers match. Use the web app for quick interactive design; use the CLI/library

@@ -80,6 +80,32 @@
     padding:2px 9px; border-radius:7px; cursor:pointer; font-size:11px; margin-left:4px; white-space:nowrap}
   button.apply:hover{background:#5be0c0}
   button.tool:disabled{opacity:.45; cursor:not-allowed}
+  .design-item{display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:6px 0; border-bottom:1px solid rgba(35,80,95,.5); font-size:13px}
+  .design-item:last-child{border-bottom:none}
+  .design-item .acts{display:flex; gap:6px; flex:none}
+  .mini{background:var(--card2); border:1px solid var(--line); color:var(--ink);
+    padding:3px 10px; border-radius:7px; cursor:pointer; font-size:11px}
+  .mini:hover{border-color:var(--accent)}
+  .mini.del:hover{border-color:var(--bad); color:var(--bad)}
+  input[type=text]{width:100%; background:#0c2530; border:1px solid var(--line); color:var(--ink);
+    padding:8px 9px; border-radius:9px; font-size:14px; outline:none}
+  input[type=text]:focus{border-color:var(--accent)}
+  .cmp{width:100%; border-collapse:collapse; margin-top:12px; font-size:13px}
+  .cmp th,.cmp td{padding:6px 8px; text-align:right; border-bottom:1px solid var(--line);
+    font-variant-numeric:tabular-nums}
+  .cmp th:first-child,.cmp td:first-child{text-align:left; color:var(--muted); font-weight:400}
+  .cmp thead th{color:var(--accent); font-size:12px}
+  .cmp .better{color:var(--good); font-weight:700}
+  .empty{color:var(--muted); font-size:13px; padding:6px 0}
+  @media print{
+    :root{--ink:#111; --muted:#444; --line:#bbb; --card:#fff; --card2:#fff}
+    body{background:#fff; color:#111}
+    .toolbar,.tool,button.apply,.mini,#card-designs .row,#card-designs .row3,#card-designs h2 .ic{display:none !important}
+    .card{box-shadow:none; break-inside:avoid; background:#fff}
+    header p{color:#444}
+    .design-item .acts{display:none}
+  }
   .warnlist{list-style:none; margin:0; padding:0}
   .warnlist li{padding:6px 0; font-size:13px; color:var(--warn); display:flex; gap:8px}
   .warnlist li::before{content:"\26A0\FE0F"}
@@ -105,12 +131,31 @@
     <button class="tool" id="btnExample">↺ Load example glider</button>
     <button class="tool" id="btnReset">🗑 Clear saved values</button>
     <button class="tool" id="btnUnits">📋 Copy report</button>
+    <button class="tool" id="btnTxt">⬇ Download .txt</button>
+    <button class="tool" id="btnPrint">🖨 Save as PDF</button>
   </div>
 
   <div class="warnbar" id="warnbar"></div>
   <div class="recbar" id="recbar"></div>
 
   <div class="grid">
+
+    <!-- SAVED DESIGNS -->
+    <section class="card span2" id="card-designs">
+      <h2><span class="ic">💾</span> Saved designs</h2>
+      <div class="row3">
+        <div><label>Name this design</label><input type="text" id="designName" placeholder="e.g. 200 m survey glider"></div>
+        <div style="display:flex;align-items:flex-end"><button class="tool" id="btnSaveDesign" style="width:100%">💾 Save current design</button></div>
+        <div style="display:flex;align-items:flex-end"><button class="tool" id="btnNew" style="width:100%">✨ Reset to example</button></div>
+      </div>
+      <div id="designList" class="out"></div>
+      <div class="row" style="margin-top:6px">
+        <div><label>Compare A</label><select id="cmpA"></select></div>
+        <div><label>Compare B</label><select id="cmpB"></select></div>
+      </div>
+      <div id="compareOut"></div>
+      <div class="hint">Designs are stored in this browser. Load one to edit it, or compare two side by side.</div>
+    </section>
 
     <!-- WATER -->
     <section class="card" id="card-water">
@@ -605,6 +650,7 @@ function compute(){
     batteryWh:num('batteryWh'),cycles,totalRange,endurance});
   report += "\n\nRECOMMENDATIONS\n" + recs.map(r=>"["+({0:'FIX',1:'TUNE',2:'GOOD'}[r.lvl])+"] "+r.text).join("\n");
 
+  if(typeof renderCompare==='function') renderCompare();
   save();
 }
 
@@ -726,25 +772,132 @@ const IDS=['surfaceDensity','g','useWater','workingDepth','gradient','mass','vol
   'useBestCl','cl','cgz','cbz','cgx','cbx','moveMass','moveDist','targetPitch','shape','hullDepth',
   'radius','thickness','poisson','yieldMPa','youngGPa','batteryWh','ballastL','depthBand','hotelW','pumpEff',
   'targetType','targetValue'];
-function save(){
+function snapshot(){
   const s={}; IDS.forEach(id=>{const el=$(id); s[id]= el.type==='checkbox'? el.checked : el.value;});
-  try{ localStorage.setItem('glider', JSON.stringify(s)); }catch(e){}
+  return s;
 }
-function load(){
-  try{ const s=JSON.parse(localStorage.getItem('glider')); if(!s) return;
-    IDS.forEach(id=>{ if(s[id]===undefined) return; const el=$(id);
-      if(el.type==='checkbox') el.checked=s[id]; else el.value=s[id]; });
-  }catch(e){}
+function applySnapshot(s){
+  if(!s) return;
+  IDS.forEach(id=>{ if(s[id]===undefined) return; const el=$(id);
+    if(el.type==='checkbox') el.checked= !!s[id]; else el.value=s[id]; });
 }
+function save(){ try{ localStorage.setItem('glider', JSON.stringify(snapshot())); }catch(e){} }
+function load(){ try{ applySnapshot(JSON.parse(localStorage.getItem('glider'))); }catch(e){} }
 function example(){ localStorage.removeItem('glider'); location.reload(); }
 
-IDS.forEach(id=> $(id).addEventListener('input', compute));
-IDS.forEach(id=> $(id).addEventListener('change', compute));
+// ---- named designs ----
+function getDesigns(){ try{ return JSON.parse(localStorage.getItem('gliderDesigns'))||{}; }catch(e){ return {}; } }
+function setDesigns(d){ try{ localStorage.setItem('gliderDesigns', JSON.stringify(d)); }catch(e){} }
+function saveDesign(){
+  const name=$('designName').value.trim();
+  if(!name){ $('designName').focus(); return; }
+  const d=getDesigns(); d[name]=snapshot(); setDesigns(d);
+  $('designName').value=''; refreshDesigns();
+}
+function loadDesign(name){ const d=getDesigns(); if(d[name]){ applySnapshot(d[name]); compute(); } }
+function deleteDesign(name){ const d=getDesigns(); delete d[name]; setDesigns(d); refreshDesigns(); }
+function refreshDesigns(){
+  const d=getDesigns(), names=Object.keys(d), list=$('designList');
+  if(!names.length){ list.innerHTML='<div class="empty">No saved designs yet — name one above and click “Save current design”.</div>'; }
+  else list.innerHTML=names.map(n=>'<div class="design-item"><span>'+escapeHtml(n)+'</span>'+
+    '<span class="acts"><button class="mini" data-load="'+escapeHtml(n)+'">Load</button>'+
+    '<button class="mini del" data-del="'+escapeHtml(n)+'">Delete</button></span></div>').join('');
+  // populate compare selects, preserving current choices
+  ['cmpA','cmpB'].forEach(id=>{
+    const sel=$(id), prev=sel.value;
+    sel.innerHTML='<option value="">— current design —</option>'+names.map(n=>'<option>'+escapeHtml(n)+'</option>').join('');
+    if([...sel.options].some(o=>o.value===prev)) sel.value=prev;
+  });
+  renderCompare();
+}
+function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ---- comparison: pure metric model (mirrors compute) ----
+function metricVal(snap){
+  const g=+snap.g, surface=+snap.surfaceDensity, useWater=!!snap.useWater;
+  const grad=useWater ? (snap.gradient!=null&&snap.gradient!==''? +snap.gradient : gradientAuto(surface,g)) : 0;
+  const wd=+snap.workingDepth, rho=useWater? seawaterDensity(wd,surface,grad) : surface;
+  const mass=+snap.mass, vol=+snap.volL/1000, net=rho*g*vol-mass*g, netMag=Math.abs(net);
+  const S=+snap.wingArea, cd0=+snap.cd0, k=+snap.k;
+  const cl=(snap.useBestCl&&cd0>0&&k>0)? Math.sqrt(cd0/k) : +snap.cl;
+  let lr=NaN, vh=NaN;
+  if(cl>0&&S>0&&netMag>1e-9){ const cd=cd0+k*cl*cl, gam=Math.atan2(cd,cl);
+    lr=cl/cd; const V=Math.sqrt(2*netMag*Math.cos(gam)/(rho*S*cl)); vh=V*Math.cos(gam); }
+  const bg=+snap.cbz - +snap.cgz;
+  const shape=snap.shape, r=+snap.radius/1000, t=+snap.thickness/1000;
+  const hd=+snap.hullDepth, yieldPa=+snap.yieldMPa*1e6, E=+snap.youngGPa*1e9, nu=+snap.poisson;
+  const hp=useWater? pressureVar(hd,surface,grad,g) : surface*g*hd;
+  let hoop,pBuckle,pYield;
+  if(shape==='cylinder'){ hoop=hp*r/t; pBuckle=E/(4*(1-nu*nu))*Math.pow(t/r,3); pYield=yieldPa*t/r; }
+  else { hoop=hp*r/(2*t); pBuckle=2*E/Math.sqrt(3*(1-nu*nu))*Math.pow(t/r,2); pYield=2*yieldPa*t/r; }
+  const ysf=hoop>0? yieldPa/hoop:Infinity, bsf=hp>0? pBuckle/hp:Infinity;
+  const collapse=Math.min(pYield,pBuckle)/(surface*g);
+  const batteryJ=+snap.batteryWh*3600, ballast=+snap.ballastL/1000, depthBand=+snap.depthBand,
+        hotelW=+snap.hotelW, pumpEff=+snap.pumpEff;
+  const pump=(rho*g*depthBand+ATM)*ballast/pumpEff;
+  let rangeKm=NaN, endurDays=NaN;
+  if(isFinite(lr)&&vh>0){ const rpc=2*depthBand*lr, ct=rpc/vh, cyc=batteryJ/(pump+hotelW*ct);
+    rangeKm=cyc*rpc/1000; endurDays=cyc*ct/86400; }
+  return {netg:net/g*1000, lr, vh, bgmm:bg*1000, ysf, bsf, collapse, rangeKm, endurDays};
+}
+function renderCompare(){
+  const out=$('compareOut');
+  const d=getDesigns();
+  const pick=id=>{ const v=$(id).value; return v&&d[v]? d[v] : snapshot(); };
+  const aName=$('cmpA').value||'current', bName=$('cmpB').value||'current';
+  const A=metricVal(pick('cmpA')), B=metricVal(pick('cmpB'));
+  // rows: label, value-fn, higher-is-better?
+  const rows=[
+    ['Net buoyancy (g)', m=>(m.netg>=0?'+':'')+fmt(m.netg,1), null],
+    ['Glide ratio L/D', m=>fmt(m.lr,2), 1],
+    ['Horizontal speed (m/s)', m=>fmt(m.vh,3), null],
+    ['BG (mm)', m=>fmt(m.bgmm,1), 1],
+    ['Yield SF', m=>isFinite(m.ysf)?fmt(m.ysf,2):'∞', 1],
+    ['Buckling SF', m=>isFinite(m.bsf)?fmt(m.bsf,2):'∞', 1],
+    ['Collapse depth (m)', m=>fmt(m.collapse,0), 1],
+    ['Total range (km)', m=>fmt(m.rangeKm,1), 1],
+    ['Endurance (days)', m=>fmt(m.endurDays,1), 1],
+  ];
+  const cellVals={lr:[A.lr,B.lr],bgmm:[A.bgmm,B.bgmm],ysf:[A.ysf,B.ysf],bsf:[A.bsf,B.bsf],
+    collapse:[A.collapse,B.collapse],rangeKm:[A.rangeKm,B.rangeKm],endurDays:[A.endurDays,B.endurDays]};
+  const keyFor={'Glide ratio L/D':'lr','BG (mm)':'bgmm','Yield SF':'ysf','Buckling SF':'bsf',
+    'Collapse depth (m)':'collapse','Total range (km)':'rangeKm','Endurance (days)':'endurDays'};
+  let html='<table class="cmp"><thead><tr><th>Metric</th><th>'+escapeHtml(aName)+'</th><th>'+escapeHtml(bName)+'</th></tr></thead><tbody>';
+  rows.forEach(([label,fn,better])=>{
+    let aCls='',bCls='';
+    if(better){ const k=keyFor[label]; if(k){ const [av,bv]=cellVals[k];
+      if(isFinite(av)&&isFinite(bv)&&Math.abs(av-bv)>1e-9){ if(av>bv) aCls=' class="better"'; else bCls=' class="better"'; } } }
+    html+='<tr><td>'+label+'</td><td'+aCls+'>'+fn(A)+'</td><td'+bCls+'>'+fn(B)+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  out.innerHTML=html;
+}
+
+// ---- downloads ----
+function downloadTxt(){
+  const blob=new Blob([report],{type:'text/plain'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='glider-report.txt'; document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(a.href);
+}
+
+IDS.forEach(id=>{ $(id).addEventListener('input', compute); $(id).addEventListener('change', compute); });
+// keep the compare table live as the current design changes
+['cmpA','cmpB'].forEach(id=> $(id).addEventListener('change', renderCompare));
 // "Apply" buttons inside recommendations (delegated, since they re-render)
 $('recbar').addEventListener('click', e=>{
   const b=e.target.closest('button.apply'); if(!b) return;
   applyFields(recApplies[+b.dataset.i]);
 });
+// design load/delete buttons (delegated)
+$('designList').addEventListener('click', e=>{
+  const l=e.target.closest('[data-load]'), x=e.target.closest('[data-del]');
+  if(l) loadDesign(l.dataset.load);
+  if(x) deleteDesign(x.dataset.del);
+});
+$('btnSaveDesign').addEventListener('click', saveDesign);
+$('designName').addEventListener('keydown', e=>{ if(e.key==='Enter') saveDesign(); });
+$('btnNew').addEventListener('click', example);
 $('btnApplyTarget').addEventListener('click', ()=>applyFields(targetApply));
 $('btnExample').addEventListener('click', example);
 $('btnReset').addEventListener('click', ()=>{ localStorage.removeItem('glider'); location.reload(); });
@@ -753,9 +906,12 @@ $('btnUnits').addEventListener('click', ()=>{
     const b=$('btnUnits'); const t=b.textContent; b.textContent="✓ Copied!"; setTimeout(()=>b.textContent=t,1400);
   }).catch(()=>alert(report));
 });
+$('btnTxt').addEventListener('click', downloadTxt);
+$('btnPrint').addEventListener('click', ()=>window.print());
 window.addEventListener('resize', compute);
 
 load();
+refreshDesigns();
 compute();
 </script>
 </body>
