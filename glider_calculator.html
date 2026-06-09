@@ -102,6 +102,14 @@
   .cmp thead th{color:var(--accent); font-size:12px}
   .cmp .better{color:var(--good); font-weight:700}
   .empty{color:var(--muted); font-size:13px; padding:6px 0}
+  .budget{width:100%; border-collapse:collapse; margin-top:6px; font-size:13px}
+  .budget th,.budget td{padding:5px 6px; border-bottom:1px solid var(--line); text-align:right}
+  .budget th:first-child,.budget td:first-child{text-align:left}
+  .budget thead th{color:var(--accent); font-size:12px}
+  .budget tfoot td{font-weight:800; font-variant-numeric:tabular-nums; border-top:2px solid var(--line); border-bottom:none}
+  .budget input.bname{width:100%; padding:6px 8px; font-size:13px}
+  .budget input.bnum{width:84px; padding:6px 8px; font-size:13px; text-align:right}
+  .budget td:last-child{width:34px; text-align:center}
   @media print{
     :root{--ink:#111; --muted:#444; --line:#bbb; --card:#fff; --card2:#fff}
     body{background:#fff; color:#111}
@@ -218,6 +226,23 @@
         <div class="kv"><span class="k">State</span><span class="v" id="o_state">–</span></div>
         <div class="kv"><span class="k">Volume change to neutral</span><span class="v" id="o_toneutral">–</span></div>
       </div>
+    </section>
+
+    <!-- MASS & VOLUME BUDGET -->
+    <section class="card span2" id="card-budget">
+      <h2><span class="ic">🧮</span> Mass &amp; volume budget</h2>
+      <div class="chk"><input type="checkbox" id="useBudget">
+        <label style="margin:0">Drive the Buoyancy section from these totals (mass &amp; displaced volume)</label></div>
+      <table class="budget" id="budgetTable">
+        <thead><tr><th>Component</th><th>Mass (kg)</th><th>Volume (L)</th><th></th></tr></thead>
+        <tbody id="budgetBody"></tbody>
+        <tfoot><tr><td>Total</td><td id="budMass">–</td><td id="budVol">–</td><td></td></tr></tfoot>
+      </table>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="tool" id="btnAddComp">+ Add component</button>
+        <button class="tool" id="btnHullComp">⟳ Pull hull from Pressure-hull section</button>
+      </div>
+      <div class="hint">“Volume” is the water each part displaces (its sealed/external volume); flooded or open parts displace ≈ 0. Tick the box above to feed these totals straight into Buoyancy.</div>
     </section>
 
     <!-- GLIDE -->
@@ -392,6 +417,17 @@ const MATERIALS={
   abs:   {n:'ABS',                c:'Plastics',y:45, E:2.3, nu:0.35, d:1050},
   peek:  {n:'PEEK',               c:'Plastics',y:100,E:3.6, nu:0.38, d:1320},
 };
+// starter mass/volume budget (sums to the example: 52.0 kg, 50.7 L displaced)
+const DEFAULT_COMPONENTS=[
+  {name:'Pressure hull',            mass:6.94, vol:18.85},
+  {name:'Battery',                  mass:8,    vol:4},
+  {name:'Electronics & payload',    mass:5,    vol:3},
+  {name:'Ballast / pump system',    mass:6,    vol:4},
+  {name:'Syntactic foam / fairing', mass:4,    vol:16},
+  {name:'Wings & tail',             mass:2,    vol:1},
+  {name:'Trim ballast',             mass:20.06,vol:3.85},
+];
+let components = DEFAULT_COMPONENTS.map(c=>({...c}));
 const $ = id => document.getElementById(id);
 const num = id => parseFloat($(id).value);
 const fmt = (x,d=2) => (isFinite(x)? x.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}) : "–");
@@ -825,12 +861,18 @@ const IDS=['surfaceDensity','g','useWater','workingDepth','gradient','mass','vol
   'depthBand','hotelW','pumpEff','targetType','targetValue'];
 function snapshot(){
   const s={}; IDS.forEach(id=>{const el=$(id); s[id]= el.type==='checkbox'? el.checked : el.value;});
+  s.__components = components.map(c=>({...c}));
+  s.__useBudget = $('useBudget').checked;
   return s;
 }
 function applySnapshot(s){
   if(!s) return;
   IDS.forEach(id=>{ if(s[id]===undefined) return; const el=$(id);
     if(el.type==='checkbox') el.checked= !!s[id]; else el.value=s[id]; });
+  if(Array.isArray(s.__components)) components = s.__components.map(c=>({...c}));
+  if(s.__useBudget!==undefined) $('useBudget').checked = !!s.__useBudget;
+  renderComponents();
+  $('mass').disabled=$('volL').disabled=$('useBudget').checked;
 }
 function save(){ try{ localStorage.setItem('glider', JSON.stringify(snapshot())); }catch(e){} }
 function load(){ try{ applySnapshot(JSON.parse(localStorage.getItem('glider'))); }catch(e){} }
@@ -996,6 +1038,57 @@ $('material').addEventListener('change', ()=>{
 ['yieldMPa','youngGPa','poisson','matDensity'].forEach(id=>
   $(id).addEventListener('input', ()=>{ $('material').value=matchMaterial(); }));
 
+// ---- mass & volume budget ----
+function renderComponents(){
+  const body=$('budgetBody');
+  body.innerHTML=components.map((c,i)=>
+    '<tr>'+
+    '<td><input class="bname" type="text" data-i="'+i+'" data-f="name" value="'+escapeHtml(String(c.name))+'"></td>'+
+    '<td><input class="bnum" type="number" step="0.1" data-i="'+i+'" data-f="mass" value="'+c.mass+'"></td>'+
+    '<td><input class="bnum" type="number" step="0.1" data-i="'+i+'" data-f="vol" value="'+c.vol+'"></td>'+
+    '<td><button class="mini del" data-del="'+i+'" title="Remove">✕</button></td>'+
+    '</tr>').join('');
+  updateBudgetTotals();
+}
+function updateBudgetTotals(){
+  const tm=components.reduce((s,c)=>s+(+c.mass||0),0);
+  const tv=components.reduce((s,c)=>s+(+c.vol||0),0);
+  $('budMass').textContent=fmt(tm,2)+' kg';
+  $('budVol').textContent=fmt(tv,2)+' L';
+  if($('useBudget').checked){ $('mass').value=tm.toFixed(2); $('volL').value=tv.toFixed(2); }
+  return {tm,tv};
+}
+function syncBudgetMode(){
+  const on=$('useBudget').checked;
+  $('mass').disabled=on; $('volL').disabled=on;
+  updateBudgetTotals();
+  compute();
+}
+// edit a cell without re-rendering (keeps focus)
+$('budgetBody').addEventListener('input', e=>{
+  const el=e.target; if(el.dataset.i===undefined) return;
+  const i=+el.dataset.i, f=el.dataset.f;
+  components[i][f] = f==='name' ? el.value : (parseFloat(el.value)||0);
+  updateBudgetTotals();
+  if($('useBudget').checked) compute();
+});
+$('budgetBody').addEventListener('click', e=>{
+  const d=e.target.closest('[data-del]'); if(!d) return;
+  components.splice(+d.dataset.del,1); renderComponents();
+  if($('useBudget').checked) compute(); save();
+});
+$('btnAddComp').addEventListener('click', ()=>{
+  components.push({name:'New component', mass:0, vol:0}); renderComponents(); save();
+});
+$('btnHullComp').addEventListener('click', ()=>{
+  if(!isFinite(hullShellMass)) return;
+  const row=components.find(c=>/hull/i.test(c.name));
+  if(row){ row.mass=+hullShellMass.toFixed(2); row.vol=+hullExtVolL.toFixed(2); }
+  else components.unshift({name:'Pressure hull', mass:+hullShellMass.toFixed(2), vol:+hullExtVolL.toFixed(2)});
+  renderComponents(); if($('useBudget').checked) compute(); save();
+});
+$('useBudget').addEventListener('change', ()=>{ syncBudgetMode(); save(); });
+
 // add a "Calculate" button to the bottom of each calculation section
 ['card-water','card-buoy','card-glide','card-stab','card-hull','card-energy'].forEach(id=>{
   const card=$(id); if(!card) return;
@@ -1010,8 +1103,11 @@ $('material').addEventListener('change', ()=>{
   card.appendChild(b);
 });
 
+renderComponents();
 load();
 $('material').value=matchMaterial();
+$('mass').disabled=$('volL').disabled=$('useBudget').checked;
+updateBudgetTotals();
 refreshDesigns();
 compute();
 </script>
