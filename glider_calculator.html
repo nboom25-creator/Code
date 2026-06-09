@@ -65,6 +65,17 @@
   .hint{font-size:11px; color:var(--muted); margin-top:2px}
   .warnbar{margin:0 0 16px}
   .warnbar .card{border-color:var(--warn)}
+  .recbar{margin:0 0 16px}
+  .recbar .card{border-color:var(--accent)}
+  .reclist{list-style:none; margin:0; padding:0}
+  .reclist li{display:flex; gap:10px; align-items:flex-start; padding:8px 0; font-size:13px;
+    border-bottom:1px solid rgba(35,80,95,.55)}
+  .reclist li:last-child{border-bottom:none}
+  .reclist .tag{flex:none; font-size:10px; font-weight:800; letter-spacing:.4px;
+    padding:2px 8px; border-radius:999px; margin-top:1px}
+  .tag.fix{background:rgba(255,107,107,.16); color:var(--bad)}
+  .tag.tune{background:rgba(255,207,92,.16); color:var(--warn)}
+  .tag.good{background:rgba(70,211,154,.16); color:var(--good)}
   .warnlist{list-style:none; margin:0; padding:0}
   .warnlist li{padding:6px 0; font-size:13px; color:var(--warn); display:flex; gap:8px}
   .warnlist li::before{content:"\26A0\FE0F"}
@@ -93,6 +104,7 @@
   </div>
 
   <div class="warnbar" id="warnbar"></div>
+  <div class="recbar" id="recbar"></div>
 
   <div class="grid">
 
@@ -322,6 +334,8 @@ function compute(){
 
   // glide
   const wingArea=num('wingArea'), cd0=num('cd0'), k=num('k');
+  const bestCl = (cd0>0&&k>0)? Math.sqrt(cd0/k) : NaN;
+  const maxLR  = (cd0>0&&k>0)? 1/(2*Math.sqrt(k*cd0)) : NaN;
   const useBest=$('useBestCl').checked;
   let cl;
   if(useBest && cd0>0 && k>0){ cl=Math.sqrt(cd0/k); $('cl').value=cl.toFixed(3); }
@@ -422,6 +436,86 @@ function compute(){
   if(pumpEff<=0||pumpEff>1) warns.push("Pump efficiency should be between 0 and 1.");
   renderWarns(warns);
 
+  // ---- recommendations engine: turn the numbers into concrete actions ----
+  const recs=[];
+  const add=(lvl,text)=>recs.push({lvl,text});
+
+  // buoyancy trim
+  const netg = net/g*1000;
+  if(Math.abs(netg)<1){
+    add(2,"Buoyancy is trimmed within 1 g of neutral at this depth — good.");
+  } else {
+    const massAct = net>0 ? "remove ~"+fmt(Math.abs(netg),0)+" g of mass"
+                          : "add ~"+fmt(Math.abs(netg),0)+" g of ballast mass";
+    const volAct  = (toNeutralL>=0?"increase":"decrease")+" displaced volume by "+fmt(Math.abs(toNeutralL),3)+" L";
+    add(1,"To trim neutrally buoyant at "+fmt(workingDepth,0)+" m, either "+massAct+", or "+volAct+
+      ". Make sure the ballast system can move at least this much.");
+  }
+
+  // glide / lift coefficient
+  if(isFinite(maxLR)){
+    if(!useBest && isFinite(glideRatio) && maxLR>glideRatio+0.02){
+      const gain=(maxLR/glideRatio-1)*100;
+      add(1,"Set C_L to "+fmt(bestCl,3)+" (tick “best glide ratio”) to reach L/D "+fmt(maxLR,2)+
+        " instead of "+fmt(glideRatio,2)+" — about "+fmt(gain,0)+"% more range per dive.");
+    } else if(useBest){
+      add(2,"Flying at the best glide ratio L/D "+fmt(maxLR,2)+" (C_L "+fmt(bestCl,3)+"). To do better you must lower drag — reduce C_D0 (cleaner shape) or k (higher-aspect wings).");
+    }
+  }
+
+  // stability
+  if(bg<=0){
+    const targetBG=0.010;               // aim for +10 mm
+    const drop=cgz-(cbz-targetBG);       // how much lower the CG must go
+    add(0,"UNSTABLE. Lower the centre of gravity by at least "+fmt(drop*1000,0)+
+      " mm (add ballast low in the hull, or raise the centre of buoyancy) to reach a stable BG of ~10 mm.");
+  } else if(bg<0.005){
+    add(1,"BG is only "+fmt(bg*1000,1)+" mm — tender. Lowering the CG a few mm gives crisper righting and steadier pitch hold.");
+  } else if(bg>0.06){
+    add(1,"BG is "+fmt(bg*1000,0)+" mm — very stiff, so the moving mass needs a long stroke to pitch. Raising the CG slightly cuts the required ballast travel.");
+  } else {
+    add(2,"BG "+fmt(bg*1000,1)+" mm is in a healthy range for stable, controllable pitch.");
+  }
+  if(bg>0){
+    const travel=bg*Math.tan(targetPitch*Math.PI/180)*mass/moveMass;
+    add(2,"To pitch "+fmt(targetPitch,0)+"°, slide the "+fmt(moveMass,1)+" kg moving mass "+fmt(travel*1000,0)+" mm — size the actuator stroke for this.");
+  }
+
+  // hull sizing
+  if(hp>0){
+    const tY=tForYieldSF(1.5,hp,radius,yieldPa,shape);
+    const tB=tForBuckleSF(2.0,hp,radius,E,nu,shape);
+    const tNeed=Math.max(tY,tB);
+    const safeDepth=Math.min(collapseYield/1.5, collapseBuckle/2.0);
+    if(ysf<1.5||bsf<2.0){
+      const drv = tB>tY ? "buckling" : "yield";
+      add(0,"Hull is under-strength for "+fmt(hullDepth,0)+" m. Increase wall thickness to ≥ "+
+        fmt(tNeed*1000,1)+" mm (driven by "+drv+") to meet yield SF 1.5 and buckling SF 2.0 — or rate it for a shallower depth.");
+    } else {
+      add(2,"Hull meets margins: rated safe working depth ≈ "+fmt(safeDepth,0)+
+        " m (SF 1.5 yield / 2.0 buckling).");
+      if(thickness-tNeed>0.0005){
+        add(1,"Hull is over-built. You could thin the wall to ~"+fmt(tNeed*1000,1)+
+          " mm and still keep yield SF 1.5 / buckling SF 2.0 at "+fmt(hullDepth,0)+" m, saving weight and buoyancy.");
+      }
+    }
+  }
+
+  // energy balance
+  if(isFinite(cycleTime)){
+    const hotelPerCycle=hotelW*cycleTime;
+    const pumpFrac=pumpPerCycle/(pumpPerCycle+hotelPerCycle);
+    if(pumpFrac>0.7){
+      add(1,"Energy is pump-dominated ("+fmt(pumpFrac*100,0)+"% of each cycle). Biggest range gains: improve pump efficiency or carry less ballast volume per inflation.");
+    } else if(pumpFrac<0.3){
+      add(1,"Energy is hotel-dominated ("+fmt((1-pumpFrac)*100,0)+"% is idle power). Biggest gains: cut standby draw, or glide faster/steeper to shorten each cycle.");
+    } else {
+      add(2,"Pump and hotel loads are balanced ("+fmt(pumpFrac*100,0)+"% pump). Deeper dive bands raise range per cycle but cost more pump energy — worth a sweep.");
+    }
+  }
+
+  renderRecs(recs);
+
   // polar chart
   drawPolar(netMag,wingArea,cd0,k,rho);
 
@@ -429,6 +523,7 @@ function compute(){
   report = buildReport({surface,grad,useWater,workingDepth,localRho,wPress,mass,volL,B,W,net,
     cl,cd,glideRatio,gamma,V,vh,vv,bg,naturalPitch,shape,hp,hoop,ysf,bsf,collapse,governs,
     batteryWh:num('batteryWh'),cycles,totalRange,endurance});
+  report += "\n\nRECOMMENDATIONS\n" + recs.map(r=>"["+({0:'FIX',1:'TUNE',2:'GOOD'}[r.lvl])+"] "+r.text).join("\n");
 
   save();
 }
@@ -437,6 +532,26 @@ function sfBadge(sf,thresh){
   const cls = sf>=thresh*1.33 ? "good" : sf>=thresh ? "warn" : "bad";
   const txt = isFinite(sf)? fmt(sf,2) : "∞";
   return '<span class="badge '+cls+'">'+txt+'</span>';
+}
+
+// wall thickness needed to reach a target safety factor
+function tForYieldSF(target,hp,r,yieldPa,shape){
+  return shape==='cylinder' ? target*hp*r/yieldPa : target*hp*r/(2*yieldPa);
+}
+function tForBuckleSF(target,hp,r,E,nu,shape){
+  if(shape==='cylinder') return r*Math.cbrt(target*hp*4*(1-nu*nu)/E);
+  return r*Math.sqrt(target*hp*Math.sqrt(3*(1-nu*nu))/(2*E));
+}
+
+function renderRecs(recs){
+  const bar=$('recbar');
+  if(!recs.length){ bar.innerHTML=''; return; }
+  recs.sort((a,b)=>a.lvl-b.lvl);
+  const tagName={0:'fix',1:'tune',2:'good'};
+  const tagText={0:'FIX',1:'TUNE',2:'GOOD'};
+  bar.innerHTML='<div class="card"><h2><span class="ic">💡</span> Recommendations</h2><ul class="reclist">'+
+    recs.map(r=>'<li><span class="tag '+tagName[r.lvl]+'">'+tagText[r.lvl]+'</span><span>'+r.text+'</span></li>').join('')+
+    '</ul></div>';
 }
 
 function renderWarns(warns){
