@@ -108,7 +108,7 @@
   .budget thead th{color:var(--accent); font-size:12px}
   .budget tfoot td{font-weight:800; font-variant-numeric:tabular-nums; border-top:2px solid var(--line); border-bottom:none}
   .budget input.bname{width:100%; padding:6px 8px; font-size:13px}
-  .budget input.bnum{width:84px; padding:6px 8px; font-size:13px; text-align:right}
+  .budget input.bnum{width:72px; padding:6px 6px; font-size:13px; text-align:right}
   .budget td:last-child{width:34px; text-align:center}
   @media print{
     :root{--ink:#111; --muted:#444; --line:#bbb; --card:#fff; --card2:#fff}
@@ -233,16 +233,20 @@
       <h2><span class="ic">🧮</span> Mass &amp; volume budget</h2>
       <div class="chk"><input type="checkbox" id="useBudget">
         <label style="margin:0">Drive the Buoyancy section from these totals (mass &amp; displaced volume)</label></div>
+      <div class="chk"><input type="checkbox" id="useBudgetCG">
+        <label style="margin:0">Drive the Stability CG from the component positions</label></div>
+      <div style="overflow-x:auto">
       <table class="budget" id="budgetTable">
-        <thead><tr><th>Component</th><th>Mass (kg)</th><th>Volume (L)</th><th></th></tr></thead>
+        <thead><tr><th>Component</th><th>Mass (kg)</th><th>Volume (L)</th><th>x (mm)</th><th>z (mm)</th><th></th></tr></thead>
         <tbody id="budgetBody"></tbody>
-        <tfoot><tr><td>Total</td><td id="budMass">–</td><td id="budVol">–</td><td></td></tr></tfoot>
+        <tfoot><tr><td>Total / CG</td><td id="budMass">–</td><td id="budVol">–</td><td id="budCGx">–</td><td id="budCGz">–</td><td></td></tr></tfoot>
       </table>
+      </div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="tool" id="btnAddComp">+ Add component</button>
         <button class="tool" id="btnHullComp">⟳ Pull hull from Pressure-hull section</button>
       </div>
-      <div class="hint">“Volume” is the water each part displaces (its sealed/external volume); flooded or open parts displace ≈ 0. Tick the box above to feed these totals straight into Buoyancy.</div>
+      <div class="hint">“Volume” is the water each part displaces (sealed/external volume; flooded parts ≈ 0). Positions: <b>x</b> = fore/aft (+ forward), <b>z</b> = vertical (+ up, − below the centre axis). Tick the boxes to feed Buoyancy and Stability automatically.</div>
     </section>
 
     <!-- GLIDE -->
@@ -417,15 +421,16 @@ const MATERIALS={
   abs:   {n:'ABS',                c:'Plastics',y:45, E:2.3, nu:0.35, d:1050},
   peek:  {n:'PEEK',               c:'Plastics',y:100,E:3.6, nu:0.38, d:1320},
 };
-// starter mass/volume budget (sums to the example: 52.0 kg, 50.7 L displaced)
+// starter mass/volume budget (sums to the example: 52.0 kg, 50.7 L, CG 0 / -15 mm)
+// x = fore/aft (+ forward), z = vertical (+ up, - below centre axis), in mm
 const DEFAULT_COMPONENTS=[
-  {name:'Pressure hull',            mass:6.94, vol:18.85},
-  {name:'Battery',                  mass:8,    vol:4},
-  {name:'Electronics & payload',    mass:5,    vol:3},
-  {name:'Ballast / pump system',    mass:6,    vol:4},
-  {name:'Syntactic foam / fairing', mass:4,    vol:16},
-  {name:'Wings & tail',             mass:2,    vol:1},
-  {name:'Trim ballast',             mass:20.06,vol:3.85},
+  {name:'Pressure hull',            mass:6.94, vol:18.85, x:0,    z:0},
+  {name:'Battery',                  mass:8,    vol:4,     x:-50,  z:-30},
+  {name:'Electronics & payload',    mass:5,    vol:3,     x:200,  z:10},
+  {name:'Ballast / pump system',    mass:6,    vol:4,     x:-150, z:-10},
+  {name:'Syntactic foam / fairing', mass:4,    vol:16,    x:75,   z:40},
+  {name:'Wings & tail',             mass:2,    vol:1,     x:0,    z:0},
+  {name:'Trim ballast',             mass:20.06,vol:3.85,  x:0,    z:-34.4},
 ];
 let components = DEFAULT_COMPONENTS.map(c=>({...c}));
 const $ = id => document.getElementById(id);
@@ -863,6 +868,7 @@ function snapshot(){
   const s={}; IDS.forEach(id=>{const el=$(id); s[id]= el.type==='checkbox'? el.checked : el.value;});
   s.__components = components.map(c=>({...c}));
   s.__useBudget = $('useBudget').checked;
+  s.__useBudgetCG = $('useBudgetCG').checked;
   return s;
 }
 function applySnapshot(s){
@@ -871,8 +877,10 @@ function applySnapshot(s){
     if(el.type==='checkbox') el.checked= !!s[id]; else el.value=s[id]; });
   if(Array.isArray(s.__components)) components = s.__components.map(c=>({...c}));
   if(s.__useBudget!==undefined) $('useBudget').checked = !!s.__useBudget;
+  if(s.__useBudgetCG!==undefined) $('useBudgetCG').checked = !!s.__useBudgetCG;
   renderComponents();
   $('mass').disabled=$('volL').disabled=$('useBudget').checked;
+  $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
 }
 function save(){ try{ localStorage.setItem('glider', JSON.stringify(snapshot())); }catch(e){} }
 function load(){ try{ applySnapshot(JSON.parse(localStorage.getItem('glider'))); }catch(e){} }
@@ -1046,21 +1054,27 @@ function renderComponents(){
     '<td><input class="bname" type="text" data-i="'+i+'" data-f="name" value="'+escapeHtml(String(c.name))+'"></td>'+
     '<td><input class="bnum" type="number" step="0.1" data-i="'+i+'" data-f="mass" value="'+c.mass+'"></td>'+
     '<td><input class="bnum" type="number" step="0.1" data-i="'+i+'" data-f="vol" value="'+c.vol+'"></td>'+
+    '<td><input class="bnum" type="number" step="1" data-i="'+i+'" data-f="x" value="'+(c.x||0)+'"></td>'+
+    '<td><input class="bnum" type="number" step="1" data-i="'+i+'" data-f="z" value="'+(c.z||0)+'"></td>'+
     '<td><button class="mini del" data-del="'+i+'" title="Remove">✕</button></td>'+
     '</tr>').join('');
   updateBudgetTotals();
 }
 function updateBudgetTotals(){
-  const tm=components.reduce((s,c)=>s+(+c.mass||0),0);
-  const tv=components.reduce((s,c)=>s+(+c.vol||0),0);
+  let tm=0,tv=0,mx=0,mz=0;
+  components.forEach(c=>{ const m=+c.mass||0; tm+=m; tv+=(+c.vol||0); mx+=m*(+c.x||0); mz+=m*(+c.z||0); });
+  const cgx = tm>0? mx/tm : 0, cgz = tm>0? mz/tm : 0;   // mm
   $('budMass').textContent=fmt(tm,2)+' kg';
   $('budVol').textContent=fmt(tv,2)+' L';
+  $('budCGx').textContent=fmt(cgx,1)+' mm';
+  $('budCGz').textContent=fmt(cgz,1)+' mm';
   if($('useBudget').checked){ $('mass').value=tm.toFixed(2); $('volL').value=tv.toFixed(2); }
-  return {tm,tv};
+  if($('useBudgetCG').checked){ $('cgx').value=(cgx/1000).toFixed(4); $('cgz').value=(cgz/1000).toFixed(4); }
+  return {tm,tv,cgx,cgz};
 }
 function syncBudgetMode(){
-  const on=$('useBudget').checked;
-  $('mass').disabled=on; $('volL').disabled=on;
+  $('mass').disabled=$('volL').disabled=$('useBudget').checked;
+  $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
   updateBudgetTotals();
   compute();
 }
@@ -1070,12 +1084,12 @@ $('budgetBody').addEventListener('input', e=>{
   const i=+el.dataset.i, f=el.dataset.f;
   components[i][f] = f==='name' ? el.value : (parseFloat(el.value)||0);
   updateBudgetTotals();
-  if($('useBudget').checked) compute();
+  if($('useBudget').checked || $('useBudgetCG').checked) compute();
 });
 $('budgetBody').addEventListener('click', e=>{
   const d=e.target.closest('[data-del]'); if(!d) return;
   components.splice(+d.dataset.del,1); renderComponents();
-  if($('useBudget').checked) compute(); save();
+  if($('useBudget').checked||$('useBudgetCG').checked) compute(); save();
 });
 $('btnAddComp').addEventListener('click', ()=>{
   components.push({name:'New component', mass:0, vol:0}); renderComponents(); save();
@@ -1085,9 +1099,10 @@ $('btnHullComp').addEventListener('click', ()=>{
   const row=components.find(c=>/hull/i.test(c.name));
   if(row){ row.mass=+hullShellMass.toFixed(2); row.vol=+hullExtVolL.toFixed(2); }
   else components.unshift({name:'Pressure hull', mass:+hullShellMass.toFixed(2), vol:+hullExtVolL.toFixed(2)});
-  renderComponents(); if($('useBudget').checked) compute(); save();
+  renderComponents(); if($('useBudget').checked||$('useBudgetCG').checked) compute(); save();
 });
 $('useBudget').addEventListener('change', ()=>{ syncBudgetMode(); save(); });
+$('useBudgetCG').addEventListener('change', ()=>{ syncBudgetMode(); save(); });
 
 // add a "Calculate" button to the bottom of each calculation section
 ['card-water','card-buoy','card-glide','card-stab','card-hull','card-energy'].forEach(id=>{
@@ -1107,6 +1122,7 @@ renderComponents();
 load();
 $('material').value=matchMaterial();
 $('mass').disabled=$('volL').disabled=$('useBudget').checked;
+$('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
 updateBudgetTotals();
 refreshDesigns();
 compute();
