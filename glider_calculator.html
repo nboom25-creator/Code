@@ -279,9 +279,11 @@
         <div><label>Wall (mm)</label><input type="number" id="thickness" value="6" step="0.5"></div>
         <div><label>Poisson ν</label><input type="number" id="poisson" value="0.33" step="0.01"></div>
       </div>
+      <div><label>Material</label><select id="material"></select>
+        <div class="hint">Auto-fills the properties below. Edit any value to switch to “Custom”.</div></div>
       <div class="row">
-        <div><label>Yield strength (MPa)</label><input type="number" id="yieldMPa" value="276" step="1"><div class="hint">6061-T6 alu ≈ 276</div></div>
-        <div><label>Young's modulus (GPa)</label><input type="number" id="youngGPa" value="69" step="1"><div class="hint">6061-T6 alu ≈ 69</div></div>
+        <div><label>Yield strength (MPa)</label><input type="number" id="yieldMPa" value="276" step="1"><div class="hint">Plastics: use nominal tensile strength</div></div>
+        <div><label>Young's modulus (GPa)</label><input type="number" id="youngGPa" value="69" step="1"><div class="hint">Stiffness — drives buckling</div></div>
       </div>
       <div class="out">
         <div class="kv"><span class="k">Pressure at depth</span><span class="v" id="o_hp">–</span></div>
@@ -363,6 +365,27 @@
 <script>
 "use strict";
 const ATM = 101325, BULK = 2.2e9;
+// material library: yield strength (MPa), Young's modulus (GPa), Poisson ratio.
+// Plastic "yield" values are nominal tensile strengths — apply extra margin for brittle ones (acrylic).
+const MATERIALS={
+  al6061:{n:'Aluminum 6061-T6', c:'Metals', y:276, E:69,   nu:0.33},
+  al7075:{n:'Aluminum 7075-T6', c:'Metals', y:503, E:71.7, nu:0.33},
+  al5083:{n:'Aluminum 5083-H116',c:'Metals',y:215, E:70,   nu:0.33},
+  ss316: {n:'Stainless steel 316',c:'Metals',y:290, E:193, nu:0.30},
+  ss304: {n:'Stainless steel 304',c:'Metals',y:215, E:193, nu:0.29},
+  steelmild:{n:'Mild steel (A36)',c:'Metals',y:250, E:200, nu:0.29},
+  steel4130:{n:'Alloy steel 4130',c:'Metals',y:435, E:205, nu:0.29},
+  ti64:  {n:'Titanium Ti-6Al-4V', c:'Metals', y:880, E:114, nu:0.34},
+  ti2:   {n:'Titanium Grade 2 (CP)',c:'Metals',y:275,E:105, nu:0.34},
+  acrylic:{n:'Acrylic / cast PMMA',c:'Plastics',y:70, E:3.2, nu:0.37},
+  pc:    {n:'Polycarbonate',      c:'Plastics',y:62, E:2.3, nu:0.37},
+  pvc:   {n:'PVC (rigid)',        c:'Plastics',y:50, E:3.0, nu:0.38},
+  hdpe:  {n:'HDPE',               c:'Plastics',y:28, E:0.8, nu:0.45},
+  nylon: {n:'Nylon (PA6)',        c:'Plastics',y:80, E:2.7, nu:0.39},
+  delrin:{n:'Acetal (Delrin/POM)',c:'Plastics',y:70, E:3.1, nu:0.35},
+  abs:   {n:'ABS',                c:'Plastics',y:45, E:2.3, nu:0.35},
+  peek:  {n:'PEEK',               c:'Plastics',y:100,E:3.6, nu:0.38},
+};
 const $ = id => document.getElementById(id);
 const num = id => parseFloat($(id).value);
 const fmt = (x,d=2) => (isFinite(x)? x.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}) : "–");
@@ -914,6 +937,33 @@ $('btnTxt').addEventListener('click', downloadTxt);
 $('btnPrint').addEventListener('click', ()=>window.print());
 window.addEventListener('resize', compute);
 
+// ---- material dropdown ----
+function populateMaterials(){
+  const sel=$('material'), cats={};
+  for(const k in MATERIALS){ const m=MATERIALS[k]; (cats[m.c]=cats[m.c]||[]).push([k,m.n]); }
+  let html='';
+  for(const c in cats) html+='<optgroup label="'+c+'">'+
+    cats[c].map(([k,n])=>'<option value="'+k+'">'+n+'</option>').join('')+'</optgroup>';
+  html+='<option value="custom">Custom (enter values)</option>';
+  sel.innerHTML=html;
+}
+// detect which material (if any) the current properties match
+function matchMaterial(){
+  const y=+$('yieldMPa').value, E=+$('youngGPa').value, nu=+$('poisson').value;
+  for(const k in MATERIALS){ const m=MATERIALS[k];
+    if(Math.abs(m.y-y)<0.5 && Math.abs(m.E-E)<0.05 && Math.abs(m.nu-nu)<0.005) return k; }
+  return 'custom';
+}
+populateMaterials();
+$('material').addEventListener('change', ()=>{
+  const m=MATERIALS[$('material').value];
+  if(m){ $('yieldMPa').value=m.y; $('youngGPa').value=m.E; $('poisson').value=m.nu; }
+  compute();
+});
+// editing any hull property re-detects the material (or shows Custom)
+['yieldMPa','youngGPa','poisson'].forEach(id=>
+  $(id).addEventListener('input', ()=>{ $('material').value=matchMaterial(); }));
+
 // add a "Calculate" button to the bottom of each calculation section
 ['card-water','card-buoy','card-glide','card-stab','card-hull','card-energy'].forEach(id=>{
   const card=$(id); if(!card) return;
@@ -929,6 +979,7 @@ window.addEventListener('resize', compute);
 });
 
 load();
+$('material').value=matchMaterial();
 refreshDesigns();
 compute();
 </script>
