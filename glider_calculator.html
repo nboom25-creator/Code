@@ -76,6 +76,10 @@
   .tag.fix{background:rgba(255,107,107,.16); color:var(--bad)}
   .tag.tune{background:rgba(255,207,92,.16); color:var(--warn)}
   .tag.good{background:rgba(70,211,154,.16); color:var(--good)}
+  button.apply{background:var(--accent); color:#06222c; border:none; font-weight:700;
+    padding:2px 9px; border-radius:7px; cursor:pointer; font-size:11px; margin-left:4px; white-space:nowrap}
+  button.apply:hover{background:#5be0c0}
+  button.tool:disabled{opacity:.45; cursor:not-allowed}
   .warnlist{list-style:none; margin:0; padding:0}
   .warnlist li{padding:6px 0; font-size:13px; color:var(--warn); display:flex; gap:8px}
   .warnlist li::before{content:"\26A0\FE0F"}
@@ -261,6 +265,32 @@
       </div>
     </section>
 
+    <!-- TARGET SOLVER -->
+    <section class="card span2" id="card-target">
+      <h2><span class="ic">🎯</span> Design targets — pick a goal, get the input that hits it</h2>
+      <div class="row3">
+        <div>
+          <label>I want to set my…</label>
+          <select id="targetType">
+            <option value="lr">Best glide ratio (L/D)</option>
+            <option value="speed">Horizontal speed (m/s)</option>
+            <option value="range">Total range (km)</option>
+            <option value="depth">Rated depth (m)</option>
+            <option value="pitch">Pitch angle (°)</option>
+          </select>
+        </div>
+        <div>
+          <label>…to this value <span id="targetUnit" class="sub"></span></label>
+          <input type="number" id="targetValue" value="5" step="0.1">
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <button class="tool" id="btnApplyTarget" style="width:100%">Apply solution ↦</button>
+        </div>
+      </div>
+      <div class="out" id="targetOut" style="font-size:13px">–</div>
+      <div class="hint">It solves the most natural single input for each goal (k for glide ratio, wing area for speed, battery for range, wall thickness for depth, ballast travel for pitch) and shows the value. Click <b>Apply solution</b> to fill it in.</div>
+    </section>
+
     <!-- POLAR CHART -->
     <section class="card span2" id="card-polar">
       <h2><span class="ic">📈</span> Glide polar — efficiency vs. speed across lift coefficient</h2>
@@ -438,7 +468,7 @@ function compute(){
 
   // ---- recommendations engine: turn the numbers into concrete actions ----
   const recs=[];
-  const add=(lvl,text)=>recs.push({lvl,text});
+  const add=(lvl,text,apply)=>recs.push({lvl,text,apply});
 
   // buoyancy trim
   const netg = net/g*1000;
@@ -449,7 +479,8 @@ function compute(){
                           : "add ~"+fmt(Math.abs(netg),0)+" g of ballast mass";
     const volAct  = (toNeutralL>=0?"increase":"decrease")+" displaced volume by "+fmt(Math.abs(toNeutralL),3)+" L";
     add(1,"To trim neutrally buoyant at "+fmt(workingDepth,0)+" m, either "+massAct+", or "+volAct+
-      ". Make sure the ballast system can move at least this much.");
+      ". Make sure the ballast system can move at least this much.",
+      [{id:'mass',value:(rho*vol).toFixed(3)}]);
   }
 
   // glide / lift coefficient
@@ -457,7 +488,8 @@ function compute(){
     if(!useBest && isFinite(glideRatio) && maxLR>glideRatio+0.02){
       const gain=(maxLR/glideRatio-1)*100;
       add(1,"Set C_L to "+fmt(bestCl,3)+" (tick “best glide ratio”) to reach L/D "+fmt(maxLR,2)+
-        " instead of "+fmt(glideRatio,2)+" — about "+fmt(gain,0)+"% more range per dive.");
+        " instead of "+fmt(glideRatio,2)+" — about "+fmt(gain,0)+"% more range per dive.",
+        [{id:'useBestCl',check:true}]);
     } else if(useBest){
       add(2,"Flying at the best glide ratio L/D "+fmt(maxLR,2)+" (C_L "+fmt(bestCl,3)+"). To do better you must lower drag — reduce C_D0 (cleaner shape) or k (higher-aspect wings).");
     }
@@ -468,17 +500,21 @@ function compute(){
     const targetBG=0.010;               // aim for +10 mm
     const drop=cgz-(cbz-targetBG);       // how much lower the CG must go
     add(0,"UNSTABLE. Lower the centre of gravity by at least "+fmt(drop*1000,0)+
-      " mm (add ballast low in the hull, or raise the centre of buoyancy) to reach a stable BG of ~10 mm.");
+      " mm (add ballast low in the hull, or raise the centre of buoyancy) to reach a stable BG of ~10 mm.",
+      [{id:'cgz',value:(cbz-targetBG).toFixed(3)}]);
   } else if(bg<0.005){
-    add(1,"BG is only "+fmt(bg*1000,1)+" mm — tender. Lowering the CG a few mm gives crisper righting and steadier pitch hold.");
+    add(1,"BG is only "+fmt(bg*1000,1)+" mm — tender. Lowering the CG a few mm gives crisper righting and steadier pitch hold.",
+      [{id:'cgz',value:(cbz-0.015).toFixed(3)}]);
   } else if(bg>0.06){
-    add(1,"BG is "+fmt(bg*1000,0)+" mm — very stiff, so the moving mass needs a long stroke to pitch. Raising the CG slightly cuts the required ballast travel.");
+    add(1,"BG is "+fmt(bg*1000,0)+" mm — very stiff, so the moving mass needs a long stroke to pitch. Raising the CG slightly cuts the required ballast travel.",
+      [{id:'cgz',value:(cbz-0.015).toFixed(3)}]);
   } else {
     add(2,"BG "+fmt(bg*1000,1)+" mm is in a healthy range for stable, controllable pitch.");
   }
   if(bg>0){
     const travel=bg*Math.tan(targetPitch*Math.PI/180)*mass/moveMass;
-    add(2,"To pitch "+fmt(targetPitch,0)+"°, slide the "+fmt(moveMass,1)+" kg moving mass "+fmt(travel*1000,0)+" mm — size the actuator stroke for this.");
+    add(2,"To pitch "+fmt(targetPitch,0)+"°, slide the "+fmt(moveMass,1)+" kg moving mass "+fmt(travel*1000,0)+" mm — size the actuator stroke for this.",
+      [{id:'moveDist',value:Math.round(travel*1000)}]);
   }
 
   // hull sizing
@@ -490,13 +526,15 @@ function compute(){
     if(ysf<1.5||bsf<2.0){
       const drv = tB>tY ? "buckling" : "yield";
       add(0,"Hull is under-strength for "+fmt(hullDepth,0)+" m. Increase wall thickness to ≥ "+
-        fmt(tNeed*1000,1)+" mm (driven by "+drv+") to meet yield SF 1.5 and buckling SF 2.0 — or rate it for a shallower depth.");
+        fmt(tNeed*1000,1)+" mm (driven by "+drv+") to meet yield SF 1.5 and buckling SF 2.0 — or rate it for a shallower depth.",
+        [{id:'thickness',value:(Math.ceil(tNeed*1000*10)/10).toFixed(1)}]);
     } else {
       add(2,"Hull meets margins: rated safe working depth ≈ "+fmt(safeDepth,0)+
         " m (SF 1.5 yield / 2.0 buckling).");
       if(thickness-tNeed>0.0005){
         add(1,"Hull is over-built. You could thin the wall to ~"+fmt(tNeed*1000,1)+
-          " mm and still keep yield SF 1.5 / buckling SF 2.0 at "+fmt(hullDepth,0)+" m, saving weight and buoyancy.");
+          " mm and still keep yield SF 1.5 / buckling SF 2.0 at "+fmt(hullDepth,0)+" m, saving weight and buoyancy.",
+          [{id:'thickness',value:(Math.ceil(tNeed*1000*10)/10).toFixed(1)}]);
       }
     }
   }
@@ -515,6 +553,48 @@ function compute(){
   }
 
   renderRecs(recs);
+
+  // ---- design-target solver ----
+  const tType=$('targetType').value, tVal=num('targetValue');
+  const units={lr:'(ratio, e.g. 5)',speed:'(m/s)',range:'(km)',depth:'(m)',pitch:'(degrees)'};
+  $('targetUnit').textContent=units[tType]||'';
+  let tRes={text:"Enter a positive target value."};
+  if(isFinite(tVal)&&tVal>0){
+    if(tType==='lr'){
+      if(cd0>0){ const kNeed=1/(4*tVal*tVal*cd0);
+        tRes={text:"To reach a best glide ratio of <b>"+fmt(tVal,2)+"</b>, reduce the induced-drag factor k to <b>"+
+          fmt(kNeed,3)+"</b> (now "+fmt(k,3)+") — e.g. longer, higher-aspect wings. C_D0 held at "+fmt(cd0,3)+".",
+          apply:[{id:'k',value:kNeed.toFixed(3)},{id:'useBestCl',check:true}]};
+      } else tRes={text:"Set C_D0 greater than 0 first."};
+    } else if(tType==='speed'){
+      if(vh>0){ const Snew=wingArea*Math.pow(vh/tVal,2);
+        tRes={text:"To fly at <b>"+fmt(tVal,3)+" m/s</b> horizontal, change wing area to <b>"+fmt(Snew,4)+
+          " m²</b> (now "+fmt(wingArea,3)+" m²). Smaller wing → faster &amp; steeper, larger → slower.",
+          apply:[{id:'wingArea',value:Snew.toFixed(4)}]};
+      } else tRes={text:"Need a valid glide first (give the vehicle some net buoyancy)."};
+    } else if(tType==='range'){
+      if(totalRange>0){ const battNew=num('batteryWh')*tVal*1000/totalRange;
+        tRes={text:"To reach <b>"+fmt(tVal,1)+" km</b> total range, size the battery to <b>"+fmt(battNew,0)+
+          " Wh</b> (now "+fmt(num('batteryWh'),0)+" Wh), holding the rest of the design fixed.",
+          apply:[{id:'batteryWh',value:Math.round(battNew)}]};
+      } else tRes={text:"Need a valid glide/energy result first."};
+    } else if(tType==='depth'){
+      const hpT=useWater?pressureVar(tVal,surface,grad,g):surface*g*tVal;
+      const tNeed=Math.max(tForYieldSF(1.5,hpT,radius,yieldPa,shape),tForBuckleSF(2.0,hpT,radius,E,nu,shape));
+      tRes={text:"To rate the hull for <b>"+fmt(tVal,0)+" m</b>, set operating depth to "+fmt(tVal,0)+
+        " m and wall thickness to <b>"+fmt(Math.ceil(tNeed*1000*10)/10,1)+" mm</b> (yield SF 1.5 / buckling SF 2.0).",
+        apply:[{id:'hullDepth',value:Math.round(tVal)},{id:'thickness',value:(Math.ceil(tNeed*1000*10)/10).toFixed(1)}]};
+    } else if(tType==='pitch'){
+      if(bg>0){ const travel=bg*Math.tan(tVal*Math.PI/180)*mass/moveMass;
+        tRes={text:"To pitch <b>"+fmt(tVal,0)+"°</b>, slide the "+fmt(moveMass,1)+" kg moving mass <b>"+
+          fmt(travel*1000,0)+" mm</b>.",
+          apply:[{id:'moveDist',value:Math.round(travel*1000)},{id:'targetPitch',value:Math.round(tVal)}]};
+      } else tRes={text:"Make the vehicle statically stable (BG &gt; 0) first."};
+    }
+  }
+  $('targetOut').innerHTML=tRes.text;
+  targetApply=tRes.apply||null;
+  $('btnApplyTarget').disabled=!targetApply;
 
   // polar chart
   drawPolar(netMag,wingArea,cd0,k,rho);
@@ -543,15 +623,25 @@ function tForBuckleSF(target,hp,r,E,nu,shape){
   return r*Math.sqrt(target*hp*Math.sqrt(3*(1-nu*nu))/(2*E));
 }
 
+let recApplies=[];
 function renderRecs(recs){
   const bar=$('recbar');
-  if(!recs.length){ bar.innerHTML=''; return; }
+  if(!recs.length){ bar.innerHTML=''; recApplies=[]; return; }
   recs.sort((a,b)=>a.lvl-b.lvl);
+  recApplies=recs.map(r=>r.apply||null);
   const tagName={0:'fix',1:'tune',2:'good'};
   const tagText={0:'FIX',1:'TUNE',2:'GOOD'};
   bar.innerHTML='<div class="card"><h2><span class="ic">💡</span> Recommendations</h2><ul class="reclist">'+
-    recs.map(r=>'<li><span class="tag '+tagName[r.lvl]+'">'+tagText[r.lvl]+'</span><span>'+r.text+'</span></li>').join('')+
+    recs.map((r,i)=>'<li><span class="tag '+tagName[r.lvl]+'">'+tagText[r.lvl]+'</span><span>'+r.text+
+      (r.apply?' <button class="apply" data-i="'+i+'">Apply ↦</button>':'')+'</span></li>').join('')+
     '</ul></div>';
+}
+// set fields from an apply action: [{id,value}] or [{id,check:true}]
+function applyFields(list){
+  if(!list) return;
+  list.forEach(a=>{ const el=$(a.id); if(!el) return;
+    if(a.check!==undefined) el.checked=a.check; else el.value=a.value; });
+  compute();
 }
 
 function renderWarns(warns){
@@ -631,9 +721,11 @@ function buildReport(r){
 }
 
 // ---- persistence & controls ----
+let targetApply=null;
 const IDS=['surfaceDensity','g','useWater','workingDepth','gradient','mass','volL','wingArea','cd0','k',
   'useBestCl','cl','cgz','cbz','cgx','cbx','moveMass','moveDist','targetPitch','shape','hullDepth',
-  'radius','thickness','poisson','yieldMPa','youngGPa','batteryWh','ballastL','depthBand','hotelW','pumpEff'];
+  'radius','thickness','poisson','yieldMPa','youngGPa','batteryWh','ballastL','depthBand','hotelW','pumpEff',
+  'targetType','targetValue'];
 function save(){
   const s={}; IDS.forEach(id=>{const el=$(id); s[id]= el.type==='checkbox'? el.checked : el.value;});
   try{ localStorage.setItem('glider', JSON.stringify(s)); }catch(e){}
@@ -647,6 +739,13 @@ function load(){
 function example(){ localStorage.removeItem('glider'); location.reload(); }
 
 IDS.forEach(id=> $(id).addEventListener('input', compute));
+IDS.forEach(id=> $(id).addEventListener('change', compute));
+// "Apply" buttons inside recommendations (delegated, since they re-render)
+$('recbar').addEventListener('click', e=>{
+  const b=e.target.closest('button.apply'); if(!b) return;
+  applyFields(recApplies[+b.dataset.i]);
+});
+$('btnApplyTarget').addEventListener('click', ()=>applyFields(targetApply));
 $('btnExample').addEventListener('click', example);
 $('btnReset').addEventListener('click', ()=>{ localStorage.removeItem('glider'); location.reload(); });
 $('btnUnits').addEventListener('click', ()=>{
