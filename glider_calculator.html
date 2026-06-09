@@ -235,11 +235,16 @@
         <label style="margin:0">Drive the Buoyancy section from these totals (mass &amp; displaced volume)</label></div>
       <div class="chk"><input type="checkbox" id="useBudgetCG">
         <label style="margin:0">Drive the Stability CG from the component positions</label></div>
+      <div class="chk"><input type="checkbox" id="useBudgetCB">
+        <label style="margin:0">Drive the Stability CB from the component volumes</label></div>
       <div style="overflow-x:auto">
       <table class="budget" id="budgetTable">
         <thead><tr><th>Component</th><th>Mass (kg)</th><th>Volume (L)</th><th>x (mm)</th><th>z (mm)</th><th></th></tr></thead>
         <tbody id="budgetBody"></tbody>
-        <tfoot><tr><td>Total / CG</td><td id="budMass">–</td><td id="budVol">–</td><td id="budCGx">–</td><td id="budCGz">–</td><td></td></tr></tfoot>
+        <tfoot>
+          <tr><td>Total / CG</td><td id="budMass">–</td><td id="budVol">–</td><td id="budCGx">–</td><td id="budCGz">–</td><td></td></tr>
+          <tr><td>Centre of buoyancy</td><td></td><td></td><td id="budCBx">–</td><td id="budCBz">–</td><td></td></tr>
+        </tfoot>
       </table>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -247,6 +252,13 @@
         <button class="tool" id="btnHullComp">⟳ Pull hull from Pressure-hull section</button>
       </div>
       <div class="hint">“Volume” is the water each part displaces (sealed/external volume; flooded parts ≈ 0). Positions: <b>x</b> = fore/aft (+ forward), <b>z</b> = vertical (+ up, − below the centre axis). Tick the boxes to feed Buoyancy and Stability automatically.</div>
+      <canvas id="layout" width="1100" height="340" style="margin-top:14px"></canvas>
+      <div class="legend">
+        <span><i class="swatch" style="background:#7fd4e6;border-radius:50%;width:10px;height:10px"></i> Component (size ∝ mass)</span>
+        <span><i class="swatch" style="background:#ff6b6b;border-radius:50%;width:10px;height:10px"></i> CG</span>
+        <span><i class="swatch" style="background:#5be0c0;width:10px;height:10px"></i> CB</span>
+      </div>
+      <div class="hint" style="text-align:center">Side profile (fore/aft × vertical). Axes are scaled independently to fill the view, so it's schematic, not to scale.</div>
     </section>
 
     <!-- GLIDE -->
@@ -421,16 +433,17 @@ const MATERIALS={
   abs:   {n:'ABS',                c:'Plastics',y:45, E:2.3, nu:0.35, d:1050},
   peek:  {n:'PEEK',               c:'Plastics',y:100,E:3.6, nu:0.38, d:1320},
 };
-// starter mass/volume budget (sums to the example: 52.0 kg, 50.7 L, CG 0 / -15 mm)
+// starter mass/volume budget: sums to the example (52.0 kg, 50.7 L) with
+// mass-CG ≈ (0, -15) mm and volume-CB ≈ (0, 0) mm.
 // x = fore/aft (+ forward), z = vertical (+ up, - below centre axis), in mm
 const DEFAULT_COMPONENTS=[
   {name:'Pressure hull',            mass:6.94, vol:18.85, x:0,    z:0},
   {name:'Battery',                  mass:8,    vol:4,     x:-50,  z:-30},
-  {name:'Electronics & payload',    mass:5,    vol:3,     x:200,  z:10},
-  {name:'Ballast / pump system',    mass:6,    vol:4,     x:-150, z:-10},
-  {name:'Syntactic foam / fairing', mass:4,    vol:16,    x:75,   z:40},
+  {name:'Electronics & payload',    mass:5,    vol:3,     x:259,  z:0},
+  {name:'Ballast / pump system',    mass:6,    vol:4,     x:-150, z:0},
+  {name:'Syntactic foam / fairing', mass:4,    vol:16,    x:1.5,  z:14.7},
   {name:'Wings & tail',             mass:2,    vol:1,     x:0,    z:0},
-  {name:'Trim ballast',             mass:20.06,vol:3.85,  x:0,    z:-34.4},
+  {name:'Trim ballast',             mass:20.06,vol:3.85,  x:0,    z:-29.85},
 ];
 let components = DEFAULT_COMPONENTS.map(c=>({...c}));
 const $ = id => document.getElementById(id);
@@ -743,6 +756,7 @@ function compute(){
   report += "\n\nRECOMMENDATIONS\n" + recs.map(r=>"["+({0:'FIX',1:'TUNE',2:'GOOD'}[r.lvl])+"] "+r.text).join("\n");
 
   if(typeof renderCompare==='function') renderCompare();
+  if(typeof drawLayout==='function') drawLayout();
   save();
 }
 
@@ -869,6 +883,7 @@ function snapshot(){
   s.__components = components.map(c=>({...c}));
   s.__useBudget = $('useBudget').checked;
   s.__useBudgetCG = $('useBudgetCG').checked;
+  s.__useBudgetCB = $('useBudgetCB').checked;
   return s;
 }
 function applySnapshot(s){
@@ -878,9 +893,11 @@ function applySnapshot(s){
   if(Array.isArray(s.__components)) components = s.__components.map(c=>({...c}));
   if(s.__useBudget!==undefined) $('useBudget').checked = !!s.__useBudget;
   if(s.__useBudgetCG!==undefined) $('useBudgetCG').checked = !!s.__useBudgetCG;
+  if(s.__useBudgetCB!==undefined) $('useBudgetCB').checked = !!s.__useBudgetCB;
   renderComponents();
   $('mass').disabled=$('volL').disabled=$('useBudget').checked;
   $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
+  $('cbx').disabled=$('cbz').disabled=$('useBudgetCB').checked;
 }
 function save(){ try{ localStorage.setItem('glider', JSON.stringify(snapshot())); }catch(e){} }
 function load(){ try{ applySnapshot(JSON.parse(localStorage.getItem('glider'))); }catch(e){} }
@@ -1060,23 +1077,83 @@ function renderComponents(){
     '</tr>').join('');
   updateBudgetTotals();
 }
+function budgetCentroids(){
+  let tm=0,tv=0,mx=0,mz=0,vx=0,vz=0;
+  components.forEach(c=>{ const m=+c.mass||0, v=+c.vol||0, x=+c.x||0, z=+c.z||0;
+    tm+=m; tv+=v; mx+=m*x; mz+=m*z; vx+=v*x; vz+=v*z; });
+  return {tm, tv,
+    cgx: tm>0? mx/tm:0, cgz: tm>0? mz/tm:0,
+    cbx: tv>0? vx/tv:0, cbz: tv>0? vz/tv:0};   // mm
+}
 function updateBudgetTotals(){
-  let tm=0,tv=0,mx=0,mz=0;
-  components.forEach(c=>{ const m=+c.mass||0; tm+=m; tv+=(+c.vol||0); mx+=m*(+c.x||0); mz+=m*(+c.z||0); });
-  const cgx = tm>0? mx/tm : 0, cgz = tm>0? mz/tm : 0;   // mm
-  $('budMass').textContent=fmt(tm,2)+' kg';
-  $('budVol').textContent=fmt(tv,2)+' L';
-  $('budCGx').textContent=fmt(cgx,1)+' mm';
-  $('budCGz').textContent=fmt(cgz,1)+' mm';
-  if($('useBudget').checked){ $('mass').value=tm.toFixed(2); $('volL').value=tv.toFixed(2); }
-  if($('useBudgetCG').checked){ $('cgx').value=(cgx/1000).toFixed(4); $('cgz').value=(cgz/1000).toFixed(4); }
-  return {tm,tv,cgx,cgz};
+  const b=budgetCentroids();
+  $('budMass').textContent=fmt(b.tm,2)+' kg';
+  $('budVol').textContent=fmt(b.tv,2)+' L';
+  $('budCGx').textContent=fmt(b.cgx,1)+' mm';
+  $('budCGz').textContent=fmt(b.cgz,1)+' mm';
+  $('budCBx').textContent=fmt(b.cbx,1)+' mm';
+  $('budCBz').textContent=fmt(b.cbz,1)+' mm';
+  if($('useBudget').checked){ $('mass').value=b.tm.toFixed(2); $('volL').value=b.tv.toFixed(2); }
+  if($('useBudgetCG').checked){ $('cgx').value=(b.cgx/1000).toFixed(4); $('cgz').value=(b.cgz/1000).toFixed(4); }
+  if($('useBudgetCB').checked){ $('cbx').value=(b.cbx/1000).toFixed(4); $('cbz').value=(b.cbz/1000).toFixed(4); }
+  drawLayout(b);
+  return b;
 }
 function syncBudgetMode(){
   $('mass').disabled=$('volL').disabled=$('useBudget').checked;
   $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
+  $('cbx').disabled=$('cbz').disabled=$('useBudgetCB').checked;
   updateBudgetTotals();
   compute();
+}
+// side-profile layout diagram (x = fore/aft, z = vertical)
+function drawLayout(b){
+  const c=$('layout'); if(!c) return;
+  const ctx=c.getContext('2d'), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H);
+  b = b || budgetCentroids();
+  const R=num('radius')||100, L=num('hullLength')||600;
+  const xs=components.map(k=>+k.x||0), zs=components.map(k=>+k.z||0);
+  let xmin=Math.min(-L/2,...xs,b.cgx,b.cbx), xmax=Math.max(L/2,...xs,b.cgx,b.cbx);
+  let zmin=Math.min(-R,...zs,b.cgz,b.cbz), zmax=Math.max(R,...zs,b.cgz,b.cbz);
+  const xp=(xmax-xmin)*0.12+15, zp=(zmax-zmin)*0.18+15;
+  xmin-=xp; xmax+=xp; zmin-=zp; zmax+=zp;
+  const pad=30;
+  const X=x=> pad+(x-xmin)/(xmax-xmin)*(W-2*pad);
+  const Z=z=> H-pad-(z-zmin)/(zmax-zmin)*(H-2*pad);
+  // hull envelope
+  ctx.strokeStyle='#3a6c7d'; ctx.lineWidth=1.5; ctx.fillStyle='rgba(55,192,216,.06)';
+  ctx.beginPath(); ctx.rect(X(-L/2),Z(R),X(L/2)-X(-L/2),Z(-R)-Z(R)); ctx.fill(); ctx.stroke();
+  // origin axes
+  ctx.strokeStyle='#2a5b6b'; ctx.setLineDash([4,4]); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(X(0),Z(zmin)); ctx.lineTo(X(0),Z(zmax)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X(xmin),Z(0)); ctx.lineTo(X(xmax),Z(0)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#9fc1cf'; ctx.font='11px system-ui'; ctx.textAlign='left';
+  ctx.fillText('← aft',X(xmin)+4,Z(0)-6); ctx.textAlign='right'; ctx.fillText('forward →',X(xmax)-4,Z(0)-6);
+  ctx.textAlign='left'; ctx.fillText('up ↑',X(0)+6,Z(zmax)+12);
+  // components
+  const mMax=Math.max(...components.map(k=>+k.mass||0),1);
+  ctx.textAlign='left';
+  components.forEach(k=>{
+    const x=X(+k.x||0), z=Z(+k.z||0), r=5+9*Math.sqrt((+k.mass||0)/mMax);
+    ctx.fillStyle='rgba(127,212,230,.85)'; ctx.strokeStyle='#0a222e'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(x,z,r,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#cfe8f0'; ctx.font='10px system-ui';
+    ctx.fillText(String(k.name).slice(0,14), x+r+3, z+3);
+  });
+  // CB marker (triangle)
+  const cbx=X(b.cbx), cbz=Z(b.cbz);
+  ctx.fillStyle='#5be0c0'; ctx.beginPath();
+  ctx.moveTo(cbx,cbz-7); ctx.lineTo(cbx-7,cbz+5); ctx.lineTo(cbx+7,cbz+5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#5be0c0'; ctx.font='bold 11px system-ui'; ctx.fillText('CB',cbx+9,cbz+4);
+  // CG marker (crosshair circle)
+  const cgx=X(b.cgx), cgz=Z(b.cgz);
+  ctx.strokeStyle='#ff6b6b'; ctx.fillStyle='#ff6b6b'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cgx,cgz,7,0,7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cgx-10,cgz); ctx.lineTo(cgx+10,cgz);
+  ctx.moveTo(cgx,cgz-10); ctx.lineTo(cgx,cgz+10); ctx.stroke();
+  ctx.font='bold 11px system-ui'; ctx.fillText('CG',cgx+11,cgz-6);
 }
 // edit a cell without re-rendering (keeps focus)
 $('budgetBody').addEventListener('input', e=>{
@@ -1084,12 +1161,12 @@ $('budgetBody').addEventListener('input', e=>{
   const i=+el.dataset.i, f=el.dataset.f;
   components[i][f] = f==='name' ? el.value : (parseFloat(el.value)||0);
   updateBudgetTotals();
-  if($('useBudget').checked || $('useBudgetCG').checked) compute();
+  if($('useBudget').checked || $('useBudgetCG').checked || $('useBudgetCB').checked) compute();
 });
 $('budgetBody').addEventListener('click', e=>{
   const d=e.target.closest('[data-del]'); if(!d) return;
   components.splice(+d.dataset.del,1); renderComponents();
-  if($('useBudget').checked||$('useBudgetCG').checked) compute(); save();
+  if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save();
 });
 $('btnAddComp').addEventListener('click', ()=>{
   components.push({name:'New component', mass:0, vol:0}); renderComponents(); save();
@@ -1099,10 +1176,11 @@ $('btnHullComp').addEventListener('click', ()=>{
   const row=components.find(c=>/hull/i.test(c.name));
   if(row){ row.mass=+hullShellMass.toFixed(2); row.vol=+hullExtVolL.toFixed(2); }
   else components.unshift({name:'Pressure hull', mass:+hullShellMass.toFixed(2), vol:+hullExtVolL.toFixed(2)});
-  renderComponents(); if($('useBudget').checked||$('useBudgetCG').checked) compute(); save();
+  renderComponents(); if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save();
 });
 $('useBudget').addEventListener('change', ()=>{ syncBudgetMode(); save(); });
 $('useBudgetCG').addEventListener('change', ()=>{ syncBudgetMode(); save(); });
+$('useBudgetCB').addEventListener('change', ()=>{ syncBudgetMode(); save(); });
 
 // add a "Calculate" button to the bottom of each calculation section
 ['card-water','card-buoy','card-glide','card-stab','card-hull','card-energy'].forEach(id=>{
@@ -1123,6 +1201,7 @@ load();
 $('material').value=matchMaterial();
 $('mass').disabled=$('volL').disabled=$('useBudget').checked;
 $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
+$('cbx').disabled=$('cbz').disabled=$('useBudgetCB').checked;
 updateBudgetTotals();
 refreshDesigns();
 compute();
