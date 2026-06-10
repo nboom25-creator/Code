@@ -14,7 +14,9 @@ and **live-updating** results. It also includes:
 - **Requirements-driven mode**: enter your project requirements (depth, hull
   tube size/material, syringe-pump volume, target speed and glide angle) and it
   sizes the hull wall, ballast authority, wing area and trim, then runs the full
-  analysis — handy for a senior-design lab glider.
+  analysis — handy for a senior-design lab glider. It also sizes the syringe-pump
+  engine (force, torque, flow, stroke time), checks the chosen motor can supply
+  it, and totals a bill of materials.
 - **Colour-coded safety warnings** and a **Recommendations** panel that turns
   the numbers into concrete actions (e.g. *“increase the wall to 7.2 mm for
   buckling SF 2.0”*), each with a one-click **Apply** button.

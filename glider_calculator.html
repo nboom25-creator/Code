@@ -300,6 +300,11 @@
   .grid > .card.collapsed > h2{margin-bottom:0; padding-bottom:0; border-bottom:none}
   .grid > .card.collapsed > h2::after{transform:rotate(-90deg)}
   .grid > .card.collapsed > *:not(h2){display:none !important}
+  .subhead{display:flex; align-items:center; gap:11px; font-size:14px; font-weight:700;
+    margin:16px 0 12px; padding-bottom:10px; border-bottom:1px solid var(--line)}
+  .subhead .ic{display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+    font-size:15px; border-radius:10px; background:linear-gradient(180deg, rgba(63,208,230,.22), rgba(63,208,230,.07));
+    border:1px solid rgba(63,208,230,.3)}
 
   @media (prefers-reduced-motion:reduce){
     *,*::before{animation:none !important}
@@ -337,13 +342,6 @@
     <button class="tool" id="btnUnits">📋 Copy report</button>
     <button class="tool" id="btnTxt">⬇ Download .txt</button>
     <button class="tool" id="btnPrint">🖨 Save as PDF</button>
-    <select id="theme" title="Colour theme" aria-label="Colour theme">
-      <option value="ocean">🌊 Ocean</option>
-      <option value="sunset">🌅 Sunset</option>
-      <option value="aurora">🌌 Aurora</option>
-      <option value="midnight">🌑 Midnight</option>
-      <option value="daylight">☀️ Daylight</option>
-    </select>
   </div>
 
   <div class="warnbar" id="warnbar"></div>
@@ -388,12 +386,7 @@
         <div style="display:flex;align-items:flex-end"><button class="tool" id="btnNew" style="width:100%">✨ Reset to example</button></div>
       </div>
       <div id="designList" class="out"></div>
-      <div class="row" style="margin-top:6px">
-        <div><label>Compare A</label><select id="cmpA"></select></div>
-        <div><label>Compare B</label><select id="cmpB"></select></div>
-      </div>
-      <div id="compareOut"></div>
-      <div class="hint">Designs are stored in this browser. Load one to edit it, or compare two side by side.</div>
+      <div class="hint">Designs are stored in this browser. Load one to edit it.</div>
     </section>
 
     <!-- WATER -->
@@ -537,18 +530,15 @@
     <!-- HULL -->
     <section class="card" id="card-hull">
       <h2><span class="ic">🛢️</span> Pressure hull</h2>
-      <div class="row">
-        <div><label>Shape</label>
-          <select id="shape"><option value="cylinder">Cylinder</option><option value="sphere">Sphere</option></select></div>
-        <div><label>Operating depth (m)</label><input type="number" id="hullDepth" value="200" step="10"></div>
-      </div>
       <div class="row3">
         <div><label>Radius (mm)</label><input type="number" id="radius" value="100" step="1"></div>
         <div><label>Wall (mm)</label><input type="number" id="thickness" value="6" step="0.5"></div>
-        <div><label>Length (mm)</label><input type="number" id="hullLength" value="600" step="10"><div class="hint">Cylinder body; ignored for sphere</div></div>
+        <div><label>Operating depth (m)</label><input type="number" id="hullDepth" value="200" step="10"></div>
       </div>
-      <div><label>Material</label><select id="material"></select>
-        <div class="hint">Auto-fills the properties below. Edit any value to switch to “Custom”.</div></div>
+      <div class="row3">
+        <div><label>Length (mm)</label><input type="number" id="hullLength" value="600" step="10"><div class="hint">Cylinder body length</div></div>
+        <div style="grid-column:span 2"><div class="hint" style="margin-top:24px">Hull material properties are set from the Requirements card (or edit below).</div></div>
+      </div>
       <div class="row3">
         <div><label>Yield strength (MPa)</label><input type="number" id="yieldMPa" value="276" step="1"><div class="hint">Plastics: nominal tensile</div></div>
         <div><label>Young's modulus (GPa)</label><input type="number" id="youngGPa" value="69" step="1"><div class="hint">Drives buckling</div></div>
@@ -611,32 +601,33 @@
         <div class="kv"><span class="k">Work per stroke</span><span class="v" id="o_pumpwork">–</span></div>
       </div>
       <button class="tool" id="btnPumpToBallast" style="width:100%;margin-top:10px">↧ Use swept volume as ballast</button>
+      <div class="subhead"><span class="ic">⚙️</span> Motor check</div>
+      <div class="row">
+        <div><label>Motor stall torque (mN·m)</label><input type="number" id="motorStall" value="200" step="10"></div>
+        <div><label>Motor no-load speed (rpm)</label><input type="number" id="motorNoLoad" value="120" step="5"></div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Torque available at set rpm</span><span class="v" id="o_motorAvail">–</span></div>
+        <div class="kv"><span class="k">Torque margin (avail / needed)</span><span class="v" id="o_motorMargin">–</span></div>
+        <div class="kv"><span class="k">Verdict</span><span class="v" id="o_motorVerdict">–</span></div>
+      </div>
     </section>
 
-    <!-- TARGET SOLVER -->
-    <section class="card span2" id="card-target">
-      <h2><span class="ic">🎯</span> Design targets — pick a goal, get the input that hits it</h2>
-      <div class="row3">
-        <div>
-          <label>I want to set my…</label>
-          <select id="targetType">
-            <option value="lr">Best glide ratio (L/D)</option>
-            <option value="speed">Horizontal speed (m/s)</option>
-            <option value="range">Total range (km)</option>
-            <option value="depth">Rated depth (m)</option>
-            <option value="pitch">Pitch angle (°)</option>
-          </select>
-        </div>
-        <div>
-          <label>…to this value <span id="targetUnit" class="sub"></span></label>
-          <input type="number" id="targetValue" value="5" step="0.1">
-        </div>
-        <div style="display:flex;align-items:flex-end">
-          <button class="tool" id="btnApplyTarget" style="width:100%">Apply solution ↦</button>
-        </div>
+    <!-- BILL OF MATERIALS -->
+    <section class="card span2" id="card-bom">
+      <h2><span class="ic">🧾</span> Bill of materials &amp; cost</h2>
+      <div style="overflow-x:auto">
+      <table class="budget" id="bomTable">
+        <thead><tr><th>Item</th><th>Qty</th><th>Unit cost</th><th>Line total</th><th></th></tr></thead>
+        <tbody id="bomBody"></tbody>
+        <tfoot><tr><td>Total</td><td></td><td></td><td id="bomTotal">–</td><td></td></tr></tfoot>
+      </table>
       </div>
-      <div class="out" id="targetOut" style="font-size:13px">–</div>
-      <div class="hint">It solves the most natural single input for each goal (k for glide ratio, wing area for speed, battery for range, wall thickness for depth, ballast travel for pitch) and shows the value. Click <b>Apply solution</b> to fill it in.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+        <button class="tool" id="btnAddBom">+ Add line item</button>
+        <label style="margin:0">Currency</label><input type="text" id="bomCurrency" value="$" style="width:60px">
+      </div>
+      <div class="hint">Editable build budget for the lab glider. Costs are rough placeholders — update with your actual supplier prices.</div>
     </section>
 
     <!-- POLAR CHART -->
@@ -696,6 +687,20 @@ const DEFAULT_COMPONENTS=[
   {name:'Trim ballast',             mass:20.06,vol:3.85,  x:0,    z:-29.85},
 ];
 let components = DEFAULT_COMPONENTS.map(c=>({...c}));
+// default bill of materials for a lab syringe-pump glider (rough placeholder costs)
+const DEFAULT_BOM=[
+  {item:'Hull tube (clear acrylic)',        qty:1, cost:30},
+  {item:'End caps & O-ring seals',          qty:2, cost:12},
+  {item:'Syringe (60 mL)',                  qty:1, cost:8},
+  {item:'Lead screw + nut',                 qty:1, cost:15},
+  {item:'DC gearmotor + driver',            qty:1, cost:25},
+  {item:'Microcontroller board',            qty:1, cost:20},
+  {item:'Battery pack',                     qty:1, cost:20},
+  {item:'IMU / pressure sensor',            qty:1, cost:25},
+  {item:'Wings & tail (3D-print/acrylic)',  qty:1, cost:15},
+  {item:'Fasteners, wiring & misc',         qty:1, cost:20},
+];
+let bomItems = DEFAULT_BOM.map(c=>({...c}));
 const $ = id => document.getElementById(id);
 const num = id => parseFloat($(id).value);
 const fmt = (x,d=2) => (isFinite(x)? x.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}) : "–");
@@ -790,7 +795,7 @@ function compute(){
   } else { $('o_pitch').textContent="– (unstable)"; $('o_travel').textContent="– (unstable)"; }
 
   // hull
-  const shape=$('shape').value, radius=num('radius')/1000, thickness=num('thickness')/1000;
+  const shape='cylinder', radius=num('radius')/1000, thickness=num('thickness')/1000;
   const hullDepth=num('hullDepth'), yieldPa=num('yieldMPa')*1e6, E=num('youngGPa')*1e9, nu=num('poisson');
   const hp = useWater ? pressureVar(hullDepth,surface,grad,g) : surface*g*hullDepth;
   const tr = thickness/radius;
@@ -974,47 +979,8 @@ function compute(){
 
   renderRecs(recs);
 
-  // ---- design-target solver ----
-  const tType=$('targetType').value, tVal=num('targetValue');
-  const units={lr:'(ratio, e.g. 5)',speed:'(m/s)',range:'(km)',depth:'(m)',pitch:'(degrees)'};
-  $('targetUnit').textContent=units[tType]||'';
-  let tRes={text:"Enter a positive target value."};
-  if(isFinite(tVal)&&tVal>0){
-    if(tType==='lr'){
-      if(cd0>0){ const kNeed=1/(4*tVal*tVal*cd0);
-        tRes={text:"To reach a best glide ratio of <b>"+fmt(tVal,2)+"</b>, reduce the induced-drag factor k to <b>"+
-          fmt(kNeed,3)+"</b> (now "+fmt(k,3)+") — e.g. longer, higher-aspect wings. C_D0 held at "+fmt(cd0,3)+".",
-          apply:[{id:'k',value:kNeed.toFixed(3)},{id:'useBestCl',check:true}]};
-      } else tRes={text:"Set C_D0 greater than 0 first."};
-    } else if(tType==='speed'){
-      if(vh>0){ const Snew=wingArea*Math.pow(vh/tVal,2);
-        tRes={text:"To fly at <b>"+fmt(tVal,3)+" m/s</b> horizontal, change wing area to <b>"+fmt(Snew,4)+
-          " m²</b> (now "+fmt(wingArea,3)+" m²). Smaller wing → faster &amp; steeper, larger → slower.",
-          apply:[{id:'wingArea',value:Snew.toFixed(4)}]};
-      } else tRes={text:"Need a valid glide first (give the vehicle some net buoyancy)."};
-    } else if(tType==='range'){
-      if(totalRange>0){ const battNew=num('batteryWh')*tVal*1000/totalRange;
-        tRes={text:"To reach <b>"+fmt(tVal,1)+" km</b> total range, size the battery to <b>"+fmt(battNew,0)+
-          " Wh</b> (now "+fmt(num('batteryWh'),0)+" Wh), holding the rest of the design fixed.",
-          apply:[{id:'batteryWh',value:Math.round(battNew)}]};
-      } else tRes={text:"Need a valid glide/energy result first."};
-    } else if(tType==='depth'){
-      const hpT=useWater?pressureVar(tVal,surface,grad,g):surface*g*tVal;
-      const tNeed=Math.max(tForYieldSF(1.5,hpT,radius,yieldPa,shape),tForBuckleSF(2.0,hpT,radius,E,nu,shape));
-      tRes={text:"To rate the hull for <b>"+fmt(tVal,0)+" m</b>, set operating depth to "+fmt(tVal,0)+
-        " m and wall thickness to <b>"+fmt(Math.ceil(tNeed*1000*10)/10,1)+" mm</b> (yield SF 1.5 / buckling SF 2.0).",
-        apply:[{id:'hullDepth',value:Math.round(tVal)},{id:'thickness',value:(Math.ceil(tNeed*1000*10)/10).toFixed(1)}]};
-    } else if(tType==='pitch'){
-      if(bg>0){ const travel=bg*Math.tan(tVal*Math.PI/180)*mass/moveMass;
-        tRes={text:"To pitch <b>"+fmt(tVal,0)+"°</b>, slide the "+fmt(moveMass,1)+" kg moving mass <b>"+
-          fmt(travel*1000,0)+" mm</b>.",
-          apply:[{id:'moveDist',value:Math.round(travel*1000)},{id:'targetPitch',value:Math.round(tVal)}]};
-      } else tRes={text:"Make the vehicle statically stable (BG &gt; 0) first."};
-    }
-  }
-  $('targetOut').innerHTML=tRes.text;
-  targetApply=tRes.apply||null;
-  $('btnApplyTarget').disabled=!targetApply;
+  // motor check (uses pump torque/speed computed above)
+  updateMotorCheck(torque, rpm);
 
   // polar chart
   drawPolar(netMag,wingArea,cd0,k,rho);
@@ -1025,7 +991,6 @@ function compute(){
     batteryWh:num('batteryWh'),cycles,totalRange,endurance});
   report += "\n\nRECOMMENDATIONS\n" + recs.map(r=>"["+({0:'FIX',1:'TUNE',2:'GOOD'}[r.lvl])+"] "+r.text).join("\n");
 
-  if(typeof renderCompare==='function') renderCompare();
   if(typeof drawLayout==='function') drawLayout();
   save();
 }
@@ -1034,6 +999,20 @@ function sfBadge(sf,thresh){
   const cls = sf>=thresh*1.33 ? "good" : sf>=thresh ? "warn" : "bad";
   const txt = isFinite(sf)? fmt(sf,2) : "∞";
   return '<span class="badge '+cls+'">'+txt+'</span>';
+}
+// check the chosen motor can supply the pump's torque at the set speed
+function updateMotorCheck(torqueNm, pumpRpm){
+  const stall=num('motorStall')/1000, noLoad=num('motorNoLoad');   // N·m, rpm
+  const avail=noLoad>0 ? stall*Math.max(0,1-pumpRpm/noLoad) : 0;     // linear DC-motor curve
+  const margin=torqueNm>0 ? avail/torqueNm : Infinity;
+  $('o_motorAvail').textContent = fmt(avail*1000,1)+" mN·m";
+  $('o_motorMargin').textContent = isFinite(margin)? fmt(margin,2)+"×" : "∞";
+  let v;
+  if(pumpRpm>=noLoad) v='<span class="badge bad">rpm ≥ no-load — won\'t turn</span>';
+  else if(margin<1) v='<span class="badge bad">under-powered</span>';
+  else if(margin<1.5) v='<span class="badge warn">marginal</span>';
+  else v='<span class="badge good">OK</span>';
+  $('o_motorVerdict').innerHTML=v;
 }
 
 // wall thickness needed to reach a target safety factor
@@ -1143,18 +1122,20 @@ function buildReport(r){
 }
 
 // ---- persistence & controls ----
-let targetApply=null, hullShellMass=NaN, hullExtVolL=NaN, pumpSweptML=NaN;
+let hullShellMass=NaN, hullExtVolL=NaN, pumpSweptML=NaN;
 const IDS=['surfaceDensity','g','useWater','workingDepth','gradient','mass','volL','wingArea','cd0','k',
-  'useBestCl','cl','cgz','cbz','cgx','cbx','moveMass','moveDist','targetPitch','shape','hullDepth',
+  'useBestCl','cl','cgz','cbz','cgx','cbx','moveMass','moveDist','targetPitch','hullDepth',
   'radius','thickness','hullLength','poisson','yieldMPa','youngGPa','matDensity','batteryWh','ballastL',
   'depthBand','hotelW','pumpEff','pumpBore','pumpStroke','pumpPitch','pumpScrewEff','pumpRpm',
-  'targetType','targetValue'];
+  'motorStall','motorNoLoad'];
 function snapshot(){
   const s={}; IDS.forEach(id=>{const el=$(id); s[id]= el.type==='checkbox'? el.checked : el.value;});
   s.__components = components.map(c=>({...c}));
   s.__useBudget = $('useBudget').checked;
   s.__useBudgetCG = $('useBudgetCG').checked;
   s.__useBudgetCB = $('useBudgetCB').checked;
+  s.__bom = bomItems.map(b=>({...b}));
+  s.__bomCurrency = $('bomCurrency').value;
   return s;
 }
 function applySnapshot(s){
@@ -1165,6 +1146,9 @@ function applySnapshot(s){
   if(s.__useBudget!==undefined) $('useBudget').checked = !!s.__useBudget;
   if(s.__useBudgetCG!==undefined) $('useBudgetCG').checked = !!s.__useBudgetCG;
   if(s.__useBudgetCB!==undefined) $('useBudgetCB').checked = !!s.__useBudgetCB;
+  if(Array.isArray(s.__bom)) bomItems = s.__bom.map(b=>({...b}));
+  if(s.__bomCurrency!==undefined) $('bomCurrency').value = s.__bomCurrency;
+  renderBom();
   renderComponents();
   $('mass').disabled=$('volL').disabled=$('useBudget').checked;
   $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
@@ -1191,76 +1175,8 @@ function refreshDesigns(){
   else list.innerHTML=names.map(n=>'<div class="design-item"><span>'+escapeHtml(n)+'</span>'+
     '<span class="acts"><button class="mini" data-load="'+escapeHtml(n)+'">Load</button>'+
     '<button class="mini del" data-del="'+escapeHtml(n)+'">Delete</button></span></div>').join('');
-  // populate compare selects, preserving current choices
-  ['cmpA','cmpB'].forEach(id=>{
-    const sel=$(id), prev=sel.value;
-    sel.innerHTML='<option value="">— current design —</option>'+names.map(n=>'<option>'+escapeHtml(n)+'</option>').join('');
-    if([...sel.options].some(o=>o.value===prev)) sel.value=prev;
-  });
-  renderCompare();
 }
 function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-// ---- comparison: pure metric model (mirrors compute) ----
-function metricVal(snap){
-  const g=+snap.g, surface=+snap.surfaceDensity, useWater=!!snap.useWater;
-  const grad=useWater ? (snap.gradient!=null&&snap.gradient!==''? +snap.gradient : gradientAuto(surface,g)) : 0;
-  const wd=+snap.workingDepth, rho=useWater? seawaterDensity(wd,surface,grad) : surface;
-  const mass=+snap.mass, vol=+snap.volL/1000, net=rho*g*vol-mass*g, netMag=Math.abs(net);
-  const S=+snap.wingArea, cd0=+snap.cd0, k=+snap.k;
-  const cl=(snap.useBestCl&&cd0>0&&k>0)? Math.sqrt(cd0/k) : +snap.cl;
-  let lr=NaN, vh=NaN;
-  if(cl>0&&S>0&&netMag>1e-9){ const cd=cd0+k*cl*cl, gam=Math.atan2(cd,cl);
-    lr=cl/cd; const V=Math.sqrt(2*netMag*Math.cos(gam)/(rho*S*cl)); vh=V*Math.cos(gam); }
-  const bg=+snap.cbz - +snap.cgz;
-  const shape=snap.shape, r=+snap.radius/1000, t=+snap.thickness/1000;
-  const hd=+snap.hullDepth, yieldPa=+snap.yieldMPa*1e6, E=+snap.youngGPa*1e9, nu=+snap.poisson;
-  const hp=useWater? pressureVar(hd,surface,grad,g) : surface*g*hd;
-  let hoop,pBuckle,pYield;
-  if(shape==='cylinder'){ hoop=hp*r/t; pBuckle=E/(4*(1-nu*nu))*Math.pow(t/r,3); pYield=yieldPa*t/r; }
-  else { hoop=hp*r/(2*t); pBuckle=2*E/Math.sqrt(3*(1-nu*nu))*Math.pow(t/r,2); pYield=2*yieldPa*t/r; }
-  const ysf=hoop>0? yieldPa/hoop:Infinity, bsf=hp>0? pBuckle/hp:Infinity;
-  const collapse=Math.min(pYield,pBuckle)/(surface*g);
-  const batteryJ=+snap.batteryWh*3600, ballast=+snap.ballastL/1000, depthBand=+snap.depthBand,
-        hotelW=+snap.hotelW, pumpEff=+snap.pumpEff;
-  const pump=(rho*g*depthBand+ATM)*ballast/pumpEff;
-  let rangeKm=NaN, endurDays=NaN;
-  if(isFinite(lr)&&vh>0){ const rpc=2*depthBand*lr, ct=rpc/vh, cyc=batteryJ/(pump+hotelW*ct);
-    rangeKm=cyc*rpc/1000; endurDays=cyc*ct/86400; }
-  return {netg:net/g*1000, lr, vh, bgmm:bg*1000, ysf, bsf, collapse, rangeKm, endurDays};
-}
-function renderCompare(){
-  const out=$('compareOut');
-  const d=getDesigns();
-  const pick=id=>{ const v=$(id).value; return v&&d[v]? d[v] : snapshot(); };
-  const aName=$('cmpA').value||'current', bName=$('cmpB').value||'current';
-  const A=metricVal(pick('cmpA')), B=metricVal(pick('cmpB'));
-  // rows: label, value-fn, higher-is-better?
-  const rows=[
-    ['Net buoyancy (g)', m=>(m.netg>=0?'+':'')+fmt(m.netg,1), null],
-    ['Glide ratio L/D', m=>fmt(m.lr,2), 1],
-    ['Horizontal speed (m/s)', m=>fmt(m.vh,3), null],
-    ['BG (mm)', m=>fmt(m.bgmm,1), 1],
-    ['Yield SF', m=>isFinite(m.ysf)?fmt(m.ysf,2):'∞', 1],
-    ['Buckling SF', m=>isFinite(m.bsf)?fmt(m.bsf,2):'∞', 1],
-    ['Collapse depth (m)', m=>fmt(m.collapse,0), 1],
-    ['Total range (km)', m=>fmt(m.rangeKm,1), 1],
-    ['Endurance (days)', m=>fmt(m.endurDays,1), 1],
-  ];
-  const cellVals={lr:[A.lr,B.lr],bgmm:[A.bgmm,B.bgmm],ysf:[A.ysf,B.ysf],bsf:[A.bsf,B.bsf],
-    collapse:[A.collapse,B.collapse],rangeKm:[A.rangeKm,B.rangeKm],endurDays:[A.endurDays,B.endurDays]};
-  const keyFor={'Glide ratio L/D':'lr','BG (mm)':'bgmm','Yield SF':'ysf','Buckling SF':'bsf',
-    'Collapse depth (m)':'collapse','Total range (km)':'rangeKm','Endurance (days)':'endurDays'};
-  let html='<table class="cmp"><thead><tr><th>Metric</th><th>'+escapeHtml(aName)+'</th><th>'+escapeHtml(bName)+'</th></tr></thead><tbody>';
-  rows.forEach(([label,fn,better])=>{
-    let aCls='',bCls='';
-    if(better){ const k=keyFor[label]; if(k){ const [av,bv]=cellVals[k];
-      if(isFinite(av)&&isFinite(bv)&&Math.abs(av-bv)>1e-9){ if(av>bv) aCls=' class="better"'; else bCls=' class="better"'; } } }
-    html+='<tr><td>'+label+'</td><td'+aCls+'>'+fn(A)+'</td><td'+bCls+'>'+fn(B)+'</td></tr>';
-  });
-  html+='</tbody></table>';
-  out.innerHTML=html;
-}
 
 // ---- downloads ----
 function downloadTxt(){
@@ -1271,8 +1187,6 @@ function downloadTxt(){
 }
 
 IDS.forEach(id=>{ $(id).addEventListener('input', compute); $(id).addEventListener('change', compute); });
-// keep the compare table live as the current design changes
-['cmpA','cmpB'].forEach(id=> $(id).addEventListener('change', renderCompare));
 // "Apply" buttons inside recommendations (delegated, since they re-render)
 $('recbar').addEventListener('click', e=>{
   const b=e.target.closest('button.apply'); if(!b) return;
@@ -1287,7 +1201,6 @@ $('designList').addEventListener('click', e=>{
 $('btnSaveDesign').addEventListener('click', saveDesign);
 $('designName').addEventListener('keydown', e=>{ if(e.key==='Enter') saveDesign(); });
 $('btnNew').addEventListener('click', example);
-$('btnApplyTarget').addEventListener('click', ()=>applyFields(targetApply));
 $('btnPumpToBallast').addEventListener('click', ()=>{
   if(isFinite(pumpSweptML)) $('ballastL').value=(pumpSweptML/1000).toFixed(3);
   compute();
@@ -1323,22 +1236,6 @@ function populateMaterials(selId='material', includeCustom=true){
   if(includeCustom) html+='<option value="custom">Custom (enter values)</option>';
   sel.innerHTML=html;
 }
-// detect which material (if any) the current properties match
-function matchMaterial(){
-  const y=+$('yieldMPa').value, E=+$('youngGPa').value, nu=+$('poisson').value, d=+$('matDensity').value;
-  for(const k in MATERIALS){ const m=MATERIALS[k];
-    if(Math.abs(m.y-y)<0.5 && Math.abs(m.E-E)<0.05 && Math.abs(m.nu-nu)<0.005 && Math.abs(m.d-d)<2) return k; }
-  return 'custom';
-}
-populateMaterials();
-$('material').addEventListener('change', ()=>{
-  const m=MATERIALS[$('material').value];
-  if(m){ $('yieldMPa').value=m.y; $('youngGPa').value=m.E; $('poisson').value=m.nu; $('matDensity').value=m.d; }
-  compute();
-});
-// editing any hull property re-detects the material (or shows Custom)
-['yieldMPa','youngGPa','poisson','matDensity'].forEach(id=>
-  $(id).addEventListener('input', ()=>{ $('material').value=matchMaterial(); }));
 
 // ---- requirements-driven design generator ----
 populateMaterials('req_mat', false);
@@ -1370,12 +1267,11 @@ function generateFromRequirements(){
   const r=od/2/1000;                       // outer radius (m)
   $('radius').value=(od/2).toFixed(1);
   $('hullLength').value=len.toFixed(0);
-  // material
-  $('material').value=matKey;
+  // material properties
   $('yieldMPa').value=M.y; $('youngGPa').value=M.E; $('poisson').value=M.nu; $('matDensity').value=M.d;
   // wall thickness for safety at depth (clamped to a buildable minimum)
   const grad=$('useWater').checked? gradientAuto(rho0,g):0;
-  const hp=pressureVar(depth,rho0,grad,g), shape=$('shape').value;
+  const hp=pressureVar(depth,rho0,grad,g), shape='cylinder';
   const tReq=Math.max(tForYieldSF(1.5,hp,r,M.y*1e6,shape), tForBuckleSF(2.0,hp,r,M.E*1e9,M.nu,shape));
   let tMM=Math.ceil(Math.max(tReq*1000,3)*2)/2;   // >= 3 mm, rounded to 0.5
   $('thickness').value=tMM.toFixed(1);
@@ -1410,7 +1306,6 @@ function generateFromRequirements(){
   // make sure budget drivers don't overwrite the generated values
   $('useBudget').checked=$('useBudgetCG').checked=$('useBudgetCB').checked=false;
   ['mass','volL','cgx','cgz','cbx','cbz'].forEach(id=>$(id).disabled=false);
-  $('material').value=matchMaterial();
   saveReq();
   compute();
 
@@ -1559,12 +1454,38 @@ $('useBudget').addEventListener('change', ()=>{ syncBudgetMode(); save(); });
 $('useBudgetCG').addEventListener('change', ()=>{ syncBudgetMode(); save(); });
 $('useBudgetCB').addEventListener('change', ()=>{ syncBudgetMode(); save(); });
 
-// ---- colour theme ----
-function applyTheme(t){ document.documentElement.setAttribute('data-theme', t);
-  try{ localStorage.setItem('gliderTheme', t); }catch(e){} }
-$('theme').addEventListener('change', ()=>applyTheme($('theme').value));
-(function(){ let t='ocean'; try{ t=localStorage.getItem('gliderTheme')||'ocean'; }catch(e){}
-  $('theme').value=t; applyTheme(t); })();
+// ---- bill of materials ----
+function renderBom(){
+  const cur=$('bomCurrency').value||'$';
+  $('bomBody').innerHTML=bomItems.map((b,i)=>
+    '<tr>'+
+    '<td><input class="bname" type="text" data-i="'+i+'" data-f="item" value="'+escapeHtml(String(b.item))+'"></td>'+
+    '<td><input class="bnum" type="number" step="1" data-i="'+i+'" data-f="qty" value="'+b.qty+'"></td>'+
+    '<td><input class="bnum" type="number" step="1" data-i="'+i+'" data-f="cost" value="'+b.cost+'"></td>'+
+    '<td>'+cur+fmt((+b.qty||0)*(+b.cost||0),2)+'</td>'+
+    '<td><button class="mini del" data-del="'+i+'" title="Remove">✕</button></td>'+
+    '</tr>').join('');
+  updateBomTotal();
+}
+function updateBomTotal(){
+  const cur=$('bomCurrency').value||'$';
+  const total=bomItems.reduce((s,b)=>s+(+b.qty||0)*(+b.cost||0),0);
+  $('bomTotal').textContent=cur+fmt(total,2);
+}
+$('bomBody').addEventListener('input', e=>{
+  const el=e.target; if(el.dataset.i===undefined) return;
+  const i=+el.dataset.i, f=el.dataset.f;
+  bomItems[i][f] = f==='item' ? el.value : (parseFloat(el.value)||0);
+  // update only the affected line total + grand total (keep focus)
+  const row=el.closest('tr'); if(row) row.children[3].textContent=($('bomCurrency').value||'$')+fmt((+bomItems[i].qty||0)*(+bomItems[i].cost||0),2);
+  updateBomTotal(); save();
+});
+$('bomBody').addEventListener('click', e=>{
+  const d=e.target.closest('[data-del]'); if(!d) return;
+  bomItems.splice(+d.dataset.del,1); renderBom(); save();
+});
+$('btnAddBom').addEventListener('click', ()=>{ bomItems.push({item:'New item',qty:1,cost:0}); renderBom(); save(); });
+$('bomCurrency').addEventListener('input', ()=>{ renderBom(); save(); });
 
 // ---- collapsible cards ----
 function setupCollapse(){
@@ -1598,9 +1519,9 @@ setupCollapse();
 });
 
 renderComponents();
+renderBom();
 load();
 loadReq();
-$('material').value=matchMaterial();
 $('mass').disabled=$('volL').disabled=$('useBudget').checked;
 $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
 $('cbx').disabled=$('cbz').disabled=$('useBudgetCB').checked;
