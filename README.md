@@ -17,6 +17,9 @@ and **live-updating** results. It also includes:
   analysis — handy for a senior-design lab glider. It also sizes the syringe-pump
   engine (force, torque, flow, stroke time), checks the chosen motor can supply
   it, and totals a bill of materials.
+- **Animated dive simulation**: plays back the glider's sawtooth glide path
+  (descend → pump → ascend → pump) on a canvas, with a dive-cycle timeline and
+  live phase/depth/distance/speed readouts.
 - **Colour-coded safety warnings** and a **Recommendations** panel that turns
   the numbers into concrete actions (e.g. *“increase the wall to 7.2 mm for
   buckling SF 2.0”*), each with a one-click **Apply** button.
