@@ -614,12 +614,12 @@
       </div>
     </section>
 
-    <!-- STL IMPORT -->
+    <!-- 3D MODEL IMPORT -->
     <section class="card span2" id="card-stl">
-      <h2><span class="ic">📐</span> Import 3D model (STL)</h2>
-      <p class="hint" style="margin:-6px 0 8px">Upload an <b>.stl</b> of your hull/part — it reads the geometry (volume, area, size) in your browser, then asks for the material to estimate mass. SolidWorks parts &amp; assemblies: use <b>File → Save As → STL</b> first.</p>
+      <h2><span class="ic">📐</span> Import 3D model (STL / OBJ / 3MF)</h2>
+      <p class="hint" style="margin:-6px 0 8px">Upload an <b>.stl</b>, <b>.obj</b> or <b>.3mf</b> of your hull/part — it reads the geometry (volume, area, size) in your browser, previews it, then asks for the material to estimate mass. SolidWorks parts &amp; assemblies: use <b>File → Save As → STL</b> first.</p>
       <div class="row3">
-        <div><label>STL file</label><input type="file" id="stlFile" accept=".stl,.STL"></div>
+        <div><label>Model file</label><input type="file" id="stlFile" accept=".stl,.STL,.obj,.OBJ,.3mf,.3MF"></div>
         <div><label>Model units</label><select id="stlUnits"><option value="0.001">millimetres</option><option value="0.01">centimetres</option><option value="1">metres</option><option value="0.0254">inches</option></select></div>
         <div><label>Material</label><select id="stlMaterial"></select></div>
       </div>
@@ -628,6 +628,8 @@
         <div><label>Wall thickness (mm) — if hollow shell</label><input type="number" id="stlWall" value="6" step="0.5"></div>
         <div></div>
       </div>
+      <canvas id="stlCanvas" width="1100" height="300" style="touch-action:none;cursor:grab"></canvas>
+      <div class="hint" style="text-align:center">Drag to rotate the model.</div>
       <div class="out" id="stl_out" style="font-size:13px">No model loaded yet.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="tool" id="btnStlToBuoy">↧ Volume → displaced volume</button>
@@ -1678,36 +1680,94 @@ $('bomCurrency').addEventListener('input', ()=>{ renderBom(); save(); });
 // ---- STL import: parse geometry in-browser, estimate mass ----
 populateMaterials('stlMaterial', false);
 $('stlMaterial').value='acrylic';
-function parseSTLMetrics(buf){
-  const dv=new DataView(buf);
-  let vol=0, area=0, tris=0;
+// build geometric metrics from a flat positions array (9 floats per triangle)
+function metricsFromPositions(pos){
+  let vol=0, area=0; const tris=pos.length/9;
   const min=[Infinity,Infinity,Infinity], max=[-Infinity,-Infinity,-Infinity];
-  function acc(ax,ay,az,bx,by,bz,cx,cy,cz){
+  for(let i=0;i<pos.length;i+=9){
+    const ax=pos[i],ay=pos[i+1],az=pos[i+2], bx=pos[i+3],by=pos[i+4],bz=pos[i+5], cx=pos[i+6],cy=pos[i+7],cz=pos[i+8];
     vol += (ax*(by*cz-bz*cy) - ay*(bx*cz-bz*cx) + az*(bx*cy-by*cx))/6;   // signed tetra
     const ux=bx-ax,uy=by-ay,uz=bz-az, vx=cx-ax,vy=cy-ay,vz=cz-az;
     const nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
     area += 0.5*Math.sqrt(nx*nx+ny*ny+nz*nz);
-    const pts=[[ax,ay,az],[bx,by,bz],[cx,cy,cz]];
-    for(const p of pts){ for(let k=0;k<3;k++){ if(p[k]<min[k])min[k]=p[k]; if(p[k]>max[k])max[k]=p[k]; } }
-    tris++;
+    for(let v=0;v<9;v+=3){ for(let k=0;k<3;k++){ const val=pos[i+v+k];
+      if(val<min[k])min[k]=val; if(val>max[k])max[k]=val; } }
   }
+  if(!tris) return null;
+  return {pos, vol:Math.abs(vol), area, min, dims:[max[0]-min[0],max[1]-min[1],max[2]-min[2]], tris};
+}
+function parseSTL(buf){
+  const dv=new DataView(buf), out=[];
   const binary = buf.byteLength>=84 && buf.byteLength === 84 + dv.getUint32(80,true)*50;
   if(binary){
     const n=dv.getUint32(80,true); let o=84;
     for(let i=0;i<n;i++){ const p=o+12;
-      acc(dv.getFloat32(p,true),dv.getFloat32(p+4,true),dv.getFloat32(p+8,true),
-          dv.getFloat32(p+12,true),dv.getFloat32(p+16,true),dv.getFloat32(p+20,true),
-          dv.getFloat32(p+24,true),dv.getFloat32(p+28,true),dv.getFloat32(p+32,true));
+      for(let j=0;j<9;j++) out.push(dv.getFloat32(p+j*4,true));
       o+=50; }
   } else {
-    const text=new TextDecoder().decode(buf);
-    const re=/vertex\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)/g;
-    const vs=[]; let m;
-    while((m=re.exec(text))){ vs.push([+m[1],+m[2],+m[3]]);
-      if(vs.length===3){ acc(vs[0][0],vs[0][1],vs[0][2],vs[1][0],vs[1][1],vs[1][2],vs[2][0],vs[2][1],vs[2][2]); vs.length=0; } }
+    const re=/vertex\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)/g, text=new TextDecoder().decode(buf);
+    let m; while((m=re.exec(text))){ out.push(+m[1],+m[2],+m[3]); }
   }
-  if(!tris) return null;
-  return {vol:Math.abs(vol), area, dims:[max[0]-min[0],max[1]-min[1],max[2]-min[2]], tris};
+  return new Float32Array(out);
+}
+function parseOBJ(text){
+  const verts=[], out=[];
+  const lines=text.split(/\r?\n/);
+  for(const ln of lines){
+    if(ln[0]==='v' && ln[1]===' '){ const p=ln.split(/\s+/); verts.push([+p[1],+p[2],+p[3]]); }
+    else if(ln[0]==='f' && ln[1]===' '){
+      const idx=ln.split(/\s+/).slice(1).map(t=>{ let n=parseInt(t.split('/')[0],10); return n<0? verts.length+n : n-1; });
+      for(let k=1;k<idx.length-1;k++){           // fan-triangulate
+        for(const vi of [idx[0],idx[k],idx[k+1]]){ const v=verts[vi]; if(v) out.push(v[0],v[1],v[2]); }
+      }
+    }
+  }
+  return new Float32Array(out);
+}
+async function unzipEntry(buffer, endsWith){      // minimal ZIP reader for 3MF
+  const dv=new DataView(buffer), td=new TextDecoder();
+  let i=buffer.byteLength-22;
+  while(i>=0 && dv.getUint32(i,true)!==0x06054b50) i--;
+  if(i<0) throw 0;
+  let p=dv.getUint32(i+16,true); const count=dv.getUint16(i+10,true);
+  for(let e=0;e<count;e++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const method=dv.getUint16(p+10,true), compSize=dv.getUint32(p+20,true);
+    const nameLen=dv.getUint16(p+28,true), extraLen=dv.getUint16(p+30,true), commentLen=dv.getUint16(p+32,true);
+    const localOff=dv.getUint32(p+42,true);
+    const name=td.decode(new Uint8Array(buffer,p+46,nameLen));
+    p+=46+nameLen+extraLen+commentLen;
+    if(name.toLowerCase().endsWith(endsWith)){
+      const lnl=dv.getUint16(localOff+26,true), lel=dv.getUint16(localOff+28,true);
+      const data=new Uint8Array(buffer, localOff+30+lnl+lel, compSize);
+      if(method===0) return td.decode(data);
+      const ds=new DecompressionStream('deflate-raw');
+      const ab=await new Response(new Blob([data]).stream().pipeThrough(ds)).arrayBuffer();
+      return td.decode(ab);
+    }
+  }
+  throw 0;
+}
+async function parse3MF(buffer){
+  const xml=await unzipEntry(buffer, '.model');
+  const doc=new DOMParser().parseFromString(xml, 'application/xml');
+  const out=[];
+  for(const obj of doc.getElementsByTagName('mesh')){
+    const vEls=obj.getElementsByTagName('vertex'), V=[];
+    for(const v of vEls) V.push([+v.getAttribute('x'),+v.getAttribute('y'),+v.getAttribute('z')]);
+    for(const tEl of obj.getElementsByTagName('triangle')){
+      for(const a of ['v1','v2','v3']){ const v=V[+tEl.getAttribute(a)]; if(v) out.push(v[0],v[1],v[2]); }
+    }
+  }
+  return new Float32Array(out);
+}
+async function meshFromFile(f){
+  const name=f.name.toLowerCase(), buf=await f.arrayBuffer();
+  let pos;
+  if(name.endsWith('.obj')) pos=parseOBJ(new TextDecoder().decode(buf));
+  else if(name.endsWith('.3mf')) pos=await parse3MF(buf);
+  else pos=parseSTL(buf);
+  return metricsFromPositions(pos);
 }
 function computeSTL(){
   if(!stlModel){ $('stl_out').textContent='No model loaded yet.'; return; }
@@ -1730,10 +1790,10 @@ function computeSTL(){
 $('stlFile').addEventListener('change', e=>{
   const f=e.target.files[0]; if(!f) return;
   $('stl_out').textContent='Reading '+f.name+' …';
-  f.arrayBuffer().then(buf=>{ stlModel=parseSTLMetrics(buf);
-    if(!stlModel){ $('stl_out').textContent='Could not parse that STL — is it a valid mesh?'; return; }
-    computeSTL();
-  }).catch(()=>{ $('stl_out').textContent='Could not read the file.'; });
+  meshFromFile(f).then(mdl=>{ stlModel=mdl;
+    if(!stlModel){ $('stl_out').textContent='Could not parse that file — is it a valid mesh?'; return; }
+    setupMeshView(); computeSTL();
+  }).catch(()=>{ $('stl_out').textContent='Could not read that file (3MF needs a modern browser).'; });
 });
 ['stlUnits','stlMaterial','stlWall','stlSolid'].forEach(id=>$(id).addEventListener('input', ()=>{ if(stlModel) computeSTL(); }));
 function stlFlash(b){ const t=b.textContent; b.textContent='✓ done'; setTimeout(()=>b.textContent=t,1200); }
@@ -1742,8 +1802,62 @@ $('btnStlToBuoy').addEventListener('click', e=>{ if(!stlSI) return;
 $('btnStlToHull').addEventListener('click', e=>{ if(!stlSI) return;
   $('radius').value=stlSI.radiusMM.toFixed(1); $('hullLength').value=stlSI.lengthMM.toFixed(0); compute(); stlFlash(e.target); });
 $('btnStlToBudget').addEventListener('click', e=>{ if(!stlSI) return;
-  components.push({name:'STL part', mass:+(isFinite(stlSI.mass)?stlSI.mass:0).toFixed(3), vol:+stlSI.volL.toFixed(3), x:0, z:0});
+  components.push({name:'imported part', mass:+(isFinite(stlSI.mass)?stlSI.mass:0).toFixed(3), vol:+stlSI.volL.toFixed(3), x:0, z:0});
   renderComponents(); if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
+
+// ---- 3D mesh preview (software-rendered, drag to rotate) ----
+const meshView={rx:-0.45, ry:0.7, stride:1};
+function setupMeshView(){
+  const tr=stlModel.tris;
+  meshView.stride = tr>40000 ? Math.ceil(tr/40000) : 1;   // sample big meshes for speed
+  meshView.rx=-0.45; meshView.ry=0.7;
+  drawMesh();
+}
+function drawMesh(){
+  const c=$('stlCanvas'); if(!c) return; const ctx=c.getContext('2d'), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H);
+  if(!stlModel){ return; }
+  const pos=stlModel.pos, mn=stlModel.min, dm=stlModel.dims;
+  const cx=mn[0]+dm[0]/2, cy=mn[1]+dm[1]/2, cz=mn[2]+dm[2]/2;
+  const sc=Math.min(W,H)*0.40/Math.max(dm[0],dm[1],dm[2],1e-9);
+  const cosx=Math.cos(meshView.rx), sinx=Math.sin(meshView.rx);
+  const cosy=Math.cos(meshView.ry), siny=Math.sin(meshView.ry);
+  const ox=W/2, oy=H/2, L=[0.4,0.5,0.75];
+  const faces=[]; const st=meshView.stride*9;
+  for(let i=0;i<pos.length;i+=st){
+    const P=[];
+    for(let v=0;v<9;v+=3){
+      let x=pos[i+v]-cx, y=pos[i+v+1]-cy, z=pos[i+v+2]-cz;
+      let x1=x*cosy + z*siny, z1=-x*siny + z*cosy;        // yaw
+      let y2=y*cosx - z1*sinx, z2=y*sinx + z1*cosx;        // pitch
+      P.push([x1, y2, z2]);
+    }
+    const ux=P[1][0]-P[0][0],uy=P[1][1]-P[0][1],uz=P[1][2]-P[0][2];
+    const vx=P[2][0]-P[0][0],vy=P[2][1]-P[0][1],vz=P[2][2]-P[0][2];
+    let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    const nl=Math.hypot(nx,ny,nz)||1; nx/=nl; ny/=nl; nz/=nl;
+    if(nz<0) continue;                                      // back-face cull
+    const sh=Math.max(0.15, nx*L[0]+ny*L[1]+nz*L[2]);
+    faces.push({d:P[0][2]+P[1][2]+P[2][2],
+      p:[[ox+P[0][0]*sc, oy-P[0][1]*sc],[ox+P[1][0]*sc, oy-P[1][1]*sc],[ox+P[2][0]*sc, oy-P[2][1]*sc]], sh});
+  }
+  faces.sort((a,b)=>a.d-b.d);
+  for(const f of faces){
+    const g=Math.round(60+150*f.sh), b=Math.round(120+120*f.sh);
+    ctx.fillStyle='rgb('+Math.round(40+60*f.sh)+','+g+','+b+')';
+    ctx.strokeStyle=ctx.fillStyle; ctx.lineWidth=0.6;
+    ctx.beginPath(); ctx.moveTo(f.p[0][0],f.p[0][1]); ctx.lineTo(f.p[1][0],f.p[1][1]); ctx.lineTo(f.p[2][0],f.p[2][1]); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+}
+(function(){
+  const c=$('stlCanvas'); if(!c) return; let drag=false, lx=0, ly=0;
+  c.addEventListener('pointerdown', e=>{ drag=true; lx=e.clientX; ly=e.clientY; c.setPointerCapture(e.pointerId); c.style.cursor='grabbing'; });
+  c.addEventListener('pointermove', e=>{ if(!drag) return;
+    meshView.ry += (e.clientX-lx)*0.01; meshView.rx += (e.clientY-ly)*0.01;
+    lx=e.clientX; ly=e.clientY; drawMesh(); });
+  c.addEventListener('pointerup', e=>{ drag=false; c.style.cursor='grab'; });
+})();
 
 // ---- collapsible cards ----
 function setupCollapse(){
