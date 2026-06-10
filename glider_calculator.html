@@ -370,6 +370,11 @@
         <div><label>Number of syringes</label><input type="number" id="req_nsyr" value="1" step="1"></div>
         <div><label>Target glide angle (°)</label><input type="number" id="req_angle" value="30" step="1"></div>
       </div>
+      <div class="row3">
+        <div><label>Wing aspect ratio</label><input type="number" id="req_ar" value="6" step="0.5"><div class="hint">Higher = longer, more efficient wings</div></div>
+        <div><label>Oswald efficiency e</label><input type="number" id="req_e" value="0.8" step="0.05"><div class="hint">Sets induced drag k = 1/(π·e·AR)</div></div>
+        <div><label>Parasite drag C<sub>D0</sub></label><input type="number" id="req_cd0" value="0.10" step="0.01"></div>
+      </div>
       <button class="calc" id="btnGenerate" style="margin-top:14px">⚙️ Generate design from requirements</button>
       <div class="out" id="req_out" style="font-size:13px">Fill in the requirements above and press Generate.</div>
     </section>
@@ -583,6 +588,29 @@
         <div class="kv"><span class="k">Total range</span><span class="v" id="o_range">–</span></div>
         <div class="kv"><span class="k">Endurance</span><span class="v" id="o_endur">–</span></div>
       </div>
+    </section>
+
+    <!-- SYRINGE PUMP ENGINE -->
+    <section class="card" id="card-pump">
+      <h2><span class="ic">💉</span> Syringe-pump engine</h2>
+      <div class="row3">
+        <div><label>Syringe bore ⌀ (mm)</label><input type="number" id="pumpBore" value="26.5" step="0.5"><div class="hint">60 mL syringe ≈ 26.5</div></div>
+        <div><label>Stroke (mm)</label><input type="number" id="pumpStroke" value="108" step="1"></div>
+        <div><label>Lead-screw pitch (mm/rev)</label><input type="number" id="pumpPitch" value="2" step="0.5"></div>
+      </div>
+      <div class="row">
+        <div><label>Screw efficiency</label><input type="number" id="pumpScrewEff" value="0.4" step="0.05"><div class="hint">ACME ≈ 0.4, ball-screw ≈ 0.9</div></div>
+        <div><label>Motor speed (rpm)</label><input type="number" id="pumpRpm" value="60" step="5"></div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Swept (ballast) volume</span><span class="v" id="o_swept">–</span></div>
+        <div class="kv"><span class="k">Flow rate</span><span class="v" id="o_flow">–</span></div>
+        <div class="kv"><span class="k">Time per stroke</span><span class="v" id="o_stroketime">–</span></div>
+        <div class="kv"><span class="k">Peak plunger force at depth</span><span class="v" id="o_plungerF">–</span></div>
+        <div class="kv"><span class="k">Required motor torque</span><span class="v" id="o_torque">–</span></div>
+        <div class="kv"><span class="k">Work per stroke</span><span class="v" id="o_pumpwork">–</span></div>
+      </div>
+      <button class="tool" id="btnPumpToBallast" style="width:100%;margin-top:10px">↧ Use swept volume as ballast</button>
     </section>
 
     <!-- TARGET SOLVER -->
@@ -806,14 +834,34 @@ function compute(){
   $('o_extvol').textContent = fmt(hullExtVolL,2)+" L";
   $('o_hullbuoy').textContent = (hullBuoy>=0?"+":"")+fmt(hullBuoy,1)+" N  "+(hullBuoy>=0?"(empty hull floats)":"(empty hull sinks)");
 
+  // syringe-pump engine
+  const bore=num('pumpBore')/1000, pStroke=num('pumpStroke')/1000, pitch=num('pumpPitch')/1000;
+  const screwEff=num('pumpScrewEff'), rpm=num('pumpRpm');
+  const Abore=Math.PI/4*bore*bore;
+  const sweptVol=Abore*pStroke;                 // m^3
+  const linSpeed=rpm*pitch/60;                  // m/s
+  const flow=Abore*linSpeed;                    // m^3/s
+  const strokeTime=linSpeed>0? pStroke/linSpeed : Infinity;   // s for one full stroke
+  const plungerF=(hp+ATM)*Abore;                // N resisting the plunger at depth
+  const torque=plungerF*pitch/(2*Math.PI*Math.max(screwEff,1e-6));   // N·m
+  const pumpWork=(hp+ATM)*sweptVol;             // J per stroke (against pressure)
+  $('o_swept').textContent = fmt(sweptVol*1e6,1)+" mL";
+  $('o_flow').textContent = fmt(flow*1e6,1)+" mL/s";
+  $('o_stroketime').textContent = isFinite(strokeTime)? fmt(strokeTime,1)+" s" : "– (rpm 0)";
+  $('o_plungerF').textContent = fmt(plungerF,1)+" N";
+  $('o_torque').textContent = fmt(torque*1000,1)+" mN·m  ("+fmt(torque*1e4,1)+" g·cm)";
+  $('o_pumpwork').textContent = fmt(pumpWork,2)+" J";
+  pumpSweptML = sweptVol*1e6;
+
   // energy
   const batteryJ=num('batteryWh')*3600, ballast=num('ballastL')/1000;
   const depthBand=num('depthBand'), hotelW=num('hotelW'), pumpEff=num('pumpEff');
   const pumpPerCycle = (rho*g*depthBand + ATM)*ballast/pumpEff;
+  const pumpTime = isFinite(strokeTime)? 2*strokeTime : 0;   // empty + fill each cycle
   let cycles=NaN, totalRange=NaN, endurance=NaN, cycleTime=NaN, rangePerCycle=NaN;
   if(isFinite(glideRatio) && vh>0){
     rangePerCycle = 2*depthBand*glideRatio;
-    cycleTime = rangePerCycle/vh;
+    cycleTime = rangePerCycle/vh + pumpTime;
     const totalPerCycle = pumpPerCycle + hotelW*cycleTime;
     cycles = batteryJ/totalPerCycle;
     totalRange = cycles*rangePerCycle;
@@ -1095,11 +1143,12 @@ function buildReport(r){
 }
 
 // ---- persistence & controls ----
-let targetApply=null, hullShellMass=NaN, hullExtVolL=NaN;
+let targetApply=null, hullShellMass=NaN, hullExtVolL=NaN, pumpSweptML=NaN;
 const IDS=['surfaceDensity','g','useWater','workingDepth','gradient','mass','volL','wingArea','cd0','k',
   'useBestCl','cl','cgz','cbz','cgx','cbx','moveMass','moveDist','targetPitch','shape','hullDepth',
   'radius','thickness','hullLength','poisson','yieldMPa','youngGPa','matDensity','batteryWh','ballastL',
-  'depthBand','hotelW','pumpEff','targetType','targetValue'];
+  'depthBand','hotelW','pumpEff','pumpBore','pumpStroke','pumpPitch','pumpScrewEff','pumpRpm',
+  'targetType','targetValue'];
 function snapshot(){
   const s={}; IDS.forEach(id=>{const el=$(id); s[id]= el.type==='checkbox'? el.checked : el.value;});
   s.__components = components.map(c=>({...c}));
@@ -1239,6 +1288,12 @@ $('btnSaveDesign').addEventListener('click', saveDesign);
 $('designName').addEventListener('keydown', e=>{ if(e.key==='Enter') saveDesign(); });
 $('btnNew').addEventListener('click', example);
 $('btnApplyTarget').addEventListener('click', ()=>applyFields(targetApply));
+$('btnPumpToBallast').addEventListener('click', ()=>{
+  if(isFinite(pumpSweptML)) $('ballastL').value=(pumpSweptML/1000).toFixed(3);
+  compute();
+  const b=$('btnPumpToBallast'), t=b.textContent;
+  b.textContent='✓ Ballast set to swept volume'; setTimeout(()=>b.textContent=t,1600);
+});
 $('btnHullToBuoy').addEventListener('click', ()=>{
   if(isFinite(hullShellMass)) $('mass').value=hullShellMass.toFixed(2);
   if(isFinite(hullExtVolL))   $('volL').value=hullExtVolL.toFixed(2);
@@ -1288,7 +1343,8 @@ $('material').addEventListener('change', ()=>{
 // ---- requirements-driven design generator ----
 populateMaterials('req_mat', false);
 $('req_mat').value='acrylic';
-const REQ_IDS=['req_water','req_depth','req_od','req_len','req_mat','req_syr','req_nsyr','req_angle','req_speed'];
+const REQ_IDS=['req_water','req_depth','req_od','req_len','req_mat','req_syr','req_nsyr','req_angle','req_speed',
+  'req_ar','req_e','req_cd0'];
 function saveReq(){ const s={}; REQ_IDS.forEach(id=>s[id]=$(id).value);
   try{ localStorage.setItem('gliderReq', JSON.stringify(s)); }catch(e){} }
 function loadReq(){ try{ const s=JSON.parse(localStorage.getItem('gliderReq')); if(!s) return;
@@ -1302,6 +1358,10 @@ function generateFromRequirements(){
   const matKey=$('req_mat').value, M=MATERIALS[matKey]||MATERIALS.acrylic;
   const Vsyr=num('req_syr'), nSyr=num('req_nsyr');
   const gammaDeg=num('req_angle'), Vtarget=num('req_speed');
+  const AR=num('req_ar'), eOsw=num('req_e'), cd0=num('req_cd0');
+  // aspect ratio sets the induced-drag factor: k = 1/(π·e·AR)
+  const k=1/(Math.PI*eOsw*AR);
+  $('cd0').value=cd0.toFixed(3); $('k').value=k.toFixed(3);
 
   // environment + depth
   $('surfaceDensity').value=rho0;
@@ -1324,13 +1384,16 @@ function generateFromRequirements(){
   const dV=Vsyr*nSyr/1e6;                          // m^3 full ballast swing
   const swing=dV/2;                                // from neutral, each way
   $('ballastL').value=(Vsyr*nSyr/1000).toFixed(3);
+  // size the syringe pump stroke so swept volume = one syringe (using current bore)
+  const bore=num('pumpBore')/1000, Abore=Math.PI/4*bore*bore;
+  if(Abore>0) $('pumpStroke').value=((Vsyr/1e6)/Abore*1000).toFixed(0);
   const rho=$('useWater').checked? (rho0+grad*depth):rho0;
   // trimmed neutral at mid-stroke; analyse the descending glide (net = -rho g swing)
   $('volL').value=(Vext*1000).toFixed(2);
   $('mass').value=(rho*Vext + rho*swing).toFixed(3);
   const Fnet=rho*g*swing;
   // glide: choose CL that yields the target glide angle for this drag polar
-  const cd0=num('cd0'), k=num('k'), tg=Math.tan(gammaDeg*Math.PI/180);
+  const tg=Math.tan(gammaDeg*Math.PI/180);
   const disc=tg*tg-4*k*cd0;
   let cl, feasibleAngle=true;
   if(disc>=0) cl=(tg-Math.sqrt(disc))/(2*k);   // front-side (normal) operating point
@@ -1340,7 +1403,7 @@ function generateFromRequirements(){
   // wing area to hit the target speed at this operating point
   const S=2*(Fnet*Math.cos(gammaUsed))/(rho*Vtarget*Vtarget*cl);
   $('wingArea').value=S.toFixed(4);
-  const AR=6, span=Math.sqrt(S*AR);            // estimated span at assumed aspect ratio 6
+  const span=Math.sqrt(S*AR), chord=S/span;    // span & mean chord from aspect ratio
   // stable trim defaults; pitch target = glide angle
   $('cbz').value='0'; $('cgz').value='-0.010'; $('cgx').value='0'; $('cbx').value='0';
   $('targetPitch').value=Math.round(gammaDeg);
@@ -1353,7 +1416,7 @@ function generateFromRequirements(){
 
   // summary + feasibility
   const grAch=cl/cd, angAch=gammaUsed*180/Math.PI;
-  const Re=rho*Vtarget*(len/1000)/1.0e-3;
+  const Re=rho*Vtarget*chord/1.0e-3;            // Reynolds on the wing chord
   const notes=[];
   if(!feasibleAngle) notes.push('Glide angle '+fmt(gammaDeg,0)+'° is shallower than this drag polar allows (min ≈ '+fmt(Math.atan2(2*Math.sqrt(k*cd0),1)*180/Math.PI,0)+'°). Using best glide ('+fmt(angAch,0)+'°) — increase the angle or lower drag (C_D0, k).');
   if(tReq*1000>tMM+1e-6) notes.push('Required wall for depth is '+fmt(tReq*1000,1)+' mm (exceeds the 3 mm minimum).');
@@ -1366,9 +1429,10 @@ function generateFromRequirements(){
     kv('Displaced volume', fmt(Vext*1000,2)+' L')+
     kv('Wall thickness', tMM.toFixed(1)+' mm')+
     kv('Wing area / C_L', fmt(S*1e4,0)+' cm² / '+fmt(cl,3))+
-    kv('Est. wingspan (AR 6)', fmt(span*1000,0)+' mm')+
+    kv('Wing span × chord (AR '+fmt(AR,0)+')', fmt(span*1000,0)+' × '+fmt(chord*1000,0)+' mm')+
+    kv('Induced factor k (from AR)', fmt(k,3))+
     kv('Glide ratio / angle', fmt(grAch,2)+' : 1  ('+fmt(angAch,1)+'°)')+
-    kv('Reynolds (on length)', fmt(Re,0))+
+    kv('Reynolds (on chord)', fmt(Re,0))+
     (notes.length? '<div style="margin-top:8px">'+notes.map(n=>'<div style="color:var(--warn);padding:4px 0;font-size:13px">⚠️ '+n+'</div>').join('')+'</div>'
       : '<div class="ok-msg" style="margin-top:8px">Requirements look self-consistent — see the sized sections below.</div>');
   const b=$('btnGenerate'); b.textContent='✓ Design generated — see sections below';
