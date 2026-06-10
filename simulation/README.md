@@ -39,11 +39,41 @@ It reduces to the original 3-DOF longitudinal baseline when the lateral states
 
 ```bash
 pip install -r requirements.txt
-python glider_6dof.py
+
+python glider_6dof.py                          # baseline ~50 kg glider
+python glider_6dof.py design.json              # a specific design (see below)
+python glider_6dof.py design.json --animate    # also write an animated GIF
+python glider_6dof.py --bank                   # use bank-to-turn steering
 ```
 
-This writes `glider_6dof_trajectory.png` (3-D path, top-down drift, depth
-profile, attitude history) and prints a summary.
+The static run writes `*_trajectory.png` (3-D path, top-down drift, depth
+profile, attitude history) and prints a summary; `--animate` also writes a
+moving side-view + top-down `*_animation.gif` (uses Pillow, no ffmpeg needed).
+
+## Feeding it a design from the web calculator
+
+In the web app's **Requirements** card, press **“Export design for 6-DOF
+simulator (.json)”** to download `glider_design.json`, then:
+
+```bash
+python glider_6dof.py glider_design.json --animate
+```
+
+`Glider6DOF.from_design()` maps the design (mass, volume, hull radius/length,
+wing area/span, C_D0, k, ballast swing, depth band, water density, speed) into
+the model, estimating inertia (including the wing span), added mass and a
+**scale-robust critical-damping** rule so it stays well-behaved from a 3 kg lab
+hull up to a 50 kg vehicle. A sample `lab_glider_design.json` is included.
+
+## Steering modes
+
+- **`rudder`** (default) — a PD heading-hold on the rudder. Validated: tracks
+  the commanded heading and stays directionally stable.
+- **`bank`** — a coordinated bank-to-turn using only the lateral movable mass,
+  reversing the bank between dive and climb (as real gliders do). It banks the
+  vehicle correctly, but this study found that for a slow, internal-mass-only
+  glider the heading tracking is limited by roll–pitch–yaw cross-coupling — a
+  real reason gliders such as the Slocum carry a rudder.
 
 ## Tuning
 

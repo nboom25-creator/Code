@@ -94,9 +94,9 @@ class Glider6DOF:
         self.m_dry = 50.0            # dry mass incl. internals (kg)
         self.V_nominal = 0.0487      # displaced volume (m^3) -> ~neutral
         self.m_ballast = 0.0         # variable ballast water (kg) [-0.3, 0.3]
-        self.m_p = 5.0               # movable internal mass (subset of m_dry)
+        self.m_p = 8.0               # movable internal mass (subset of m_dry)
         self.r_p = np.array([0.0, 0.0, 0.0])   # movable-mass position (body, m)
-        self.rg_base = np.array([0.0, 0.0, 0.020])  # CG below CB -> z down (m)
+        self.rg_base = np.array([0.0, 0.0, 0.012])  # CG below CB -> z down (m)
         self.rb = np.array([0.0, 0.0, 0.0])         # centre of buoyancy = origin
 
         # inertia about the body origin (kg m^2): slender body
@@ -133,6 +133,89 @@ class Glider6DOF:
         # perturbation relative to the glide speed, not a dominant flow
         self.current_surface = np.array([0.0, 0.04, 0.0])
         self.current_decay = 25.0    # e-folding depth (m)
+
+        # ---- actuator authority & mission (used by the controller) -------- #
+        self.ballast_auth = 0.40     # |ballast| each way (kg)
+        self.xp_max = 0.035          # movable-mass fore/aft stroke (m), pitch
+        self.yp_max = 0.040          # movable-mass lateral stroke (m), roll
+        self.z_top = 2.5             # dive band top (m)
+        self.z_bot = 18.0            # dive band bottom (m)
+        self.turn_mode = "rudder"    # "rudder" (validated) or "bank" (lateral mass)
+        self.psi_cmd = np.deg2rad(25.0)
+        self.name = "baseline 50 kg glider"
+
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def from_design(cls, d: dict) -> "Glider6DOF":
+        """Build a glider from a calculator design dict (all SI units).
+
+        Recognised keys (with sensible fallbacks):
+          name, mass_kg, volume_m3, hull_radius_m, hull_length_m,
+          wing_area_m2, wing_span_m, cd0, k_induced, ballast_swing_kg,
+          movable_mass_kg, depth_band_m, speed_mps
+        Inertia, added mass and damping are estimated from the hull geometry
+        and scaled to preserve the (validated) stability margins.
+        """
+        g = cls()
+        g.name = d.get("name", "calculator design")
+        g.rho_0 = float(d.get("water_density_kgm3", g.rho_0))
+        m = float(d.get("mass_kg", g.m_dry))
+        V = float(d.get("volume_m3", g.V_nominal))
+        r = float(d.get("hull_radius_m", 0.045))
+        L = float(d.get("hull_length_m", 0.5))
+        A = float(d.get("wing_area_m2", g.A))
+        b = float(d.get("wing_span_m", max(np.sqrt(A * 6.0), 1e-3)))
+
+        g.m_dry = m
+        g.V_nominal = V
+        g.A = A
+        g.b = b
+        g.c = A / b                                   # mean chord
+        g.CD0 = float(d.get("cd0", g.CD0))
+        g.K = float(d.get("k_induced", g.K))
+
+        m_disp = g.rho_0 * V                          # displaced mass
+        # the wings dominate the roll/yaw inertia of a winged glider — the
+        # bare-hull cylinder value alone is unphysically small and ill-
+        # conditioned, so include a span term (≈10% of mass at the half-span)
+        I_wing = 0.10 * m * (0.5 * b) ** 2
+        Ixx = 0.5 * m * r * r + I_wing                # roll
+        Iyy = (1.0 / 12.0) * m * (3.0 * r * r + L * L)  # pitch
+        Izz = Iyy + I_wing                            # yaw
+        g.I_O = np.diag([Ixx, Iyy, Izz])
+        # added mass from slender-body cross-flow
+        a_u, a_v = 0.04 * m_disp, 0.30 * m_disp
+        a_p, a_q, a_r = 0.40 * Ixx, 0.50 * Iyy, 0.50 * Izz
+        g.M_A = np.diag([a_u, a_v, a_v, a_p, a_q, a_r])
+
+        g.rg_base = np.array([0.0, 0.0, 0.04 * r])    # CG below CB
+        # --- scale-robust damping via a critical-damping rule ------------- #
+        # rotational damping is set from each axis' stiffness and inertia so
+        # the attitude dynamics stay well-damped at ANY vehicle scale (the
+        # naive "fraction of inertia" rule goes unstable for tiny lab hulls).
+        Vref = max(float(d.get("speed_mps", 0.3)), 0.05)
+        qref = 0.5 * g.rho_0 * Vref * Vref * A
+        Wn = m * g.g
+        k_roll = max(Wn * g.rg_base[2], 1e-9)                       # buoyancy righting
+        k_pitch = max(Wn * g.rg_base[2] + qref * g.c * abs(g.Cm_alpha), 1e-9)
+        k_yaw = max(qref * g.b * g.Cn_beta, 1e-9)
+        d_p = 2.0 * 1.6 * np.sqrt((Ixx + a_p) * k_roll)            # over-damped roll
+        d_q = 2.0 * 1.0 * np.sqrt((Iyy + a_q) * k_pitch)
+        d_r = 2.0 * 1.8 * np.sqrt((Izz + a_r) * k_yaw)            # extra for Munk
+        g.D_lin = np.diag([0.03 * m, 0.44 * m, 0.44 * m, d_p, d_q, d_r])
+        g.ballast_auth = float(d.get("ballast_swing_kg", 0.4 * (m_disp - m) or 0.02))
+        g.ballast_auth = abs(g.ballast_auth) if g.ballast_auth else 0.02
+        g.m_p = float(d.get("movable_mass_kg", 0.25 * m))
+        # size the mass strokes from the righting arm (BG = rg_z) so the trim
+        # pitch/roll stay sensible: tan(angle) = (m_p/m)*stroke / BG
+        bg = max(g.rg_base[2], 1e-4)
+        g.xp_max = 0.70 * bg * m / g.m_p        # ~35 deg max pitch
+        g.yp_max = 0.45 * bg * m / g.m_p        # ~25 deg max bank
+        depth = float(d.get("depth_band_m", 18.0))
+        g.z_top = max(0.15 * depth, 0.3)
+        g.z_bot = max(0.9 * depth, g.z_top + 0.5)
+        g._init_speed = float(d.get("speed_mps", 0.3))
+        return g
 
     # ------------------------------------------------------------------ #
     def current_earth(self, depth: float) -> np.ndarray:
@@ -241,53 +324,86 @@ class Glider6DOF:
 
 
 # --------------------------------------------------------------------------- #
-# Flight controller: sawtooth dive logic + heading hold
+# Flight controller: sawtooth dive logic + heading control
 # --------------------------------------------------------------------------- #
-def control(glider: Glider6DOF, state: np.ndarray, phase: str,
-            z_top: float, z_bot: float, psi_cmd: float) -> str:
-    """Update actuators in-place; return the (possibly toggled) dive phase."""
-    z, psi, r = state[2], state[5], state[11]
+def control(glider: Glider6DOF, state: np.ndarray, phase: str) -> str:
+    """Update actuators in-place; return the (possibly toggled) dive phase.
 
-    if z < z_top:
+    Pitch is trimmed by the fore/aft movable mass + ballast (sawtooth).
+    Heading is controlled either by a rudder (turn_mode='rudder') or by a
+    coordinated BANK-TO-TURN using the lateral movable mass (turn_mode='bank'):
+    an outer loop turns heading error into a commanded roll angle, an inner loop
+    drives the lateral mass to achieve that bank, and the banked lift curves the
+    flight path — no rudder used.
+    """
+    z, phi, theta, psi = state[2], state[3], state[4], state[5]
+    p, r = state[9], state[11]
+
+    if z < glider.z_top:
         phase = "dive"
-    elif z > z_bot:
+    elif z > glider.z_bot:
         phase = "climb"
 
+    # longitudinal trim: ballast + fore/aft mass
     if phase == "dive":
-        glider.m_ballast = 0.40        # heavier than neutral -> sink
-        glider.r_p = np.array([0.035, glider.r_p[1], 0.0])   # mass fwd -> nose down
-    else:  # climb
-        glider.m_ballast = -0.40       # lighter than neutral -> rise
-        glider.r_p = np.array([-0.035, glider.r_p[1], 0.0])  # mass aft -> nose up
+        glider.m_ballast = glider.ballast_auth
+        xp = glider.xp_max
+    else:
+        glider.m_ballast = -glider.ballast_auth
+        xp = -glider.xp_max
 
-    # heading hold via rudder (PD on yaw) + a touch of lateral mass for bank
-    yaw_err = wrap_pi(psi_cmd - psi)
-    delta_r = np.clip(1.0 * yaw_err - 1.0 * r, -0.30, 0.30)
-    glider.delta_r = delta_r
-    glider.r_p[1] = np.clip(0.15 * yaw_err, -0.015, 0.015)   # bank into the turn
+    yaw_err = wrap_pi(glider.psi_cmd - psi)
+
+    if glider.turn_mode == "bank":
+        # Coordinated bank-to-turn with the lateral movable mass.  A constant
+        # bank turns one way descending and the opposite way climbing, so the
+        # net heading change cancels — the bank must REVERSE between dive and
+        # climb for the turns to accumulate (real gliders roll over at each
+        # apex).  Outer loop: heading error -> turn direction; inner loop:
+        # lateral mass drives the roll to the phase-reversed commanded bank.
+        turn_dir = float(np.clip(2.5 * yaw_err, -1.0, 1.0))
+        phase_sign = 1.0 if phase == "dive" else -1.0
+        phi_cmd = 0.35 * turn_dir * phase_sign
+        yp = float(np.clip(0.9 * (phi_cmd - phi) - 0.25 * p,
+                           -glider.yp_max, glider.yp_max))
+        glider.delta_r = 0.0
+        glider._phi_cmd = phi_cmd
+    else:  # rudder
+        yp = 0.0
+        glider.delta_r = float(np.clip(1.0 * yaw_err - 1.0 * r, -0.30, 0.30))
+        glider._phi_cmd = 0.0
+
+    glider.r_p = np.array([xp, yp, 0.0])
     return phase
 
 
 # --------------------------------------------------------------------------- #
 # Simulation driver
 # --------------------------------------------------------------------------- #
-def simulate(t_max: float = 900.0, dt: float = 0.05,
-             z_top: float = 2.5, z_bot: float = 18.0,
-             psi_cmd_deg: float = 25.0):
-    glider = Glider6DOF()
+def simulate(glider: Glider6DOF | None = None, t_max: float = 900.0,
+             dt: float = 0.05, psi_cmd_deg: float | None = None,
+             turn_mode: str | None = None):
+    if glider is None:
+        glider = Glider6DOF()
+    if psi_cmd_deg is not None:
+        glider.psi_cmd = np.deg2rad(psi_cmd_deg)
+    if turn_mode is not None:
+        glider.turn_mode = turn_mode
+    glider.psi_cmd_deg = np.rad2deg(glider.psi_cmd)
     glider.delta_r = 0.0
-    glider.psi_cmd_deg = psi_cmd_deg
-    psi_cmd = np.deg2rad(psi_cmd_deg)
+    glider._phi_cmd = 0.0
 
+    u0 = getattr(glider, "_init_speed", 0.45)
     # state: [x, y, z, phi, theta, psi, u, v, w, p, q, r]
-    state = np.array([0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.45, 0.0, 0.0, 0.0, 0.0, 0.0])
+    state = np.array([0.0, 0.0, glider.z_top + 0.5, 0.0, 0.0, 0.0,
+                      u0, 0.0, 0.0, 0.0, 0.0, 0.0])
     phase = "dive"
 
     n = int(t_max / dt)
     hist = np.empty((n, 12))
     t = np.arange(n) * dt
     for i in range(n):
-        phase = control(glider, state, phase, z_top, z_bot, psi_cmd)
+        phase = control(glider, state, phase)
         state = glider.rk4_step(state, dt)
         hist[i] = state
     return t, hist, glider
@@ -350,8 +466,64 @@ def plot(t, hist, glider, out="glider_6dof_trajectory.png"):
     print(f"final heading ψ     : {psi[-1]:.1f} deg  (commanded {glider.psi_cmd_deg:.0f})")
     print(f"speed               : {speed.mean():.3f} m/s mean, {speed.max():.3f} m/s max")
     print(f"roll / pitch range  : ±{np.abs(phi).max():.1f}° / {theta.min():.1f}…{theta.max():.1f}°")
+    print(f"steering            : {glider.turn_mode}")
+
+
+def animate(t, hist, glider, out="glider_6dof_animation.gif", n_frames=200, fps=20):
+    """Animate the glide as a moving side-view + top-down GIF (no ffmpeg needed)."""
+    from matplotlib.animation import FuncAnimation, PillowWriter
+    x, y, z = hist[:, 0], hist[:, 1], hist[:, 2]
+    idx = np.linspace(0, len(t) - 1, n_frames).astype(int)
+
+    fig, (axs, axt) = plt.subplots(1, 2, figsize=(13, 4.6))
+    fig.suptitle(f"6-DOF glider — {glider.name} ({glider.turn_mode} steering)",
+                 fontweight="bold")
+    axs.set_xlim(x.min() - 0.5, x.max() + 0.5)
+    axs.set_ylim(z.max() + 0.5, min(z.min(), 0) - 0.3)   # depth down
+    axs.set_xlabel("horizontal distance x (m)"); axs.set_ylabel("depth (m)")
+    axs.set_title("Side view"); axs.grid(ls="--", alpha=0.4)
+    trail, = axs.plot([], [], "-", color="teal", lw=1.2)
+    glmark, = axs.plot([], [], "o", color="#eafaf3", ms=9, mec="#3fd0e6", mew=2)
+
+    axt.set_xlim(x.min() - 1, x.max() + 1); axt.set_ylim(y.min() - 1, y.max() + 1)
+    axt.set_aspect("equal"); axt.set_xlabel("north x (m)"); axt.set_ylabel("east y (m)")
+    axt.set_title("Top-down (turn + current drift)"); axt.grid(ls="--", alpha=0.4)
+    ttrail, = axt.plot([], [], "-", color="darkcyan", lw=1.2)
+    tmark, = axt.plot([], [], "o", color="crimson", ms=7)
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+
+    def upd(i):
+        k = idx[i]
+        trail.set_data(x[:k + 1], z[:k + 1]); glmark.set_data([x[k]], [z[k]])
+        ttrail.set_data(x[:k + 1], y[:k + 1]); tmark.set_data([x[k]], [y[k]])
+        return trail, glmark, ttrail, tmark
+
+    anim = FuncAnimation(fig, upd, frames=len(idx), interval=1000 / fps, blit=True)
+    anim.save(out, writer=PillowWriter(fps=fps))
+    plt.close(fig)
+    print(f"saved animation -> {out}")
+
+
+def _main(argv):
+    import json
+    mode = "bank" if "--bank" in argv else "rudder"
+    do_anim = "--animate" in argv
+    designs = [a for a in argv if a.endswith(".json")]
+    if designs:
+        d = json.load(open(designs[0]))
+        glider = Glider6DOF.from_design(d)
+        dt, t_max = 0.01, 900.0
+        out = "glider_6dof_" + "".join(ch if ch.isalnum() else "_"
+                                       for ch in glider.name)[:30]
+    else:
+        glider, dt, t_max, out = None, 0.05, 900.0, "glider_6dof"
+
+    t, hist, glider = simulate(glider=glider, t_max=t_max, dt=dt, turn_mode=mode)
+    plot(t, hist, glider, out=out + "_trajectory.png")
+    if do_anim:
+        animate(t, hist, glider, out=out + "_animation.gif")
 
 
 if __name__ == "__main__":
-    t, hist, glider = simulate()
-    plot(t, hist, glider)
+    import sys
+    _main(sys.argv[1:])

@@ -1,0 +1,5 @@
+# generated simulation outputs
+*.png
+*.gif
+*.mp4
+__pycache__/

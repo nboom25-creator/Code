@@ -1,0 +1,16 @@
+{
+  "name": "lab syringe-pump glider",
+  "mass_kg": 3.18,
+  "volume_m3": 0.00318,
+  "hull_radius_m": 0.0445,
+  "hull_length_m": 0.508,
+  "wing_area_m2": 0.118,
+  "wing_span_m": 0.84,
+  "cd0": 0.1,
+  "k_induced": 0.066,
+  "ballast_swing_kg": 0.03,
+  "movable_mass_kg": 0.8,
+  "depth_band_m": 1.98,
+  "speed_mps": 0.15,
+  "water_density_kgm3": 998.0
+}
