@@ -3,6 +3,14 @@
 `glider_6dof.py` expands a 3-DOF longitudinal-plane glider model into a full
 **12-state, 6 degree-of-freedom** rigid-body flight simulation.
 
+## Run it in your browser (no install — works on a phone)
+
+Open the notebook in Google Colab and press *Runtime → Run all*; the trajectory
+figures and the animated dive appear inline:
+
+**https://colab.research.google.com/github/nboom25-creator/code/blob/claude/underwater-glider-calc-HNYEV/simulation/glider_6dof.ipynb**
+
+
 | Group | States |
 | ----- | ------ |
 | Position (earth/NED) | `x` (north), `y` (east), `z` (depth, down +) |
