@@ -351,6 +351,29 @@
 
   <div class="grid">
 
+    <!-- REQUIREMENTS-DRIVEN DESIGN -->
+    <section class="card span2" id="card-req">
+      <h2><span class="ic">📋</span> Requirements → design (lab syringe-pump glider)</h2>
+      <p class="hint" style="margin:-6px 0 6px">Enter your project requirements, press <b>Generate</b>, and every section below is sized and analyzed automatically. Tune from there.</p>
+      <div class="row3">
+        <div><label>Water</label><select id="req_water"><option value="fresh">Fresh — lab/tank (998)</option><option value="salt">Salt water (1025)</option></select></div>
+        <div><label>Max operating depth (m)</label><input type="number" id="req_depth" value="2" step="0.5"></div>
+        <div><label>Target along-track speed (m/s)</label><input type="number" id="req_speed" value="0.15" step="0.01"></div>
+      </div>
+      <div class="row3">
+        <div><label>Hull tube outer ⌀ (mm)</label><input type="number" id="req_od" value="90" step="1"></div>
+        <div><label>Hull tube length (mm)</label><input type="number" id="req_len" value="500" step="10"></div>
+        <div><label>Hull material</label><select id="req_mat"></select></div>
+      </div>
+      <div class="row3">
+        <div><label>Syringe volume (mL)</label><input type="number" id="req_syr" value="60" step="5"></div>
+        <div><label>Number of syringes</label><input type="number" id="req_nsyr" value="1" step="1"></div>
+        <div><label>Target glide angle (°)</label><input type="number" id="req_angle" value="30" step="1"></div>
+      </div>
+      <button class="calc" id="btnGenerate" style="margin-top:14px">⚙️ Generate design from requirements</button>
+      <div class="out" id="req_out" style="font-size:13px">Fill in the requirements above and press Generate.</div>
+    </section>
+
     <!-- SAVED DESIGNS -->
     <section class="card span2" id="card-designs">
       <h2><span class="ic">💾</span> Saved designs</h2>
@@ -1236,13 +1259,13 @@ $('btnPrint').addEventListener('click', ()=>window.print());
 window.addEventListener('resize', compute);
 
 // ---- material dropdown ----
-function populateMaterials(){
-  const sel=$('material'), cats={};
+function populateMaterials(selId='material', includeCustom=true){
+  const sel=$(selId), cats={};
   for(const k in MATERIALS){ const m=MATERIALS[k]; (cats[m.c]=cats[m.c]||[]).push([k,m.n]); }
   let html='';
   for(const c in cats) html+='<optgroup label="'+c+'">'+
     cats[c].map(([k,n])=>'<option value="'+k+'">'+n+'</option>').join('')+'</optgroup>';
-  html+='<option value="custom">Custom (enter values)</option>';
+  if(includeCustom) html+='<option value="custom">Custom (enter values)</option>';
   sel.innerHTML=html;
 }
 // detect which material (if any) the current properties match
@@ -1261,6 +1284,97 @@ $('material').addEventListener('change', ()=>{
 // editing any hull property re-detects the material (or shows Custom)
 ['yieldMPa','youngGPa','poisson','matDensity'].forEach(id=>
   $(id).addEventListener('input', ()=>{ $('material').value=matchMaterial(); }));
+
+// ---- requirements-driven design generator ----
+populateMaterials('req_mat', false);
+$('req_mat').value='acrylic';
+const REQ_IDS=['req_water','req_depth','req_od','req_len','req_mat','req_syr','req_nsyr','req_angle','req_speed'];
+function saveReq(){ const s={}; REQ_IDS.forEach(id=>s[id]=$(id).value);
+  try{ localStorage.setItem('gliderReq', JSON.stringify(s)); }catch(e){} }
+function loadReq(){ try{ const s=JSON.parse(localStorage.getItem('gliderReq')); if(!s) return;
+  REQ_IDS.forEach(id=>{ if(s[id]!==undefined) $(id).value=s[id]; }); }catch(e){} }
+REQ_IDS.forEach(id=> $(id).addEventListener('change', saveReq));
+
+function generateFromRequirements(){
+  const g=num('g');
+  const fresh=$('req_water').value==='fresh', rho0=fresh?998:1025;
+  const depth=num('req_depth'), od=num('req_od'), len=num('req_len');
+  const matKey=$('req_mat').value, M=MATERIALS[matKey]||MATERIALS.acrylic;
+  const Vsyr=num('req_syr'), nSyr=num('req_nsyr');
+  const gammaDeg=num('req_angle'), Vtarget=num('req_speed');
+
+  // environment + depth
+  $('surfaceDensity').value=rho0;
+  $('hullDepth').value=depth; $('workingDepth').value=depth; $('depthBand').value=depth;
+  // hull geometry
+  const r=od/2/1000;                       // outer radius (m)
+  $('radius').value=(od/2).toFixed(1);
+  $('hullLength').value=len.toFixed(0);
+  // material
+  $('material').value=matKey;
+  $('yieldMPa').value=M.y; $('youngGPa').value=M.E; $('poisson').value=M.nu; $('matDensity').value=M.d;
+  // wall thickness for safety at depth (clamped to a buildable minimum)
+  const grad=$('useWater').checked? gradientAuto(rho0,g):0;
+  const hp=pressureVar(depth,rho0,grad,g), shape=$('shape').value;
+  const tReq=Math.max(tForYieldSF(1.5,hp,r,M.y*1e6,shape), tForBuckleSF(2.0,hp,r,M.E*1e9,M.nu,shape));
+  let tMM=Math.ceil(Math.max(tReq*1000,3)*2)/2;   // >= 3 mm, rounded to 0.5
+  $('thickness').value=tMM.toFixed(1);
+  // displaced volume & syringe ballast authority
+  const Vext=Math.PI*r*r*(len/1000);              // m^3 (cylinder body)
+  const dV=Vsyr*nSyr/1e6;                          // m^3 full ballast swing
+  const swing=dV/2;                                // from neutral, each way
+  $('ballastL').value=(Vsyr*nSyr/1000).toFixed(3);
+  const rho=$('useWater').checked? (rho0+grad*depth):rho0;
+  // trimmed neutral at mid-stroke; analyse the descending glide (net = -rho g swing)
+  $('volL').value=(Vext*1000).toFixed(2);
+  $('mass').value=(rho*Vext + rho*swing).toFixed(3);
+  const Fnet=rho*g*swing;
+  // glide: choose CL that yields the target glide angle for this drag polar
+  const cd0=num('cd0'), k=num('k'), tg=Math.tan(gammaDeg*Math.PI/180);
+  const disc=tg*tg-4*k*cd0;
+  let cl, feasibleAngle=true;
+  if(disc>=0) cl=(tg-Math.sqrt(disc))/(2*k);   // front-side (normal) operating point
+  else { cl=Math.sqrt(cd0/k); feasibleAngle=false; }
+  $('useBestCl').checked=false; $('cl').disabled=false; $('cl').value=cl.toFixed(3);
+  const cd=cd0+k*cl*cl, gammaUsed=Math.atan2(cd,cl);
+  // wing area to hit the target speed at this operating point
+  const S=2*(Fnet*Math.cos(gammaUsed))/(rho*Vtarget*Vtarget*cl);
+  $('wingArea').value=S.toFixed(4);
+  const AR=6, span=Math.sqrt(S*AR);            // estimated span at assumed aspect ratio 6
+  // stable trim defaults; pitch target = glide angle
+  $('cbz').value='0'; $('cgz').value='-0.010'; $('cgx').value='0'; $('cbx').value='0';
+  $('targetPitch').value=Math.round(gammaDeg);
+  // make sure budget drivers don't overwrite the generated values
+  $('useBudget').checked=$('useBudgetCG').checked=$('useBudgetCB').checked=false;
+  ['mass','volL','cgx','cgz','cbx','cbz'].forEach(id=>$(id).disabled=false);
+  $('material').value=matchMaterial();
+  saveReq();
+  compute();
+
+  // summary + feasibility
+  const grAch=cl/cd, angAch=gammaUsed*180/Math.PI;
+  const Re=rho*Vtarget*(len/1000)/1.0e-3;
+  const notes=[];
+  if(!feasibleAngle) notes.push('Glide angle '+fmt(gammaDeg,0)+'° is shallower than this drag polar allows (min ≈ '+fmt(Math.atan2(2*Math.sqrt(k*cd0),1)*180/Math.PI,0)+'°). Using best glide ('+fmt(angAch,0)+'°) — increase the angle or lower drag (C_D0, k).');
+  if(tReq*1000>tMM+1e-6) notes.push('Required wall for depth is '+fmt(tReq*1000,1)+' mm (exceeds the 3 mm minimum).');
+  if(span>1.6*(len/1000)) notes.push('Estimated wingspan ≈ '+fmt(span*1000,0)+' mm is large vs the '+fmt(len,0)+' mm hull — raise the target speed, accept a steeper glide, or reduce drag to shrink the wing.');
+  if(Fnet<0.05) notes.push('Buoyancy authority is only '+fmt(Fnet,3)+' N — gliding will be very slow/weak. Use a bigger or extra syringe.');
+  const kv=(k2,v)=>'<div class="kv"><span class="k">'+k2+'</span><span class="v">'+v+'</span></div>';
+  $('req_out').innerHTML=
+    kv('Buoyancy authority (½ swing)', fmt(Fnet,3)+' N  ('+fmt(Fnet/g*1000,0)+' g)')+
+    kv('Neutral (build-to) mass', fmt(rho*Vext,3)+' kg')+
+    kv('Displaced volume', fmt(Vext*1000,2)+' L')+
+    kv('Wall thickness', tMM.toFixed(1)+' mm')+
+    kv('Wing area / C_L', fmt(S*1e4,0)+' cm² / '+fmt(cl,3))+
+    kv('Est. wingspan (AR 6)', fmt(span*1000,0)+' mm')+
+    kv('Glide ratio / angle', fmt(grAch,2)+' : 1  ('+fmt(angAch,1)+'°)')+
+    kv('Reynolds (on length)', fmt(Re,0))+
+    (notes.length? '<div style="margin-top:8px">'+notes.map(n=>'<div style="color:var(--warn);padding:4px 0;font-size:13px">⚠️ '+n+'</div>').join('')+'</div>'
+      : '<div class="ok-msg" style="margin-top:8px">Requirements look self-consistent — see the sized sections below.</div>');
+  const b=$('btnGenerate'); b.textContent='✓ Design generated — see sections below';
+  setTimeout(()=>b.textContent='⚙️ Generate design from requirements',2200);
+}
+$('btnGenerate').addEventListener('click', generateFromRequirements);
 
 // ---- mass & volume budget ----
 function renderComponents(){
@@ -1421,6 +1535,7 @@ setupCollapse();
 
 renderComponents();
 load();
+loadReq();
 $('material').value=matchMaterial();
 $('mass').disabled=$('volL').disabled=$('useBudget').checked;
 $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
