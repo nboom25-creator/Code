@@ -36,6 +36,18 @@ The web app reimplements the same physics as the Python package below, so the
 numbers match. Use the web app for quick interactive design; use the CLI/library
 below for scripting, automation, or batch studies.
 
+## 🛩️ 6-DOF flight simulation
+
+A full 12-state, 6-degree-of-freedom flight simulator (surge/sway/heave +
+roll/pitch/yaw, added mass, buoyancy engine, movable-mass trim, rudder and
+lateral ocean currents) lives in [`simulation/`](simulation/). It can be driven
+straight from a design exported by the web app's Requirements card.
+
+Run it **in your browser with no install** — open the notebook in Colab and
+press *Runtime → Run all* to see the trajectory figures and an animated dive:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nboom25-creator/code/blob/claude/underwater-glider-calc-HNYEV/simulation/glider_6dof.ipynb)
+
 ## Command-line tool
 
 It covers six design domains:
