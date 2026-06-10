@@ -614,6 +614,28 @@
       </div>
     </section>
 
+    <!-- STL IMPORT -->
+    <section class="card span2" id="card-stl">
+      <h2><span class="ic">📐</span> Import 3D model (STL)</h2>
+      <p class="hint" style="margin:-6px 0 8px">Upload an <b>.stl</b> of your hull/part — it reads the geometry (volume, area, size) in your browser, then asks for the material to estimate mass. SolidWorks parts &amp; assemblies: use <b>File → Save As → STL</b> first.</p>
+      <div class="row3">
+        <div><label>STL file</label><input type="file" id="stlFile" accept=".stl,.STL"></div>
+        <div><label>Model units</label><select id="stlUnits"><option value="0.001">millimetres</option><option value="0.01">centimetres</option><option value="1">metres</option><option value="0.0254">inches</option></select></div>
+        <div><label>Material</label><select id="stlMaterial"></select></div>
+      </div>
+      <div class="row3">
+        <div class="chk" style="margin-top:24px"><input type="checkbox" id="stlSolid"><label style="margin:0">Solid part (mass = volume × density)</label></div>
+        <div><label>Wall thickness (mm) — if hollow shell</label><input type="number" id="stlWall" value="6" step="0.5"></div>
+        <div></div>
+      </div>
+      <div class="out" id="stl_out" style="font-size:13px">No model loaded yet.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="tool" id="btnStlToBuoy">↧ Volume → displaced volume</button>
+        <button class="tool" id="btnStlToHull">↧ Size → hull radius &amp; length</button>
+        <button class="tool" id="btnStlToBudget">↧ Add as budget component</button>
+      </div>
+    </section>
+
     <!-- BILL OF MATERIALS -->
     <section class="card span2" id="card-bom">
       <h2><span class="ic">🧾</span> Bill of materials &amp; cost</h2>
@@ -1253,6 +1275,7 @@ function drawTimeline(){
 
 // ---- persistence & controls ----
 let hullShellMass=NaN, hullExtVolL=NaN, pumpSweptML=NaN, lastDesign=null;
+let stlModel=null, stlSI=null;
 const IDS=['surfaceDensity','g','useWater','workingDepth','gradient','mass','volL','wingArea','cd0','k',
   'useBestCl','cl','cgz','cbz','cgx','cbx','moveMass','moveDist','targetPitch','hullDepth',
   'radius','thickness','hullLength','poisson','yieldMPa','youngGPa','matDensity','batteryWh','ballastL',
@@ -1651,6 +1674,76 @@ $('bomBody').addEventListener('click', e=>{
 });
 $('btnAddBom').addEventListener('click', ()=>{ bomItems.push({item:'New item',qty:1,cost:0}); renderBom(); save(); });
 $('bomCurrency').addEventListener('input', ()=>{ renderBom(); save(); });
+
+// ---- STL import: parse geometry in-browser, estimate mass ----
+populateMaterials('stlMaterial', false);
+$('stlMaterial').value='acrylic';
+function parseSTLMetrics(buf){
+  const dv=new DataView(buf);
+  let vol=0, area=0, tris=0;
+  const min=[Infinity,Infinity,Infinity], max=[-Infinity,-Infinity,-Infinity];
+  function acc(ax,ay,az,bx,by,bz,cx,cy,cz){
+    vol += (ax*(by*cz-bz*cy) - ay*(bx*cz-bz*cx) + az*(bx*cy-by*cx))/6;   // signed tetra
+    const ux=bx-ax,uy=by-ay,uz=bz-az, vx=cx-ax,vy=cy-ay,vz=cz-az;
+    const nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    area += 0.5*Math.sqrt(nx*nx+ny*ny+nz*nz);
+    const pts=[[ax,ay,az],[bx,by,bz],[cx,cy,cz]];
+    for(const p of pts){ for(let k=0;k<3;k++){ if(p[k]<min[k])min[k]=p[k]; if(p[k]>max[k])max[k]=p[k]; } }
+    tris++;
+  }
+  const binary = buf.byteLength>=84 && buf.byteLength === 84 + dv.getUint32(80,true)*50;
+  if(binary){
+    const n=dv.getUint32(80,true); let o=84;
+    for(let i=0;i<n;i++){ const p=o+12;
+      acc(dv.getFloat32(p,true),dv.getFloat32(p+4,true),dv.getFloat32(p+8,true),
+          dv.getFloat32(p+12,true),dv.getFloat32(p+16,true),dv.getFloat32(p+20,true),
+          dv.getFloat32(p+24,true),dv.getFloat32(p+28,true),dv.getFloat32(p+32,true));
+      o+=50; }
+  } else {
+    const text=new TextDecoder().decode(buf);
+    const re=/vertex\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)/g;
+    const vs=[]; let m;
+    while((m=re.exec(text))){ vs.push([+m[1],+m[2],+m[3]]);
+      if(vs.length===3){ acc(vs[0][0],vs[0][1],vs[0][2],vs[1][0],vs[1][1],vs[1][2],vs[2][0],vs[2][1],vs[2][2]); vs.length=0; } }
+  }
+  if(!tris) return null;
+  return {vol:Math.abs(vol), area, dims:[max[0]-min[0],max[1]-min[1],max[2]-min[2]], tris};
+}
+function computeSTL(){
+  if(!stlModel){ $('stl_out').textContent='No model loaded yet.'; return; }
+  const s=parseFloat($('stlUnits').value);              // metres per model unit
+  const volM3=stlModel.vol*s*s*s, areaM2=stlModel.area*s*s, dims=stlModel.dims.map(d=>d*s);
+  const M=MATERIALS[$('stlMaterial').value], dens=M?M.d:NaN;
+  const solid=$('stlSolid').checked, wall=num('stlWall')/1000;
+  const mass = isFinite(dens) ? (solid? volM3*dens : areaM2*wall*dens) : NaN;
+  const sorted=[...dims].sort((a,b)=>b-a);
+  stlSI={volL:volM3*1000, mass, lengthMM:sorted[0]*1000, radiusMM:sorted[1]*1000/2};
+  const kv=(k,v)=>'<div class="kv"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>';
+  $('stl_out').innerHTML=
+    kv('Triangles', fmt(stlModel.tris,0))+
+    kv('Bounding box (L×W×H)', fmt(dims[0]*1000,1)+' × '+fmt(dims[1]*1000,1)+' × '+fmt(dims[2]*1000,1)+' mm')+
+    kv('Surface area', fmt(areaM2*1e4,1)+' cm²')+
+    kv('Enclosed volume', fmt(volM3*1000,3)+' L  ('+fmt(volM3*1e6,1)+' cm³)')+
+    kv('Material', M?M.n:'—')+
+    kv(solid?'Mass (solid)':'Mass (shell, '+num('stlWall')+' mm wall)', isFinite(mass)?fmt(mass,3)+' kg':'pick a material');
+}
+$('stlFile').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  $('stl_out').textContent='Reading '+f.name+' …';
+  f.arrayBuffer().then(buf=>{ stlModel=parseSTLMetrics(buf);
+    if(!stlModel){ $('stl_out').textContent='Could not parse that STL — is it a valid mesh?'; return; }
+    computeSTL();
+  }).catch(()=>{ $('stl_out').textContent='Could not read the file.'; });
+});
+['stlUnits','stlMaterial','stlWall','stlSolid'].forEach(id=>$(id).addEventListener('input', ()=>{ if(stlModel) computeSTL(); }));
+function stlFlash(b){ const t=b.textContent; b.textContent='✓ done'; setTimeout(()=>b.textContent=t,1200); }
+$('btnStlToBuoy').addEventListener('click', e=>{ if(!stlSI) return;
+  $('useBudget').checked=false; $('volL').disabled=false; $('volL').value=stlSI.volL.toFixed(2); compute(); stlFlash(e.target); });
+$('btnStlToHull').addEventListener('click', e=>{ if(!stlSI) return;
+  $('radius').value=stlSI.radiusMM.toFixed(1); $('hullLength').value=stlSI.lengthMM.toFixed(0); compute(); stlFlash(e.target); });
+$('btnStlToBudget').addEventListener('click', e=>{ if(!stlSI) return;
+  components.push({name:'STL part', mass:+(isFinite(stlSI.mass)?stlSI.mass:0).toFixed(3), vol:+stlSI.volL.toFixed(3), x:0, z:0});
+  renderComponents(); if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
 
 // ---- collapsible cards ----
 function setupCollapse(){
