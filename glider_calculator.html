@@ -354,17 +354,17 @@
       <h2><span class="ic">📋</span> Requirements → design (lab syringe-pump glider)</h2>
       <p class="hint" style="margin:-6px 0 6px">Enter your project requirements, press <b>Generate</b>, and every section below is sized and analyzed automatically. Tune from there.</p>
       <div class="row3">
-        <div><label>Water</label><select id="req_water"><option value="fresh">Fresh — lab/tank (998)</option><option value="salt">Salt water (1025)</option></select></div>
-        <div><label>Max operating depth (m)</label><input type="number" id="req_depth" value="2" step="0.5"></div>
-        <div><label>Target along-track speed (m/s)</label><input type="number" id="req_speed" value="0.15" step="0.01"></div>
+        <div><label>Water</label><select id="req_water"><option value="fresh">Fresh — lab/tank</option><option value="salt">Salt water</option></select></div>
+        <div><label>Max operating depth (ft)</label><input type="number" id="req_depth" value="6.5" step="0.5"></div>
+        <div><label>Target along-track speed (ft/s)</label><input type="number" id="req_speed" value="0.5" step="0.05"></div>
       </div>
       <div class="row3">
-        <div><label>Hull tube outer ⌀ (mm)</label><input type="number" id="req_od" value="90" step="1"></div>
-        <div><label>Hull tube length (mm)</label><input type="number" id="req_len" value="500" step="10"></div>
+        <div><label>Hull tube outer ⌀ (in)</label><input type="number" id="req_od" value="3.5" step="0.1"></div>
+        <div><label>Hull tube length (in)</label><input type="number" id="req_len" value="20" step="0.5"></div>
         <div><label>Hull material</label><select id="req_mat"></select></div>
       </div>
       <div class="row3">
-        <div><label>Syringe volume (mL)</label><input type="number" id="req_syr" value="60" step="5"></div>
+        <div><label>Syringe volume (fl oz)</label><input type="number" id="req_syr" value="2" step="0.25"></div>
         <div><label>Number of syringes</label><input type="number" id="req_nsyr" value="1" step="1"></div>
         <div><label>Target glide angle (°)</label><input type="number" id="req_angle" value="30" step="1"></div>
       </div>
@@ -1376,18 +1376,20 @@ $('req_mat').value='acrylic';
 const REQ_IDS=['req_water','req_depth','req_od','req_len','req_mat','req_syr','req_nsyr','req_angle','req_speed',
   'req_ar','req_e','req_cd0'];
 function saveReq(){ const s={}; REQ_IDS.forEach(id=>s[id]=$(id).value);
-  try{ localStorage.setItem('gliderReq', JSON.stringify(s)); }catch(e){} }
-function loadReq(){ try{ const s=JSON.parse(localStorage.getItem('gliderReq')); if(!s) return;
+  try{ localStorage.setItem('gliderReqEng', JSON.stringify(s)); }catch(e){} }
+function loadReq(){ try{ const s=JSON.parse(localStorage.getItem('gliderReqEng')); if(!s) return;
   REQ_IDS.forEach(id=>{ if(s[id]!==undefined) $(id).value=s[id]; }); }catch(e){} }
 REQ_IDS.forEach(id=> $(id).addEventListener('change', saveReq));
 
 function generateFromRequirements(){
   const g=num('g');
+  // English-unit requirement inputs → SI (mm, m, m/s, mL)
+  const FT=0.3048, MMperIN=25.4, MLperFLOZ=29.5735;
   const fresh=$('req_water').value==='fresh', rho0=fresh?998:1025;
-  const depth=num('req_depth'), od=num('req_od'), len=num('req_len');
+  const depth=num('req_depth')*FT, od=num('req_od')*MMperIN, len=num('req_len')*MMperIN;
   const matKey=$('req_mat').value, M=MATERIALS[matKey]||MATERIALS.acrylic;
-  const Vsyr=num('req_syr'), nSyr=num('req_nsyr');
-  const gammaDeg=num('req_angle'), Vtarget=num('req_speed');
+  const Vsyr=num('req_syr')*MLperFLOZ, nSyr=num('req_nsyr');
+  const gammaDeg=num('req_angle'), Vtarget=num('req_speed')*FT;
   const AR=num('req_ar'), eOsw=num('req_e'), cd0=num('req_cd0');
   // aspect ratio sets the induced-drag factor: k = 1/(π·e·AR)
   const k=1/(Math.PI*eOsw*AR);
@@ -1445,19 +1447,21 @@ function generateFromRequirements(){
   // summary + feasibility
   const grAch=cl/cd, angAch=gammaUsed*180/Math.PI;
   const Re=rho*Vtarget*chord/1.0e-3;            // Reynolds on the wing chord
+  // English-unit conversion factors for the summary
+  const LBF=0.224809, OZf=Fnet/g*35.274, LB=2.20462, IN=39.3701, IN2=1550.0031, IN3=61023.7, MM_IN=1/25.4;
   const notes=[];
   if(!feasibleAngle) notes.push('Glide angle '+fmt(gammaDeg,0)+'° is shallower than this drag polar allows (min ≈ '+fmt(Math.atan2(2*Math.sqrt(k*cd0),1)*180/Math.PI,0)+'°). Using best glide ('+fmt(angAch,0)+'°) — increase the angle or lower drag (C_D0, k).');
-  if(tReq*1000>tMM+1e-6) notes.push('Required wall for depth is '+fmt(tReq*1000,1)+' mm (exceeds the 3 mm minimum).');
-  if(span>1.6*(len/1000)) notes.push('Estimated wingspan ≈ '+fmt(span*1000,0)+' mm is large vs the '+fmt(len,0)+' mm hull — raise the target speed, accept a steeper glide, or reduce drag to shrink the wing.');
-  if(Fnet<0.05) notes.push('Buoyancy authority is only '+fmt(Fnet,3)+' N — gliding will be very slow/weak. Use a bigger or extra syringe.');
+  if(tReq*1000>tMM+1e-6) notes.push('Required wall for depth is '+fmt(tReq*1000*MM_IN,3)+' in (exceeds the 0.12 in / 3 mm minimum).');
+  if(span>1.6*(len/1000)) notes.push('Estimated wingspan ≈ '+fmt(span*IN,1)+' in is large vs the '+fmt(len*MM_IN,1)+' in hull — raise the target speed, accept a steeper glide, or reduce drag to shrink the wing.');
+  if(Fnet<0.05) notes.push('Buoyancy authority is only '+fmt(Fnet*LBF,4)+' lbf — gliding will be very slow/weak. Use a bigger or extra syringe.');
   const kv=(k2,v)=>'<div class="kv"><span class="k">'+k2+'</span><span class="v">'+v+'</span></div>';
   $('req_out').innerHTML=
-    kv('Buoyancy authority (½ swing)', fmt(Fnet,3)+' N  ('+fmt(Fnet/g*1000,0)+' g)')+
-    kv('Neutral (build-to) mass', fmt(rho*Vext,3)+' kg')+
-    kv('Displaced volume', fmt(Vext*1000,2)+' L')+
-    kv('Wall thickness', tMM.toFixed(1)+' mm')+
-    kv('Wing area / C_L', fmt(S*1e4,0)+' cm² / '+fmt(cl,3))+
-    kv('Wing span × chord (AR '+fmt(AR,0)+')', fmt(span*1000,0)+' × '+fmt(chord*1000,0)+' mm')+
+    kv('Buoyancy authority (½ swing)', fmt(Fnet*LBF,4)+' lbf  ('+fmt(OZf,2)+' oz)')+
+    kv('Neutral (build-to) weight', fmt(rho*Vext*LB,2)+' lb')+
+    kv('Displaced volume', fmt(Vext*IN3,0)+' in³')+
+    kv('Wall thickness', fmt(tMM*MM_IN,3)+' in')+
+    kv('Wing area / C_L', fmt(S*IN2,0)+' in² / '+fmt(cl,3))+
+    kv('Wing span × chord (AR '+fmt(AR,0)+')', fmt(span*IN,1)+' × '+fmt(chord*IN,1)+' in')+
     kv('Induced factor k (from AR)', fmt(k,3))+
     kv('Glide ratio / angle', fmt(grAch,2)+' : 1  ('+fmt(angAch,1)+'°)')+
     kv('Reynolds (on chord)', fmt(Re,0))+
