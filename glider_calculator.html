@@ -665,6 +665,7 @@
       </table>
       </div>
       <div class="hint">Edit each part's material &amp; infill here; mass, filament and print time update and feed the budget. Print time is a rough estimate (≈10 mm³/s, 1.75 mm filament).</div>
+      <div class="out" id="asm_totals" style="font-size:13px"></div>
     </section>
 
     <!-- BILL OF MATERIALS -->
@@ -1721,6 +1722,7 @@ function updateBomTotal(){
   const cur=$('bomCurrency').value||'$';
   const total=bomItems.reduce((s,b)=>s+(+b.qty||0)*(+b.cost||0),0);
   $('bomTotal').textContent=cur+fmt(total,2);
+  if(typeof updateAsmTotals==='function') updateAsmTotals();
 }
 $('bomBody').addEventListener('input', e=>{
   const el=e.target; if(el.dataset.i===undefined) return;
@@ -1907,6 +1909,22 @@ function renderPartsPanel(){
       '<td>'+fmt(est.hours,2)+'</td>'+
       '<td><button class="mini del" data-pdel="'+i+'" title="Remove">✕</button></td></tr>';
   }).join('');
+  updateAsmTotals();
+}
+function updateAsmTotals(){
+  const el=$('asm_totals'); if(!el) return;
+  const parts=components.filter(c=>c.geo);
+  const pv=parts.reduce((s,c)=>s+(c.printVolCm3||0),0), pm=parts.reduce((s,c)=>s+(+c.mass||0),0);
+  const est=printEstimate(pv);
+  const cur=($('bomCurrency')&&$('bomCurrency').value)||'$';
+  const cost=(typeof bomItems!=='undefined'?bomItems:[]).reduce((s,b)=>s+(+b.qty||0)*(+b.cost||0),0);
+  const kv=(k,v)=>'<div class="kv"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>';
+  el.innerHTML=
+    kv('Whole-build totals', parts.length+' printed part'+(parts.length===1?'':'s'))+
+    kv('Printed material', fmt(pv,0)+' cm³ · '+fmt(pm,3)+' kg')+
+    kv('Filament', fmt(est.filamentM,1)+' m')+
+    kv('Print time', fmt(est.hours,1)+' h  ('+fmt(est.hours/24,1)+' days)')+
+    kv('Bill of materials total', cur+fmt(cost,2));
 }
 $('stlFile').addEventListener('change', e=>{
   const f=e.target.files[0]; if(!f) return;
