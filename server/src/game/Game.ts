@@ -4,8 +4,11 @@
  */
 
 import {
-  type EntitySnapshot,
+  HP_REGEN_PER_SEC,
+  PROFILES,
+  type ClassProfile,
   type CombatLogEvent,
+  type EntitySnapshot,
 } from "@wow/shared";
 import { World, type EntityId } from "../ecs/World.js";
 import {
@@ -14,6 +17,7 @@ import {
   MonsterAI,
   MoveIntent,
   Position,
+  Power,
   Stats,
   ThreatTable,
 } from "../ecs/components.js";
@@ -23,7 +27,10 @@ import { CastingSystem } from "./systems/CastingSystem.js";
 import { AutoAttackSystem } from "./systems/AutoAttackSystem.js";
 import { MonsterAISystem } from "./systems/MonsterAISystem.js";
 import { MovementSystem } from "./systems/MovementSystem.js";
-import { RegenSystem } from "./systems/RegenSystem.js";
+import { ResourceSystem } from "./systems/ResourceSystem.js";
+
+/** Default class profile a freshly-spawned player starts with. */
+const DEFAULT_PROFILE: ClassProfile = "mage";
 
 export class Game {
   readonly world = new World();
@@ -38,7 +45,7 @@ export class Game {
       new MonsterAISystem(),
       new CastingSystem(),
       new AutoAttackSystem(),
-      new RegenSystem(),
+      new ResourceSystem(),
     ];
   }
 
@@ -48,10 +55,24 @@ export class Game {
     const id = this.world.createEntity();
     this.world.add(id, new Identity(name, "player"));
     this.world.add(id, new Position(0, 0));
-    this.world.add(id, new Stats(100, 100, 100, 100, /*hpRegen*/ 6, /*manaRegen*/ 8));
-    this.world.add(id, new Combat(/*weaponDamage*/ 15));
+    this.world.add(
+      id,
+      new Stats(
+        /*hp*/ 100,
+        /*maxHp*/ 100,
+        { strength: 20, agility: 20, intellect: 20, stamina: 20 },
+        /*armor*/ 30,
+        /*weaponMin*/ 8,
+        /*weaponMax*/ 12,
+        /*critChance*/ 15,
+        /*hpRegen*/ HP_REGEN_PER_SEC,
+      ),
+    );
+    const profile = PROFILES[DEFAULT_PROFILE];
+    this.world.add(id, new Power(profile.power, profile.start, profile.max, profile.manaRegen));
+    this.world.add(id, new Combat());
     this.world.add(id, new MoveIntent());
-    this.log.push("info", `${name} has entered the world.`);
+    this.log.push("info", `${name} has entered the world as a ${profile.label}.`);
     return id;
   }
 
@@ -59,8 +80,20 @@ export class Game {
     const id = this.world.createEntity();
     this.world.add(id, new Identity(name, "monster"));
     this.world.add(id, new Position(x, y));
-    this.world.add(id, new Stats(1000, 1000, 0, 0));
-    this.world.add(id, new Combat(/*weaponDamage*/ 4));
+    this.world.add(
+      id,
+      new Stats(
+        /*hp*/ 1000,
+        /*maxHp*/ 1000,
+        { strength: 10, agility: 10, intellect: 10, stamina: 10 },
+        /*armor*/ 150,
+        /*weaponMin*/ 3,
+        /*weaponMax*/ 5,
+        /*critChance*/ 0,
+        /*hpRegen*/ 0,
+      ),
+    );
+    this.world.add(id, new Combat());
     this.world.add(id, new ThreatTable());
     // Non-passive: swings back lightly so cast interrupts can be demonstrated.
     this.world.add(id, new MonsterAI(/*passive*/ false));
@@ -92,6 +125,24 @@ export class Game {
   castSpell(player: EntityId, spellId: string): void {
     const error = tryStartCast(this.ctx(), player, spellId);
     if (error) this.log.push("info", error);
+  }
+
+  /** Swap the player's class profile, reseeding the active resource. */
+  setResourceProfile(player: EntityId, profileId: ClassProfile): void {
+    const profile = PROFILES[profileId];
+    if (!profile) return;
+    let power = this.world.get(player, Power);
+    if (!power) {
+      power = this.world.add(player, new Power(profile.power, profile.start, profile.max, profile.manaRegen));
+    } else {
+      power.type = profile.power;
+      power.current = profile.start;
+      power.max = profile.max;
+      power.manaRegen = profile.manaRegen;
+      power.tickAccumulator = 0;
+    }
+    const name = this.world.get(player, Identity)?.name ?? "You";
+    this.log.push("info", `${name} switches to the ${profile.label} profile (${profile.power}).`);
   }
 
   setMoveIntent(player: EntityId, dx: number, dy: number): void {
@@ -145,6 +196,7 @@ export class Game {
       const pos = this.world.get(id, Position)!;
       const stats = this.world.get(id, Stats)!;
       const combat = this.world.get(id, Combat)!;
+      const power = this.world.get(id, Power);
       out.push({
         id,
         kind: ident.kind,
@@ -153,8 +205,9 @@ export class Game {
         y: Math.round(pos.y * 100) / 100,
         hp: Math.round(stats.hp),
         maxHp: stats.maxHp,
-        mana: Math.round(stats.mana),
-        maxMana: stats.maxMana,
+        power: power ? Math.floor(power.current) : 0,
+        maxPower: power ? power.max : 0,
+        powerType: power ? power.type : "mana",
         inCombat: combat.inCombat,
         targetId: combat.targetId,
         autoAttacking: combat.autoAttacking,

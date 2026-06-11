@@ -5,7 +5,7 @@
  * not here — this keeps the data model easy to serialize and reason about.
  */
 
-import type { EntityKind } from "@wow/shared";
+import type { EntityKind, PowerType } from "@wow/shared";
 import { Component, type EntityId } from "./World.js";
 
 /** Human-readable identity used for nameplates and the kind discriminator. */
@@ -28,22 +28,47 @@ export class Position extends Component {
   }
 }
 
-/** Primary resources. */
+/** Primary attributes from which combat values are derived. */
+export interface Attributes {
+  strength: number;
+  agility: number;
+  intellect: number;
+  stamina: number;
+}
+
+/** Health, attributes, weapon and defensive stats. Resources live in Power. */
 export class Stats extends Component {
   constructor(
     public hp: number,
     public maxHp: number,
-    public mana: number,
-    public maxMana: number,
+    public attributes: Attributes,
+    public armor: number,
+    public weaponMinDamage: number,
+    public weaponMaxDamage: number,
+    /** Critical strike chance as a percentage (0-100). */
+    public critChance: number,
     /** Out-of-combat health regen per second. */
     public hpRegen = 0,
-    /** Mana regen per second. */
-    public manaRegen = 0,
   ) {
     super();
   }
   get dead(): boolean {
     return this.hp <= 0;
+  }
+}
+
+/** The unit's single active resource pool (mana, energy or rage). */
+export class Power extends Component {
+  /** Accumulator for discrete energy ticks (ms). */
+  tickAccumulator = 0;
+  constructor(
+    public type: PowerType,
+    public current: number,
+    public max: number,
+    /** Continuous mana regen per second (mana only). */
+    public manaRegen = 0,
+  ) {
+    super();
   }
 }
 
@@ -68,10 +93,6 @@ export class Combat extends Component {
   gcdEndsAt = 0;
   /** Active cast, or null. */
   cast: ActiveCast | null = null;
-  /** Weapon damage per swing. */
-  constructor(public weaponDamage = 0) {
-    super();
-  }
 }
 
 /** Threat accumulated per attacker; monsters target the highest entry. */

@@ -9,6 +9,7 @@ import { Renderer } from "./render/Renderer.js";
 import { UnitFrames } from "./render/UnitFrames.js";
 import { CastBar } from "./render/CastBar.js";
 import { ActionBar } from "./render/ActionBar.js";
+import { ProfileBar } from "./render/ProfileBar.js";
 import { CombatLog } from "./render/CombatLog.js";
 import { Input } from "./input/Input.js";
 
@@ -28,8 +29,9 @@ const unitFrames = new UnitFrames(el("unit-frames"));
 const castBar = new CastBar(el("cast-bar-container"));
 const combatLog = new CombatLog(el("combat-log"));
 const actionBar = new ActionBar(el("action-bar"), state, ActionBar.defaultSlots(connection));
+const profileBar = new ProfileBar(el("profile-bar"), state, connection);
 
-const input = new Input(connection, state, renderer, actionBar, canvas);
+const input = new Input(connection, state, renderer, actionBar, profileBar, canvas);
 input.attach();
 
 connection.connect();
@@ -39,6 +41,7 @@ function frame(): void {
   unitFrames.update(state);
   castBar.update(state);
   actionBar.update();
+  profileBar.update();
   combatLog.update(state);
   requestAnimationFrame(frame);
 }

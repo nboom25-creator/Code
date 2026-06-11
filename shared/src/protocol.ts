@@ -7,6 +7,7 @@
  */
 
 import type { DamageSchool } from "./spells.js";
+import type { ClassProfile, PowerType } from "./resources.js";
 
 export type EntityKind = "player" | "monster";
 
@@ -19,8 +20,10 @@ export interface EntitySnapshot {
   y: number;
   hp: number;
   maxHp: number;
-  mana: number;
-  maxMana: number;
+  /** Active resource (mana / energy / rage) — drives the unit-frame bar. */
+  power: number;
+  maxPower: number;
+  powerType: PowerType;
   inCombat: boolean;
   targetId: number | null;
   /** Active spell cast, or null when not casting. */
@@ -63,6 +66,7 @@ export interface CombatLogMessage {
 
 export type CombatLogKind =
   | "damage"
+  | "crit"
   | "heal"
   | "resource"
   | "miss"
@@ -108,8 +112,15 @@ export interface MoveMessage {
   dy: number;
 }
 
+/** Swap the player's class profile, changing the active resource type. */
+export interface SetProfileMessage {
+  type: "setProfile";
+  profile: ClassProfile;
+}
+
 export type ClientMessage =
   | SetTargetMessage
   | CastSpellMessage
   | ToggleAutoAttackMessage
-  | MoveMessage;
+  | MoveMessage
+  | SetProfileMessage;

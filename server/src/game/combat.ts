@@ -1,16 +1,28 @@
 /**
- * Shared combat primitives used by the casting, auto-attack and AI systems.
- *
- * Centralising damage / resource / threat application here keeps the Classic
- * WoW rules in one place: damage always builds threat, taking damage cancels a
- * cast, and resources are spent when a cast resolves.
+ * Server-side combat engine. All combat math runs here: the unified melee
+ * attack table (miss / dodge / crit / hit), armor mitigation, weapon-damage
+ * rolls, spell-damage rolls, resource costs and rage generation. Systems and
+ * the network layer only ever call into these functions — never roll dice
+ * themselves — so the simulation stays authoritative and deterministic to one
+ * place.
  */
 
-import { getSpell, GCD_MS, type DamageSchool } from "@wow/shared";
+import {
+  ARMOR_CONSTANT,
+  ARMOR_PER_LEVEL,
+  BASE_DODGE_CHANCE,
+  BASE_MISS_CHANCE,
+  DEFAULT_LEVEL,
+  GCD_MS,
+  RAGE_DAMAGE_DIVISOR,
+  getSpell,
+  type DamageSchool,
+} from "@wow/shared";
 import {
   ActiveCast,
   Combat,
   Identity,
+  Power,
   Stats,
   ThreatTable,
 } from "../ecs/components.js";
@@ -18,21 +30,42 @@ import type { EntityId } from "../ecs/World.js";
 import type { GameContext } from "./context.js";
 import { distance } from "./util.js";
 
+type AttackOutcome = "miss" | "dodge" | "crit" | "hit";
+
+// ---------------------------------------------------------------------------
+// Naming / perspective helpers
+// ---------------------------------------------------------------------------
+
 function nameOf(ctx: GameContext, id: EntityId): string {
   return ctx.world.get(id, Identity)?.name ?? `Entity#${id}`;
 }
-
-/** Put an entity into combat (starts auto-attack swing cadence elsewhere). */
-export function enterCombat(ctx: GameContext, id: EntityId): void {
-  const combat = ctx.world.get(id, Combat);
-  if (combat && !combat.inCombat) {
-    combat.inCombat = true;
-    // Wind up the first swing so combat opens with an attack ~immediately.
-    if (combat.swingTimer <= 0) combat.swingTimer = 0;
-  }
+function isPlayer(ctx: GameContext, id: EntityId): boolean {
+  return ctx.world.get(id, Identity)?.kind === "player";
+}
+/** Sentence-start possessive: "Your" for the player, "Name's" otherwise. */
+function possCap(ctx: GameContext, id: EntityId): string {
+  return isPlayer(ctx, id) ? "Your" : `${nameOf(ctx, id)}'s`;
+}
+/** Mid-sentence possessive: "your" for the player, "Name's" otherwise. */
+function possLow(ctx: GameContext, id: EntityId): string {
+  return isPlayer(ctx, id) ? "your" : `${nameOf(ctx, id)}'s`;
+}
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function randInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-/** Cancel an in-progress cast, logging the reason. */
+// ---------------------------------------------------------------------------
+// Combat-state helpers
+// ---------------------------------------------------------------------------
+
+export function enterCombat(ctx: GameContext, id: EntityId): void {
+  const combat = ctx.world.get(id, Combat);
+  if (combat && !combat.inCombat) combat.inCombat = true;
+}
+
 export function interruptCast(
   ctx: GameContext,
   caster: EntityId,
@@ -42,80 +75,230 @@ export function interruptCast(
   if (!combat?.cast) return;
   const spellName = combat.cast.spellName;
   combat.cast = null;
-  ctx.log.push("cast", `${nameOf(ctx, caster)}'s ${spellName} was ${reason}.`);
+  ctx.log.push("cast", `${possCap(ctx, caster)} ${spellName} was ${reason}.`);
+}
+
+/** Generate rage for an entity (if it uses rage) from a damage event. */
+function generateRage(ctx: GameContext, id: EntityId, damage: number): void {
+  const power = ctx.world.get(id, Power);
+  if (!power || power.type !== "rage" || damage <= 0) return;
+  const gained = Math.round(damage / RAGE_DAMAGE_DIVISOR);
+  power.current = Math.min(power.max, power.current + gained);
+}
+
+// ---------------------------------------------------------------------------
+// Combat matrix
+// ---------------------------------------------------------------------------
+
+/** Classic armor mitigation: reduction fraction in [0, 1). Level 1 assumed. */
+export function armorReduction(armor: number): number {
+  if (armor <= 0) return 0;
+  const denom = armor + ARMOR_CONSTANT + ARMOR_PER_LEVEL * DEFAULT_LEVEL;
+  return armor / denom;
+}
+
+/** Roll the unified melee attack table in priority order. */
+function rollAttackTable(ctx: GameContext, attacker: EntityId): AttackOutcome {
+  const crit = ctx.world.get(attacker, Stats)?.critChance ?? 0;
+  const roll = Math.random() * 100;
+  let cursor = BASE_MISS_CHANCE;
+  if (roll < cursor) return "miss";
+  cursor += BASE_DODGE_CHANCE;
+  if (roll < cursor) return "dodge";
+  cursor += crit;
+  if (roll < cursor) return "crit";
+  return "hit";
 }
 
 /**
- * Apply damage from `source` to `target`. Builds threat, may interrupt the
- * target's cast, and handles death. Returns the damage actually dealt.
+ * Core damage application: subtract HP, build threat, generate rage for both
+ * participants, enter combat, interrupt the victim's cast, handle death.
+ * Returns the HP actually removed. Callers compose the combat-log line.
  */
-export function applyDamage(
+function inflict(
   ctx: GameContext,
   source: EntityId,
   target: EntityId,
   amount: number,
-  school: DamageSchool,
-  label: string,
+  _school: DamageSchool,
 ): number {
   const stats = ctx.world.get(target, Stats);
   if (!stats || stats.dead) return 0;
 
-  const dealt = Math.min(amount, stats.hp);
+  const dealt = Math.max(0, Math.min(amount, stats.hp));
   stats.hp -= dealt;
 
-  // Threat: the damage dealer climbs the target's threat table.
   ctx.world.get(target, ThreatTable)?.add(source, dealt);
+  generateRage(ctx, source, dealt); // dealing damage builds rage
+  generateRage(ctx, target, dealt); // taking damage builds rage
 
   enterCombat(ctx, source);
   enterCombat(ctx, target);
-
-  // Taking damage cancels the victim's cast (pushback -> full interrupt here).
   interruptCast(ctx, target, "interrupted");
 
-  const isPlayerSource = ctx.world.get(source, Identity)?.kind === "player";
-  const sourceName = nameOf(ctx, source);
-  const targetName = nameOf(ctx, target);
-  const verb = isPlayerSource ? "Your" : `${sourceName}'s`;
-  ctx.log.push(
-    "damage",
-    `${verb} ${label} hit ${targetName} for ${dealt} ${capitalize(school)} damage.`,
-    school,
-  );
-
   if (stats.dead) {
-    ctx.log.push("info", `${targetName} dies.`);
+    ctx.log.push("info", `${nameOf(ctx, target)} dies.`);
     onDeath(ctx, target);
   }
   return dealt;
 }
 
-/** Restore a resource to an entity, clamped to its maximum. */
-export function applyRestore(
+interface StrikeOptions {
+  multiplier: number;
+  bonus: number;
+  school: DamageSchool;
+  critMultiplier: number;
+  label: string;
+}
+
+/**
+ * A weapon-based attack (auto-attack or weapon ability). Rolls the attack
+ * table, applies armor mitigation to physical damage, and logs the outcome.
+ */
+export function meleeStrike(
   ctx: GameContext,
+  source: EntityId,
   target: EntityId,
-  type: "health" | "mana",
-  amount: number,
+  opts: StrikeOptions,
 ): void {
-  const stats = ctx.world.get(target, Stats);
-  if (!stats) return;
-  if (type === "mana") {
-    stats.mana = Math.min(stats.maxMana, stats.mana + amount);
-  } else {
-    stats.hp = Math.min(stats.maxHp, stats.hp + amount);
+  const srcStats = ctx.world.get(source, Stats);
+  const tgtStats = ctx.world.get(target, Stats);
+  if (!srcStats || !tgtStats || tgtStats.dead) return;
+
+  enterCombat(ctx, source);
+  enterCombat(ctx, target);
+
+  const outcome = rollAttackTable(ctx, source);
+  if (outcome === "miss") {
+    ctx.log.push("miss", logMiss(ctx, source, target, opts.label));
+    return;
   }
+  if (outcome === "dodge") {
+    ctx.log.push(
+      "miss",
+      `${nameOf(ctx, target)} dodges ${possLow(ctx, source)} ${opts.label}.`,
+    );
+    return;
+  }
+
+  let raw = randInt(srcStats.weaponMinDamage, srcStats.weaponMaxDamage) * opts.multiplier + opts.bonus;
+  const crit = outcome === "crit";
+  if (crit) raw *= opts.critMultiplier;
+
+  applyResolvedDamage(ctx, source, target, raw, opts.school, crit, opts.label);
+}
+
+interface SpellStrikeOptions {
+  min: number;
+  max: number;
+  school: DamageSchool;
+  critMultiplier: number;
+  label: string;
+}
+
+/**
+ * A direct spell hit. Rolls damage in [min, max], may crit (using the caster's
+ * crit chance), and bypasses the melee miss/dodge table. Non-physical schools
+ * ignore armor.
+ */
+export function spellStrike(
+  ctx: GameContext,
+  source: EntityId,
+  target: EntityId,
+  opts: SpellStrikeOptions,
+): void {
+  const srcStats = ctx.world.get(source, Stats);
+  const tgtStats = ctx.world.get(target, Stats);
+  if (!srcStats || !tgtStats || tgtStats.dead) return;
+
+  let raw = randInt(opts.min, opts.max);
+  const crit = Math.random() * 100 < srcStats.critChance;
+  if (crit) raw *= opts.critMultiplier;
+
+  applyResolvedDamage(ctx, source, target, raw, opts.school, crit, opts.label);
+}
+
+/** Shared tail of melee/spell strikes: armor mitigation, inflict, logging. */
+function applyResolvedDamage(
+  ctx: GameContext,
+  source: EntityId,
+  target: EntityId,
+  raw: number,
+  school: DamageSchool,
+  crit: boolean,
+  label: string,
+): void {
+  const tgtStats = ctx.world.require(target, Stats);
+  const reduction = school === "physical" ? armorReduction(tgtStats.armor) : 0;
+  const preMitigation = Math.round(raw);
+  const final = Math.max(0, Math.round(raw * (1 - reduction)));
+  const blocked = preMitigation - final;
+
+  const dealt = inflict(ctx, source, target, final, school);
   ctx.log.push(
-    "resource",
-    `${nameOf(ctx, target)} gains ${amount} ${type === "mana" ? "Mana" : "Health"}.`,
+    crit ? "crit" : "damage",
+    logHit(ctx, source, target, label, dealt, school, crit, blocked),
+    school,
   );
 }
 
-function currentResource(stats: Stats, type: "health" | "mana"): number {
-  return type === "mana" ? stats.mana : stats.hp;
+// ---------------------------------------------------------------------------
+// Combat-log line builders
+// ---------------------------------------------------------------------------
+
+function logHit(
+  ctx: GameContext,
+  source: EntityId,
+  target: EntityId,
+  label: string,
+  dealt: number,
+  school: DamageSchool,
+  crit: boolean,
+  blocked: number,
+): string {
+  const blockedText = blocked > 0 ? ` (${blocked} blocked by Armor)` : "";
+  const poss = possCap(ctx, source);
+  const tgt = nameOf(ctx, target);
+  const dmg = `${dealt} ${capitalize(school)} damage`;
+  return crit
+    ? `${poss} ${label} CRITS ${tgt} for ${dmg}!${blockedText}`
+    : `${poss} ${label} hits ${tgt} for ${dmg}${blockedText}.`;
 }
-function spendResource(stats: Stats, type: "health" | "mana", amt: number): void {
-  if (type === "mana") stats.mana -= amt;
-  else stats.hp -= amt;
+
+function logMiss(
+  ctx: GameContext,
+  source: EntityId,
+  target: EntityId,
+  label: string,
+): string {
+  return isPlayer(ctx, source)
+    ? `Your ${label} missed!`
+    : `${nameOf(ctx, source)}'s ${label} misses ${nameOf(ctx, target)}.`;
 }
+
+// ---------------------------------------------------------------------------
+// Resource helpers
+// ---------------------------------------------------------------------------
+
+function currentResource(ctx: GameContext, id: EntityId, type: string): number {
+  if (type === "health") return ctx.world.get(id, Stats)?.hp ?? 0;
+  const power = ctx.world.get(id, Power);
+  return power && power.type === type ? power.current : 0;
+}
+
+function spendResource(ctx: GameContext, id: EntityId, type: string, amount: number): void {
+  if (type === "health") {
+    const stats = ctx.world.get(id, Stats);
+    if (stats) stats.hp -= amount;
+    return;
+  }
+  const power = ctx.world.get(id, Power);
+  if (power && power.type === type) power.current = Math.max(0, power.current - amount);
+}
+
+// ---------------------------------------------------------------------------
+// Spell casting
+// ---------------------------------------------------------------------------
 
 /**
  * Validate and begin casting a spell. Instant spells resolve immediately;
@@ -136,20 +319,17 @@ export function tryStartCast(
   if (combat.cast) return "Already casting.";
   if (ctx.now < combat.gcdEndsAt) return "Global cooldown not ready.";
 
-  // Targeting / range checks for offensive spells.
-  if (spell.effect.damage) {
-    if (combat.targetId == null) return "You have no target.";
-    if (!ctx.world.exists(combat.targetId)) return "Invalid target.";
-    if (distance(ctx.world, caster, combat.targetId) > spell.range) {
-      return "Target is out of range.";
-    }
+  // Every current ability is offensive: require a valid, in-range target.
+  if (combat.targetId == null) return "You have no target.";
+  if (!ctx.world.exists(combat.targetId)) return "Invalid target.";
+  if (distance(ctx.world, caster, combat.targetId) > spell.range) {
+    return "Target is out of range.";
   }
 
-  if (currentResource(stats, spell.cost.type) < spell.cost.amount) {
+  if (currentResource(ctx, caster, spell.cost.type) < spell.cost.amount) {
     return `Not enough ${spell.cost.type}.`;
   }
 
-  // Trigger the GCD at cast start (Classic behaviour).
   if (spell.triggersGcd) combat.gcdEndsAt = ctx.now + GCD_MS;
 
   if (spell.castTime <= 0) {
@@ -161,36 +341,45 @@ export function tryStartCast(
   return null;
 }
 
-/** Apply a spell's effects (resource cost + damage / restore). */
+/** Spend the resource and apply a spell's damage through the combat matrix. */
 export function resolveSpell(
   ctx: GameContext,
   caster: EntityId,
   spellId: string,
 ): void {
   const spell = getSpell(spellId);
-  const stats = ctx.world.get(caster, Stats);
   const combat = ctx.world.get(caster, Combat);
-  if (!spell || !stats || !combat) return;
+  if (!spell || !combat) return;
 
-  // Re-validate resource at resolution time (it may have changed mid-cast).
-  if (currentResource(stats, spell.cost.type) < spell.cost.amount) {
-    ctx.log.push("info", `${nameOf(ctx, caster)} fails to cast ${spell.name}: not enough ${spell.cost.type}.`);
+  if (currentResource(ctx, caster, spell.cost.type) < spell.cost.amount) {
+    ctx.log.push(
+      "info",
+      `${possCap(ctx, caster)} ${spell.name} fizzles: not enough ${spell.cost.type}.`,
+    );
     return;
   }
-  spendResource(stats, spell.cost.type, spell.cost.amount);
+  spendResource(ctx, caster, spell.cost.type, spell.cost.amount);
 
-  if (spell.effect.damage && combat.targetId != null) {
-    applyDamage(
-      ctx,
-      caster,
-      combat.targetId,
-      spell.effect.damage,
-      spell.effect.damageSchool ?? "physical",
-      spell.name,
-    );
-  }
-  if (spell.effect.restore) {
-    applyRestore(ctx, caster, spell.effect.restore.type, spell.effect.restore.amount);
+  const target = combat.targetId;
+  if (target == null || !ctx.world.exists(target)) return;
+
+  const effect = spell.effect;
+  if (effect.kind === "weapon") {
+    meleeStrike(ctx, caster, target, {
+      multiplier: effect.multiplier,
+      bonus: effect.bonus,
+      school: effect.school,
+      critMultiplier: effect.critMultiplier,
+      label: spell.name,
+    });
+  } else {
+    spellStrike(ctx, caster, target, {
+      min: effect.min,
+      max: effect.max,
+      school: effect.school,
+      critMultiplier: effect.critMultiplier,
+      label: spell.name,
+    });
   }
 }
 
@@ -205,8 +394,4 @@ function onDeath(ctx: GameContext, dead: EntityId): void {
     }
     ctx.world.get(id, ThreatTable)?.remove(dead);
   }
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }

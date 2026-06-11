@@ -3,10 +3,18 @@
  * movement vectors, action-bar hotkeys, Tab/click targeting.
  */
 
+import type { ClassProfile } from "@wow/shared";
 import type { Connection } from "../net/Connection.js";
 import type { ClientState } from "../state/ClientState.js";
 import type { Renderer } from "../render/Renderer.js";
 import type { ActionBar } from "../render/ActionBar.js";
+import type { ProfileBar } from "../render/ProfileBar.js";
+
+const PROFILE_KEYS: Record<string, ClassProfile> = {
+  KeyZ: "warrior",
+  KeyX: "rogue",
+  KeyC: "mage",
+};
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   KeyW: [0, -1],
@@ -28,6 +36,7 @@ export class Input {
     private readonly state: ClientState,
     private readonly renderer: Renderer,
     private readonly actionBar: ActionBar,
+    private readonly profileBar: ProfileBar,
     private readonly canvas: HTMLCanvasElement,
   ) {}
 
@@ -41,8 +50,13 @@ export class Input {
     if (e.repeat) return;
 
     // Action bar hotkeys.
-    if (["1", "2", "3"].includes(e.key)) {
+    if (["1", "2", "3", "4"].includes(e.key)) {
       this.actionBar.activateKey(e.key);
+      return;
+    }
+    // Profile / resource swap hotkeys.
+    if (PROFILE_KEYS[e.code]) {
+      this.profileBar.activateKey(PROFILE_KEYS[e.code]);
       return;
     }
     // Targeting.

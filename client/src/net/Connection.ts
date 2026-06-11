@@ -3,7 +3,7 @@
  * and exposes typed senders for the input layer to drive.
  */
 
-import type { ClientMessage, ServerMessage } from "@wow/shared";
+import type { ClassProfile, ClientMessage, ServerMessage } from "@wow/shared";
 import type { ClientState } from "../state/ClientState.js";
 
 const WS_URL =
@@ -62,6 +62,10 @@ export class Connection {
 
   toggleAutoAttack(): void {
     this.send({ type: "toggleAutoAttack" });
+  }
+
+  setProfile(profile: ClassProfile): void {
+    this.send({ type: "setProfile", profile });
   }
 
   /** Send a movement vector only when it changes, to avoid socket spam. */

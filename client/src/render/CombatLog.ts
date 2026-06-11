@@ -30,7 +30,10 @@ export class CombatLog {
   }
 
   private classFor(event: CombatLogEvent): string {
-    if (event.kind === "damage" && event.school) return `school-${event.school}`;
-    return `log-${event.kind}`;
+    const classes = [`log-${event.kind}`];
+    if (event.school && (event.kind === "damage" || event.kind === "crit")) {
+      classes.push(`school-${event.school}`);
+    }
+    return classes.join(" ");
   }
 }

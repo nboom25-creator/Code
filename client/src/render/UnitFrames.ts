@@ -1,9 +1,11 @@
 /**
  * WoW-style unit frames for the player and current target: nameplate, health
- * bar and mana bar. Built once as DOM and updated each frame from state.
+ * bar and a resource bar that recolors to match the active power type
+ * (blue mana / yellow energy / red rage). Built once and updated each frame.
  */
 
-import type { EntitySnapshot } from "@wow/shared";
+import type { EntitySnapshot, PowerType } from "@wow/shared";
+import { powerLabel } from "@wow/shared";
 import type { ClientState } from "../state/ClientState.js";
 
 class UnitFrame {
@@ -12,8 +14,9 @@ class UnitFrame {
   private readonly combatEl = document.createElement("span");
   private readonly hpFill: HTMLElement;
   private readonly hpLabel: HTMLElement;
-  private readonly manaFill: HTMLElement;
-  private readonly manaLabel: HTMLElement;
+  private readonly powerBar: HTMLElement;
+  private readonly powerFill: HTMLElement;
+  private readonly powerLabelEl: HTMLElement;
 
   constructor(private readonly placeholder: string) {
     this.root.className = "unit-frame empty";
@@ -24,17 +27,18 @@ class UnitFrame {
     nameRow.append(this.nameEl, this.combatEl);
 
     const hp = this.makeBar("hp");
-    const mana = this.makeBar("mana");
+    const power = this.makeBar("power");
     this.hpFill = hp.fill;
     this.hpLabel = hp.label;
-    this.manaFill = mana.fill;
-    this.manaLabel = mana.label;
+    this.powerBar = power.bar;
+    this.powerFill = power.fill;
+    this.powerLabelEl = power.label;
 
-    this.root.append(nameRow, hp.bar, mana.bar);
+    this.root.append(nameRow, hp.bar, power.bar);
     this.update(undefined);
   }
 
-  private makeBar(kind: "hp" | "mana") {
+  private makeBar(kind: "hp" | "power") {
     const bar = document.createElement("div");
     bar.className = `bar ${kind}`;
     const fill = document.createElement("div");
@@ -51,20 +55,34 @@ class UnitFrame {
       this.nameEl.textContent = this.placeholder;
       this.combatEl.textContent = "";
       this.setBar(this.hpFill, this.hpLabel, 0, 0);
-      this.setBar(this.manaFill, this.manaLabel, 0, 0);
+      this.powerBar.style.display = "none";
       return;
     }
     this.root.className = "unit-frame has-unit";
     this.nameEl.textContent = unit.name;
     this.combatEl.textContent = unit.inCombat ? "⚔ In Combat" : "";
     this.setBar(this.hpFill, this.hpLabel, unit.hp, unit.maxHp);
-    this.setBar(this.manaFill, this.manaLabel, unit.mana, unit.maxMana);
+
+    // Resource bar: hide for unitless pools (e.g. target dummies), otherwise
+    // recolor to the active power type.
+    if (unit.maxPower <= 0) {
+      this.powerBar.style.display = "none";
+    } else {
+      this.powerBar.style.display = "";
+      this.setPowerColor(unit.powerType);
+      this.setBar(this.powerFill, this.powerLabelEl, unit.power, unit.maxPower, powerLabel(unit.powerType));
+    }
   }
 
-  private setBar(fill: HTMLElement, label: HTMLElement, value: number, max: number): void {
+  private setPowerColor(type: PowerType): void {
+    this.powerFill.className = `fill power-${type}`;
+  }
+
+  private setBar(fill: HTMLElement, label: HTMLElement, value: number, max: number, prefix = ""): void {
     const pct = max > 0 ? value / max : 0;
     fill.style.transform = `scaleX(${pct})`;
-    label.textContent = max > 0 ? `${value} / ${max}` : "";
+    const text = max > 0 ? `${value} / ${max}` : "";
+    label.textContent = prefix && text ? `${prefix}  ${text}` : text;
   }
 }
 

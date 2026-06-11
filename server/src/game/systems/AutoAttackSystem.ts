@@ -1,13 +1,13 @@
 /**
  * Drives the auto-attack weapon swing loop. While an entity is in combat, has
  * auto-attack enabled, and its target is within melee range, it lands a weapon
- * swing every SWING_TIMER_MS.
+ * swing every SWING_TIMER_MS — resolved through the full melee attack table.
  */
 
 import { MELEE_RANGE, SWING_TIMER_MS } from "@wow/shared";
 import { Combat, Stats } from "../../ecs/components.js";
 import type { System, GameContext } from "../context.js";
-import { applyDamage } from "../combat.js";
+import { meleeStrike } from "../combat.js";
 import { distance } from "../util.js";
 
 export class AutoAttackSystem implements System {
@@ -30,7 +30,13 @@ export class AutoAttackSystem implements System {
 
       combat.swingTimer -= ctx.dt * 1000;
       if (combat.swingTimer <= 0) {
-        applyDamage(ctx, id, combat.targetId, combat.weaponDamage, "physical", "melee");
+        meleeStrike(ctx, id, combat.targetId, {
+          multiplier: 1,
+          bonus: 0,
+          school: "physical",
+          critMultiplier: 2.0,
+          label: "auto attack",
+        });
         combat.swingTimer = SWING_TIMER_MS;
       }
     }

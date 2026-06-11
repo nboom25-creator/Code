@@ -28,3 +28,38 @@ export const MOVE_SPEED = 120;
 /** Logical world / canvas dimensions shared by server spawns and renderer. */
 export const WORLD_WIDTH = 800;
 export const WORLD_HEIGHT = 600;
+
+// ---------------------------------------------------------------------------
+// Combat matrix (attack table)
+// ---------------------------------------------------------------------------
+
+/** Base chance (%) for a melee attack to miss. */
+export const BASE_MISS_CHANCE = 5;
+/** Base chance (%) for a defender to dodge a melee attack. */
+export const BASE_DODGE_CHANCE = 5;
+/** Melee critical strikes deal this multiple of normal damage. */
+export const MELEE_CRIT_MULTIPLIER = 2.0;
+
+/** Classic armor mitigation curve: reduction = armor / (armor + K + level*PER). */
+export const ARMOR_CONSTANT = 400;
+export const ARMOR_PER_LEVEL = 85;
+/** Everything currently assumes level 1. */
+export const DEFAULT_LEVEL = 1;
+
+// ---------------------------------------------------------------------------
+// Resource regeneration
+// ---------------------------------------------------------------------------
+
+/** Energy regenerates in discrete ticks: +AMOUNT every INTERVAL ms. */
+export const ENERGY_TICK_INTERVAL_MS = 2000;
+export const ENERGY_TICK_AMOUNT = 20;
+
+/** Rage decays by this many points per second while out of combat. */
+export const RAGE_DECAY_PER_SEC = 1;
+/** Rage generated = damage / RAGE_DAMAGE_DIVISOR (both dealing and taking). */
+export const RAGE_DAMAGE_DIVISOR = 2;
+
+/** Default continuous mana regen (points per second). */
+export const MANA_REGEN_PER_SEC = 8;
+/** Default out-of-combat health regen (points per second). */
+export const HP_REGEN_PER_SEC = 6;

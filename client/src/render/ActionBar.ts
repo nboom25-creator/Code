@@ -1,10 +1,11 @@
 /**
  * Bottom action bar. Each slot binds a hotkey to an action and shows live
- * state: the auto-attack toggle highlights while active, and spell slots show a
- * Global Cooldown sweep driven by the server's gcdRemaining.
+ * state: the auto-attack toggle highlights while active, spell slots show the
+ * Global Cooldown sweep, and slots whose resource the player can't currently
+ * pay are dimmed as "unusable".
  */
 
-import { GCD_MS } from "@wow/shared";
+import { GCD_MS, SPELLS } from "@wow/shared";
 import type { ClientState } from "../state/ClientState.js";
 import type { Connection } from "../net/Connection.js";
 
@@ -12,7 +13,7 @@ export interface ActionSlot {
   key: string;
   name: string;
   icon: string;
-  /** "autoattack" | spellId; used for active/GCD rendering. */
+  /** "autoattack" or a spell id from SPELLS. */
   action: string;
   onActivate: () => void;
 }
@@ -39,12 +40,16 @@ class SlotButton {
     this.cdOverlay.className = "cd-overlay";
 
     this.root.append(this.cdOverlay, key, icon, name);
-    this.root.title = slot.name;
+    this.root.title = SPELLS[slot.action]?.description ?? slot.name;
     this.root.addEventListener("click", () => slot.onActivate());
   }
 
   setActive(active: boolean): void {
     this.root.classList.toggle("active", active);
+  }
+
+  setUnusable(unusable: boolean): void {
+    this.root.classList.toggle("unusable", unusable);
   }
 
   setGcd(fraction: number): void {
@@ -74,15 +79,31 @@ export class ActionBar {
 
   update(): void {
     const gcdFraction = Math.max(0, Math.min(1, this.state.gcdRemaining / GCD_MS));
-    const autoOn = this.state.player?.autoAttacking ?? false;
+    const player = this.state.player;
+    const autoOn = player?.autoAttacking ?? false;
+
     for (const button of this.buttons) {
-      if (button.slot.action === "autoattack") {
+      const action = button.slot.action;
+      if (action === "autoattack") {
         button.setActive(autoOn);
         button.setGcd(0);
-      } else {
-        // Spell slots reflect the shared Global Cooldown sweep.
-        button.setGcd(gcdFraction);
+        button.setUnusable(false);
+        continue;
       }
+
+      // Spell slot: GCD sweep + resource availability.
+      button.setGcd(gcdFraction);
+      const spell = SPELLS[action];
+      if (!spell || !player) {
+        button.setUnusable(true);
+        continue;
+      }
+      const cost = spell.cost;
+      const usable =
+        cost.type === "health"
+          ? player.hp > cost.amount
+          : player.powerType === cost.type && player.power >= cost.amount;
+      button.setUnusable(!usable);
     }
   }
 
@@ -97,17 +118,24 @@ export class ActionBar {
       },
       {
         key: "2",
-        name: "Shadowbolt",
-        icon: "🟣",
-        action: "shadowbolt",
-        onActivate: () => connection.castSpell("shadowbolt"),
+        name: "Mortal Strike",
+        icon: "🪓",
+        action: "mortalstrike",
+        onActivate: () => connection.castSpell("mortalstrike"),
       },
       {
         key: "3",
-        name: "Life Tap",
-        icon: "🩸",
-        action: "lifetap",
-        onActivate: () => connection.castSpell("lifetap"),
+        name: "Sinister Strike",
+        icon: "🗡️",
+        action: "sinisterstrike",
+        onActivate: () => connection.castSpell("sinisterstrike"),
+      },
+      {
+        key: "4",
+        name: "Fireball",
+        icon: "🔥",
+        action: "fireball",
+        onActivate: () => connection.castSpell("fireball"),
       },
     ];
   }

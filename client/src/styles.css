@@ -97,8 +97,15 @@ body {
 .bar.hp .fill {
   background: var(--hp);
 }
-.bar.mana .fill {
-  background: var(--mana);
+/* Resource bar recolors by power type. */
+.fill.power-mana {
+  background: linear-gradient(#3f7fff, #1f3fa0);
+}
+.fill.power-energy {
+  background: linear-gradient(#ffe46b, #c9a51f);
+}
+.fill.power-rage {
+  background: linear-gradient(#ef6b5e, #a31f1f);
 }
 
 .bar .label {
@@ -196,6 +203,11 @@ body {
   box-shadow: 0 0 8px rgba(255, 90, 77, 0.6);
 }
 
+.action-button.unusable {
+  opacity: 0.4;
+  filter: grayscale(0.6);
+}
+
 .action-button .icon {
   font-size: 22px;
 }
@@ -277,6 +289,70 @@ body {
 }
 .log-cast {
   color: #c9b6ff;
+}
+.log-miss {
+  color: #b9bfc9;
+  font-style: italic;
+}
+/* Critical hits: bold + slightly larger, keeping the school color. */
+.log-crit {
+  font-weight: 800;
+  font-size: 13px;
+  text-shadow: 0 0 6px rgba(255, 211, 77, 0.5);
+}
+.log-crit.school-fire {
+  color: #ff7d2a;
+}
+.log-crit.school-physical {
+  color: #ffd34d;
+}
+.log-crit.school-shadow {
+  color: #c87bff;
+}
+
+/* ----- Profile selector ----- */
+#profile-bar {
+  position: absolute;
+  bottom: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 5;
+}
+
+.profile-button {
+  background: var(--panel);
+  border: 2px solid var(--border-dim);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-button:hover {
+  border-color: var(--border);
+}
+
+.profile-button.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.profile-button .pkey {
+  color: var(--gold);
+}
+
+.profile-button .ptype {
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
 }
 
 #hint {

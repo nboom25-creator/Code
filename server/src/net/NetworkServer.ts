@@ -71,6 +71,9 @@ export class NetworkServer {
       case "move":
         this.game.setMoveIntent(playerId, msg.dx, msg.dy);
         break;
+      case "setProfile":
+        this.game.setResourceProfile(playerId, msg.profile);
+        break;
     }
   }
 
