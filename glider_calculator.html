@@ -657,6 +657,14 @@
       </div>
       <div class="hint" style="text-align:center">Each part sits at its centroid; markers are the assembled CG &amp; CB. <b>Drag a part</b> to nudge it (side view moves fore/aft &amp; up-down, top view moves fore/aft &amp; left-right).</div>
       <div class="out" id="asm_stab" style="font-size:13px"></div>
+      <div class="subhead" style="margin-top:16px"><span class="ic">🧵</span> Imported parts</div>
+      <div style="overflow-x:auto">
+      <table class="budget" id="partsTable">
+        <thead><tr><th>Part</th><th>Material</th><th>Infill %</th><th>Mass (kg)</th><th>Filament (m)</th><th>Print (h)</th><th></th></tr></thead>
+        <tbody id="partsBody"></tbody>
+      </table>
+      </div>
+      <div class="hint">Edit each part's material &amp; infill here; mass, filament and print time update and feed the budget. Print time is a rough estimate (≈10 mm³/s, 1.75 mm filament).</div>
     </section>
 
     <!-- BILL OF MATERIALS -->
@@ -1326,6 +1334,7 @@ function applySnapshot(s){
   if(s.__bomCurrency!==undefined) $('bomCurrency').value = s.__bomCurrency;
   renderBom();
   renderComponents();
+  if(typeof renderPartsPanel==='function') renderPartsPanel();
   $('mass').disabled=$('volL').disabled=$('useBudget').checked;
   $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
   $('cbx').disabled=$('cbz').disabled=$('useBudgetCB').checked;
@@ -1846,9 +1855,11 @@ function computeSTL(){
   const offFore=(cg[aFore]-ctr[aFore])*s, offVert=(cg[aVert]-ctr[aVert])*s;       // CG offset from centre
   const absFore=cg[aFore]*s, absVert=cg[aVert]*s, absLat=(aLat>=0&&aLat<=2?cg[aLat]:0)*s;  // place at CG
   const sorted=[...dims].sort((a,b)=>b-a);
+  const printVolCm3=(shellVolM3+infill*coreVolM3)*1e6, est=printEstimate(printVolCm3);
   stlSI={volL:volM3*1000, mass, lengthMM:sorted[0]*1000, odMM:sorted[1]*1000, radiusMM:sorted[1]*1000/2,
     cgx:offFore, cgz:offVert, absForeMM:absFore*1000, absVertMM:absVert*1000, absLatMM:absLat*1000,
-    cgModel:cg, cbModel:comV, name:stlModel.fileName||'imported part'};
+    cgModel:cg, cbModel:comV, name:stlModel.fileName||'imported part', printVolCm3,
+    geo:{V:volM3, A:areaM2}, mat:$('stlMaterial').value, infill:num('stlInfill'), shell:num('stlShell')};
   drawMesh();
   const kv=(k,v)=>'<div class="kv"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>';
   $('stl_out').innerHTML=
@@ -1858,8 +1869,44 @@ function computeSTL(){
     kv('Enclosed volume', fmt(volM3*1000,3)+' L  ('+fmt(volM3*1e6,1)+' cm³)')+
     kv('Material', M?M.n:'—')+
     kv('Mass (shell '+fmt(num('stlShell'),1)+' mm + '+fmt(num('stlInfill'),0)+'% infill)', isFinite(mass)?fmt(mass,3)+' kg':'pick a material')+
+    kv('Printed material', fmt(printVolCm3,1)+' cm³ · '+fmt(est.filamentM,1)+' m filament · ~'+fmt(est.hours,1)+' h')+
     kv('CG vs CB offset (this part)', 'fore/aft '+fmt((cg[aFore]-comV[aFore])*s*1000,1)+' mm, vert '+fmt((cg[aVert]-comV[aVert])*s*1000,1)+' mm')+
     kv('Assembly position (fwd, up)', fmt(absFore*1000,1)+', '+fmt(absVert*1000,1)+' mm');
+}
+const FILAMENT_AREA_MM2=Math.PI*0.875*0.875, PRINT_FLOW_MM3S=10;   // 1.75 mm filament, ~10 mm³/s
+function printEstimate(printVolCm3){
+  const mm3=(printVolCm3||0)*1000;
+  return {filamentM: mm3/FILAMENT_AREA_MM2/1000, hours: mm3/PRINT_FLOW_MM3S/3600};
+}
+function partMass(comp){
+  if(!comp.geo) return comp.mass;
+  const M=MATERIALS[comp.mat], dens=M?M.d:0;
+  const tShell=Math.max(comp.shell,0)/1000, infill=Math.min(Math.max(comp.infill,0),100)/100;
+  const shellV=Math.min(comp.geo.A*tShell, comp.geo.V), coreV=Math.max(comp.geo.V-shellV,0);
+  comp.printVolCm3=(shellV+infill*coreV)*1e6;
+  comp.mass=+(dens*(shellV+infill*coreV)).toFixed(4);
+  return comp.mass;
+}
+function matOptionsHTML(sel){
+  const cats={}; for(const k in MATERIALS){ const m=MATERIALS[k]; (cats[m.c]=cats[m.c]||[]).push([k,m.n]); }
+  let h=''; for(const c in cats) h+='<optgroup label="'+c+'">'+
+    cats[c].map(([k,n])=>'<option value="'+k+'"'+(k===sel?' selected':'')+'>'+n+'</option>').join('')+'</optgroup>';
+  return h;
+}
+function renderPartsPanel(){
+  const el=$('partsBody'); if(!el) return;
+  const rows=components.map((c,i)=>({c,i})).filter(o=>o.c.geo);
+  if(!rows.length){ el.innerHTML='<tr><td colspan="7" class="empty">No imported parts yet — load a model and “Add part to assembly”.</td></tr>'; return; }
+  el.innerHTML=rows.map(({c,i})=>{ const est=printEstimate(c.printVolCm3);
+    return '<tr>'+
+      '<td style="text-align:left">'+escapeHtml(String(c.name))+'</td>'+
+      '<td><select class="bnum" style="width:auto" data-pi="'+i+'" data-pf="mat">'+matOptionsHTML(c.mat)+'</select></td>'+
+      '<td><input class="bnum" type="number" step="5" data-pi="'+i+'" data-pf="infill" value="'+c.infill+'"></td>'+
+      '<td>'+fmt(c.mass,3)+'</td>'+
+      '<td>'+fmt(est.filamentM,1)+'</td>'+
+      '<td>'+fmt(est.hours,2)+'</td>'+
+      '<td><button class="mini del" data-pdel="'+i+'" title="Remove">✕</button></td></tr>';
+  }).join('');
 }
 $('stlFile').addEventListener('change', e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -1884,11 +1931,29 @@ $('btnStlToCG').addEventListener('click', e=>{ if(!stlSI) return;
   $('cgx').value=stlSI.cgx.toFixed(4); $('cgz').value=stlSI.cgz.toFixed(4); compute(); stlFlash(e.target); });
 $('btnStlToBudget').addEventListener('click', e=>{ if(!stlSI) return;
   components.push({name:stlSI.name.slice(0,24), mass:+(isFinite(stlSI.mass)?stlSI.mass:0).toFixed(3),
-    vol:+stlSI.volL.toFixed(3), x:+stlSI.absForeMM.toFixed(1), y:+stlSI.absLatMM.toFixed(1), z:+stlSI.absVertMM.toFixed(1)});
-  renderComponents(); if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
+    vol:+stlSI.volL.toFixed(3), x:+stlSI.absForeMM.toFixed(1), y:+stlSI.absLatMM.toFixed(1), z:+stlSI.absVertMM.toFixed(1),
+    geo:stlSI.geo, mat:stlSI.mat, infill:stlSI.infill, shell:stlSI.shell, printVolCm3:stlSI.printVolCm3});
+  renderComponents(); renderPartsPanel(); if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
 $('btnAsmClear').addEventListener('click', e=>{
-  components=[]; selComp=-1; renderComponents();
+  components=[]; selComp=-1; renderComponents(); renderPartsPanel();
   if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
+// imported-parts panel: edit material / infill, delete
+$('partsBody').addEventListener('input', e=>{
+  const el=e.target; if(el.dataset.pi===undefined) return;
+  const c=components[+el.dataset.pi], f=el.dataset.pf;
+  if(f==='mat') c.mat=el.value; else c.infill=parseFloat(el.value)||0;
+  partMass(c);
+  const row=el.closest('tr'); const est=printEstimate(c.printVolCm3);
+  if(row){ row.children[3].textContent=fmt(c.mass,3); row.children[4].textContent=fmt(est.filamentM,1); row.children[5].textContent=fmt(est.hours,2); }
+  renderComponents();      // updates the budget mass column + totals + previews
+  if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save();
+});
+$('partsBody').addEventListener('change', e=>{ if(e.target.dataset.pf==='mat') renderPartsPanel(); });
+$('partsBody').addEventListener('click', e=>{
+  const d=e.target.closest('[data-pdel]'); if(!d) return;
+  components.splice(+d.dataset.pdel,1); selComp=-1; renderComponents(); renderPartsPanel();
+  if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save();
+});
 // drag a part dot in the assembly preview to nudge its position
 function attachAsmDrag(canvasId, vAxis){
   const c=$(canvasId); if(!c) return; let dragging=false;
@@ -2014,6 +2079,7 @@ setupCollapse();
 renderComponents();
 renderBom();
 load();
+renderPartsPanel();
 loadReq();
 $('mass').disabled=$('volL').disabled=$('useBudget').checked;
 $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
