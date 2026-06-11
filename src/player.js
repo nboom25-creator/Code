@@ -181,11 +181,11 @@ export class Player {
     this.resource -= n; return true;
   }
 
-  respawn() {
+  respawn(pos) {
     this.dead = false;
     this.hp = this.maxHp;
     this.resource = this.resourceType === "rage" ? 0 : this.maxResource;
-    this.position.set(6, groundHeight(6, 6), 6);
+    if (pos) this.position.set(pos.x, groundHeight(pos.x, pos.z) + 1, pos.z);
     this.model.position.copy(this.position);
     this.vy = 0;
   }

@@ -57,16 +57,40 @@ its own resource (rage / mana / energy) and a 4-ability action bar.
 | **Space** | Jump |
 | **B** | Toggle bags / inventory |
 | **C** | Toggle character & stats panel |
+| **M** | Toggle the world map |
 | **Esc** | Game menu |
 
-## Zones & the dungeon
+## The world map
 
-Step into a glowing **portal** to travel between areas:
+Azora is **one seamless continent** — a 4×4 grid of **16 unique regions**
+(~1920×1920 units, roughly 16× the original world) that streams in around you as
+you explore, so it stays smooth no matter how far you roam. Open the **world map
+(M)** to see them all and your position. Each region has its own biome, terrain,
+palette, level range, and **its own creatures**:
 
-1. **Northshire Vale** — the green starter zone (levels 1–12) with a hamlet.
-2. **Emberfall Wastes** — a harsh red wasteland (levels 8–18), dead trees & ogres.
-3. **Shadowfang Crypt** — an instanced dungeon: a torch-lit hall of skeletons and
-   wraiths leading to the boss, **Lord Mortis**, who drops guaranteed epic loot.
+| Region | Biome | Lv | Signature creatures |
+|---|---|---|---|
+| Whisperwood ⌂ | forest (start) | 1–6 | Ridgeback Boar, Gray Stalker, Treant |
+| Goldmeadow Plains | grassland | 3–8 | Plains Lion, Swift Raptor, Highway Bandit |
+| Wildgrove | autumn forest | 5–10 | Elder Stag, Dire Wolf, Grizzly |
+| Mistral Coast | beach | 6–11 | Tidal Crab, Reef Crawler, Coastal Siren |
+| Thornmarsh | swamp | 8–13 | Bog Lurker, Crocolisk, Will-o'-Wisp |
+| Stormpeak Highlands | rocky hills | 10–15 | Crag Boar, Wild Gryphon, Storm Elemental |
+| Verdant Jungle | jungle | 12–17 | Shadow Panther, Venom Serpent, Headhunter |
+| Ashen Badlands | badlands | 14–19 | Boulder Golem, Carrion Vulture, Marauder |
+| Frostspire Peaks | snow mountains | 15–20 | Frostfang Wolf, Frost Yeti, Ice Elemental |
+| Shadowmoor ⚑ | cursed forest | 18–24 | Shadow Stalker, Ghoul, Wraith |
+| Bloodfen | red swamp | 20–26 | Bloodleech, Bog Troll, Plague Rat |
+| Sunscorch Desert | dunes | 22–28 | Sand Wurm, Plague Scarab, Dust Raider |
+| Crystalvale | crystal fields | 24–30 | Mana Wyrm, Crystal Golem, Arcane Sprite |
+| Emberfall Wastes | volcanic | 28–34 | Lava Hound, Magma Elemental, Scorchling |
+| Direhollow | haunted | 32–40 | Risen Skeleton, Banshee, Dire Bat |
+| The Maw | corrupted (endgame) | 45–55 | Fel Hound, Pit Demon, Dreadlord |
+
+⚑ **Shadowmoor** holds a portal into **Shadowfang Crypt** — an instanced,
+torch-lit dungeon of skeletons and wraiths leading to the boss **Lord Mortis**,
+who drops guaranteed epic loot. Step back through the portal to return to the
+exact spot you left.
 
 ## Loot & gear
 
@@ -80,18 +104,21 @@ Step into a glowing **portal** to travel between areas:
 
 ## Features
 
-- Three hand-built zones (two open-world + one instanced dungeon) with portal
-  travel and smooth fade transitions.
-- Procedurally generated terrain, scenery, a hamlet, and a torch-lit crypt.
-- Procedural stylized humanoid models — each race built from its own proportions.
-- Enemy AI: idle wandering, aggro, chase, melee attacks, leashing & respawns;
-  flying wraiths and a high-health boss.
+- **WoW-scale streamed continent**: 16 unique biome regions on one seamless map
+  with terrain chunk streaming (only ~9 cells active at a time) and a sun that
+  follows you for crisp local shadows.
+- **~48 unique creatures** built from 7 procedural body types (quadruped, biped,
+  serpent, flyer, ooze, golem, insect), themed per region.
+- Instanced **Shadowfang Crypt** dungeon with a boss, reached by portal.
+- Procedural stylized character models — each race built from its own proportions.
+- Enemy AI: idle wandering, aggro, chase, melee attacks, leashing; flyers, oozes,
+  golems, and a high-health boss.
 - Combat: cast bars, cooldowns, global cooldown, crits, slows, AoE, charges,
   projectiles with lighting, floating combat text, armor mitigation.
-- Full loot & equipment system with rarities, tooltips and live stat updates.
+- Full loot & equipment system with 6 rarities, tooltips and live stat updates.
 - Progression: XP, leveling, scaling stats, a kill quest with a bonus objective.
-- HUD: player/target unit frames, action bar, XP bar, live minimap, combat log,
-  inventory and character panels.
+- HUD: player/target unit frames, action bar, XP bar, live minimap, world map,
+  combat log, inventory and character panels.
 
 ## Project layout
 
@@ -102,13 +129,15 @@ vendor/three.module.js# bundled Three.js (offline)
 src/
   data.js             # factions, races, classes, abilities
   items.js            # item rarities, procedural loot, drop tables
-  zones.js            # zone definitions (vale, wastes, crypt)
+  regions.js          # 16-region world grid + global terrain samplers
+  creatures.js        # creature body builders + ~48-creature registry
+  zones.js            # instanced zone definitions (the crypt dungeon)
   characterModel.js   # procedural humanoid builder + animation
-  world.js            # Zone builder: terrain/dungeon, scenery, portals
+  world.js            # Overworld streamer + dungeon Zone builder
   player.js           # stats, leveling, movement, inventory & gear
-  enemies.js          # mob models, AI, spawning, boss
-  ui.js               # HUD, minimap, panels, combat text, quests
-  main.js             # bootstrap, char creation, loop, combat, zones
+  enemies.js          # creature instances, AI, chunk streaming, boss
+  ui.js               # HUD, minimap, world map, panels, combat text
+  main.js             # bootstrap, char creation, loop, combat, travel
 ```
 
 Built with Three.js. Original world, names, and lore.

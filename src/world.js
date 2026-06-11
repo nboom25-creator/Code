@@ -6,8 +6,12 @@
 // player & enemies can stay grounded in whichever zone is loaded.
 // ===========================================================
 import * as THREE from "three";
+import {
+  sampleHeight, sampleColor, regionAt, cellOf, cellCenter,
+  CELL, GRID, WORLD_HALF, SEA_LEVEL, startSpawn,
+} from "./regions.js";
 
-export const WORLD_SIZE = 220;     // half-extent for outdoor zones
+export const WORLD_SIZE = 220;     // half-extent for legacy outdoor zones
 const SEG = 120;
 
 // ---- active ground height (set by the loaded zone) ----
@@ -348,5 +352,272 @@ export class Zone {
       o.traverse?.(c => { if (c.isMesh) { c.geometry?.dispose?.(); } });
     }
     this.objects = []; this.colliders = []; this.portals = [];
+  }
+}
+
+// ===========================================================
+// Overworld — one seamless streamed continent.
+// Loads a 3x3 ring of terrain chunks around the player; each
+// chunk samples the global biome height/color and scatters
+// region-appropriate props. Creatures are spawned/despawned
+// per-chunk via callbacks so only ~9 cells are ever active.
+// ===========================================================
+function smat(c, o = {}) {
+  return new THREE.MeshStandardMaterial({ color: c, roughness: o.rough ?? 1, metalness: o.metal ?? 0, flatShading: true, emissive: o.emissive ?? 0x000000, emissiveIntensity: o.ei ?? 1, transparent: o.transparent ?? false, opacity: o.opacity ?? 1 });
+}
+
+// ---- tree / prop builders by biome kind ----
+function buildTree(kind, leafColors, trunkColor) {
+  const g = new THREE.Group();
+  const lc = leafColors[(Math.random() * leafColors.length) | 0];
+  const trunkMat = smat(trunkColor);
+  const leafMat = smat(lc);
+  if (kind === "dead") {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.5, 5, 6), trunkMat);
+    trunk.position.y = 2.5; g.add(trunk);
+    for (let k = 0; k < 4; k++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 2, 5), trunkMat); b.position.set((Math.random()-0.5)*1.6, 3.5 + k*0.6, (Math.random()-0.5)*1.6); b.rotation.z = (Math.random()-0.5)*1.6; g.add(b); }
+  } else if (kind === "crystal") {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.4, 2, 6), trunkMat); trunk.position.y = 1; g.add(trunk);
+    for (let k = 0; k < 5; k++) { const sh = new THREE.Mesh(new THREE.ConeGeometry(0.4, 2.4, 5), smat(lc, { emissive: lc, ei: 0.5, transparent: true, opacity: 0.85 })); sh.position.set((Math.random()-0.5)*1.2, 2 + Math.random()*1.5, (Math.random()-0.5)*1.2); sh.rotation.set(Math.random()*0.5, 0, (Math.random()-0.5)*0.6); g.add(sh); }
+  } else if (kind === "palm") {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 5.5, 6), trunkMat); trunk.position.y = 2.75; trunk.rotation.z = 0.12; g.add(trunk);
+    for (let k = 0; k < 6; k++) { const frond = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 0.6), leafMat); frond.position.set(0, 5.4, 0); frond.rotation.y = (k / 6) * Math.PI * 2; frond.rotation.z = 0.4; frond.position.x = Math.cos(frond.rotation.y) * 1.3; frond.position.z = Math.sin(frond.rotation.y) * 1.3; g.add(frond); }
+  } else if (kind === "willow") {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 3.5, 6), trunkMat); trunk.position.y = 1.75; g.add(trunk);
+    const canopy = new THREE.Mesh(new THREE.SphereGeometry(2.2, 8, 6), leafMat); canopy.position.y = 4; canopy.scale.y = 0.7; g.add(canopy);
+    for (let k = 0; k < 6; k++) { const drape = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.2, 0.2), leafMat); const a = Math.random()*Math.PI*2; drape.position.set(Math.cos(a)*1.8, 2.6, Math.sin(a)*1.8); g.add(drape); }
+  } else if (kind === "round") {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, 3, 6), trunkMat); trunk.position.y = 1.5; g.add(trunk);
+    const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(2.1, 0), leafMat); ball.position.y = 4; g.add(ball);
+  } else if (kind === "autumn") {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 3.5, 6), trunkMat); trunk.position.y = 1.75; g.add(trunk);
+    for (let k = 0; k < 3; k++) { const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6 - k*0.2, 0), smat(leafColors[(Math.random()*leafColors.length)|0])); ball.position.set((Math.random()-0.5)*1.2, 4 + k*0.9, (Math.random()-0.5)*1.2); g.add(ball); }
+  } else if (kind === "jungle") {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.55, 7, 6), trunkMat); trunk.position.y = 3.5; g.add(trunk);
+    for (let k = 0; k < 3; k++) { const disc = new THREE.Mesh(new THREE.CylinderGeometry(2.6 - k*0.5, 2.6 - k*0.5, 0.5, 7), leafMat); disc.position.y = 6 + k*1.1; g.add(disc); }
+  } else { // pine
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 4, 6), trunkMat); trunk.position.y = 2; g.add(trunk);
+    for (let k = 0; k < 3; k++) { const cone = new THREE.Mesh(new THREE.ConeGeometry(2.6, 4.5, 7), leafMat); cone.position.y = 4 + k*1.8; cone.scale.setScalar(1 - k*0.22); g.add(cone); }
+  }
+  return g;
+}
+
+export class Overworld {
+  constructor(scene, callbacks = {}) {
+    this.scene = scene;
+    this.cb = callbacks;            // {onSpawnChunk, onDespawnChunk}
+    this.chunks = new Map();        // key -> {objects, colliders, portals}
+    this.colliders = [];            // aggregate (rebuilt on chunk change)
+    this.portals = [];              // aggregate
+    this.loadRadius = 1;            // 3x3
+    this._lastCell = null;
+    setActiveHeight(sampleHeight);
+    this.height = sampleHeight;
+    this._buildSkyAndSea();
+  }
+
+  _buildSkyAndSea() {
+    const scene = this.scene;
+    scene.background = new THREE.Color(0x9fc0e4);
+    scene.fog = new THREE.Fog(0x9fc0e4, 180, 520);
+
+    this.sun = new THREE.DirectionalLight(0xfff2d6, 1.5);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    const sc = this.sun.shadow.camera;
+    sc.near = 1; sc.far = 260; sc.left = -90; sc.right = 90; sc.top = 90; sc.bottom = -90;
+    this.sun.shadow.bias = -0.0004;
+    scene.add(this.sun); scene.add(this.sun.target);
+    this.hemi = new THREE.HemisphereLight(0xbcd6ff, 0x4a6a3a, 0.7); scene.add(this.hemi);
+    this.amb = new THREE.AmbientLight(0x40506a, 0.4); scene.add(this.amb);
+
+    // global sea
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_HALF * 2 + 400, WORLD_HALF * 2 + 400),
+      new THREE.MeshStandardMaterial({ color: 0x2f6f9f, transparent: true, opacity: 0.8, roughness: 0.2, metalness: 0.35 }));
+    sea.rotation.x = -Math.PI / 2; sea.position.y = SEA_LEVEL - 0.4;
+    scene.add(sea); this.sea = sea;
+  }
+
+  _chunkKey(cx, cz) { return cx + "," + cz; }
+
+  _buildChunk(cx, cz) {
+    if (cx < 0 || cz < 0 || cx >= GRID || cz >= GRID) return;
+    const key = this._chunkKey(cx, cz);
+    if (this.chunks.has(key)) return;
+    const region = regionAt(cx, cz);
+    const [ccx, ccz] = cellCenter(cx, cz);
+    const chunk = { objects: [], colliders: [], portals: [] };
+
+    // terrain mesh
+    const SEG = 40;
+    const geo = new THREE.PlaneGeometry(CELL, CELL, SEG, SEG);
+    geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position;
+    const colors = [];
+    const col = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const wx = pos.getX(i) + ccx, wz = pos.getZ(i) + ccz;
+      const y = sampleHeight(wx, wz);
+      pos.setY(i, y);
+      sampleColor(wx, wz, y, col);
+      colors.push(col.r, col.g, col.b);
+    }
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    const terrain = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
+    terrain.position.set(ccx, 0, ccz);
+    terrain.receiveShadow = true;
+    this.scene.add(terrain); chunk.objects.push(terrain);
+
+    // props
+    this._scatterProps(chunk, region, ccx, ccz);
+    if (region.hamlet) this._buildHamlet(chunk, ccx, ccz);
+    if (region.dungeon) this._addPortal(chunk, ccx + 60, ccz + 60, region.dungeon, "Enter Shadowfang Crypt", 0x9a40ff);
+
+    this.chunks.set(key, chunk);
+    // notify spawner
+    this.cb.onSpawnChunk?.(key, region, cx, cz);
+  }
+
+  _scatterProps(chunk, region, ccx, ccz) {
+    const half = CELL / 2 - 6;
+    const treeCount = Math.round((region.trees || 0) * 0.7);
+    for (let i = 0; i < treeCount; i++) {
+      const x = ccx + (Math.random() * 2 - 1) * half;
+      const z = ccz + (Math.random() * 2 - 1) * half;
+      const y = sampleHeight(x, z);
+      if (y < SEA_LEVEL + 0.4 || y > 26) continue;
+      const tree = buildTree(region.treeKind, region.leaf, region.trunk || 0x5a3a1c);
+      const sc = 0.8 + Math.random() * 0.7;
+      tree.scale.setScalar(sc); tree.position.set(x, y, z); tree.rotation.y = Math.random() * Math.PI;
+      this.scene.add(tree); chunk.objects.push(tree);
+      chunk.colliders.push({ x, z, r: 1.1 * sc });
+    }
+    const rockMat = smat(region.colRock || 0x6a6256);
+    for (let i = 0; i < (region.rocks || 0); i++) {
+      const x = ccx + (Math.random() * 2 - 1) * half;
+      const z = ccz + (Math.random() * 2 - 1) * half;
+      const y = sampleHeight(x, z);
+      if (y < SEA_LEVEL + 0.2) continue;
+      const rk = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5 + Math.random() * 1.8, 0), rockMat);
+      rk.position.set(x, y + 0.3, z); rk.rotation.set(Math.random(), Math.random(), Math.random()); rk.scale.y *= 0.7;
+      rk.castShadow = true; rk.receiveShadow = true;
+      this.scene.add(rk); chunk.objects.push(rk);
+      if (rk.geometry.parameters.radius > 1.1) chunk.colliders.push({ x, z, r: 1.3 });
+    }
+    if (region.flowers) {
+      const fc = [0xffe14a, 0xff5a7a, 0xffffff, 0x9a6aff];
+      const fgeo = new THREE.PlaneGeometry(0.5, 0.5);
+      for (let i = 0; i < 120; i++) {
+        const x = ccx + (Math.random()*2-1)*half, z = ccz + (Math.random()*2-1)*half;
+        const y = sampleHeight(x, z); if (y < SEA_LEVEL + 0.5) continue;
+        const m = new THREE.Mesh(fgeo, new THREE.MeshStandardMaterial({ color: fc[(Math.random()*fc.length)|0], side: THREE.DoubleSide, roughness: 1 }));
+        m.position.set(x, y + 0.25, z); m.rotation.y = Math.random()*Math.PI;
+        this.scene.add(m); chunk.objects.push(m);
+      }
+    }
+  }
+
+  _buildHamlet(chunk, ccx, ccz) {
+    const spots = [[14, 8], [-15, 10], [10, -16], [-12, -14], [20, -2], [-22, -4]];
+    for (const [dx, dz] of spots) this._house(chunk, ccx + dx, ccz + dz, ccx, ccz);
+    const well = new THREE.Group();
+    well.add(new THREE.Mesh(new THREE.CylinderGeometry(2, 2.2, 1, 12), smat(0x8a8276)));
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.6, 12), new THREE.MeshStandardMaterial({ color: 0x2f6f9f, transparent: true, opacity: 0.8 }));
+    w.position.y = 0.5; well.add(w);
+    well.position.set(ccx, sampleHeight(ccx, ccz) + 0.4, ccz);
+    this.scene.add(well); chunk.objects.push(well);
+    chunk.colliders.push({ x: ccx, z: ccz, r: 2.4 });
+  }
+
+  _house(chunk, x, z, cx, cz) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 6), smat(0xc9b58a)); body.position.y = 2; body.castShadow = true; body.receiveShadow = true; g.add(body);
+    for (const [bx, bz] of [[-3,-3],[3,-3],[3,3],[-3,3]]) { const beam = new THREE.Mesh(new THREE.BoxGeometry(0.4,4,0.4), smat(0x6a4326)); beam.position.set(bx,2,bz); g.add(beam); }
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(5.2, 3, 4), smat(0x8a3a2a)); roof.position.y = 5.5; roof.rotation.y = Math.PI/4; roof.castShadow = true; g.add(roof);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.4, 0.2), smat(0x6a4326)); door.position.set(0, 1.2, 3.05); g.add(door);
+    g.rotation.y = Math.atan2(cx - x, cz - z);
+    g.position.set(x, sampleHeight(x, z), z);
+    this.scene.add(g); chunk.objects.push(g);
+    chunk.colliders.push({ x, z, r: 4.2 });
+  }
+
+  _addPortal(chunk, x, z, to, label, color) {
+    const g = new THREE.Group();
+    const torus = new THREE.Mesh(new THREE.TorusGeometry(1.8, 0.3, 10, 24), new THREE.MeshBasicMaterial({ color }));
+    torus.rotation.x = Math.PI / 2; torus.position.y = 2.2; g.add(torus);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.7, 24), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, side: THREE.DoubleSide }));
+    disc.position.y = 2.2; g.add(disc);
+    const light = new THREE.PointLight(color, 3, 16); light.position.y = 2.5; g.add(light);
+    const y = sampleHeight(x, z); g.position.set(x, y, z);
+    this.scene.add(g); chunk.objects.push(g);
+    const portal = { x, z, y, r: 3, to, label, mesh: g, disc, color };
+    chunk.portals.push(portal);
+  }
+
+  _disposeChunk(key) {
+    const chunk = this.chunks.get(key);
+    if (!chunk) return;
+    for (const o of chunk.objects) {
+      this.scene.remove(o);
+      o.traverse?.(c => { if (c.isMesh) { c.geometry?.dispose?.(); } });
+    }
+    this.chunks.delete(key);
+    this.cb.onDespawnChunk?.(key);
+  }
+
+  _rebuildAggregates() {
+    this.colliders = [];
+    this.portals = [];
+    for (const chunk of this.chunks.values()) {
+      for (const c of chunk.colliders) this.colliders.push(c);
+      for (const p of chunk.portals) this.portals.push(p);
+    }
+  }
+
+  _stream(px, pz) {
+    const [cx, cz] = cellOf(px, pz);
+    if (this._lastCell && this._lastCell[0] === cx && this._lastCell[1] === cz) return;
+    this._lastCell = [cx, cz];
+    const want = new Set();
+    for (let dz = -this.loadRadius; dz <= this.loadRadius; dz++)
+      for (let dx = -this.loadRadius; dx <= this.loadRadius; dx++) {
+        const nx = cx + dx, nz = cz + dz;
+        if (nx < 0 || nz < 0 || nx >= GRID || nz >= GRID) continue;
+        want.add(this._chunkKey(nx, nz));
+      }
+    // unload far
+    for (const key of [...this.chunks.keys()]) if (!want.has(key)) this._disposeChunk(key);
+    // load near
+    for (const key of want) if (!this.chunks.has(key)) { const [a, b] = key.split(",").map(Number); this._buildChunk(a, b); }
+    this._rebuildAggregates();
+  }
+
+  resolveCollision(x, z, radius = 0.6) {
+    for (const c of this.colliders) {
+      const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz), min = c.r + radius;
+      if (d < min && d > 0.0001) { const push = min - d; x += (dx / d) * push; z += (dz / d) * push; }
+    }
+    const lim = WORLD_HALF - 6;
+    x = THREE.MathUtils.clamp(x, -lim, lim);
+    z = THREE.MathUtils.clamp(z, -lim, lim);
+    return [x, z];
+  }
+
+  update(t, player) {
+    if (player) {
+      this._stream(player.position.x, player.position.z);
+      // sun follows player for crisp local shadows
+      this.sun.position.set(player.position.x + 60, player.position.y + 120, player.position.z + 40);
+      this.sun.target.position.copy(player.position);
+    }
+    if (this.sea) this.sea.material.opacity = 0.74 + Math.sin(t * 1.2) * 0.05;
+    for (const p of this.portals) { p.mesh.rotation.y = t * 0.6; if (p.disc) p.disc.material.opacity = 0.35 + Math.sin(t * 3) * 0.12; }
+  }
+
+  dispose() {
+    for (const key of [...this.chunks.keys()]) this._disposeChunk(key);
+    for (const o of [this.sun, this.sun?.target, this.hemi, this.amb, this.sea]) if (o) this.scene.remove(o);
+    this.colliders = []; this.portals = [];
   }
 }

@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { ABILITIES, CLASS_KIT } from "./data.js";
 import { SLOTS, SLOT_LABEL, SLOT_ICON, RARITY, STAT_LABEL } from "./items.js";
+import { LAYOUT, REGION_DEFS, GRID, CELL, WORLD_HALF } from "./regions.js";
 
 const $ = id => document.getElementById(id);
 
@@ -31,11 +32,13 @@ export class UI {
     // micro buttons
     const btnRow = document.createElement("div");
     btnRow.className = "ui-buttons";
-    btnRow.innerHTML = `<button id="btn-char" title="Character (C)">🧍</button>
+    btnRow.innerHTML = `<button id="btn-map" title="World Map (M)">🗺️</button>
+                        <button id="btn-char" title="Character (C)">🧍</button>
                         <button id="btn-bags" title="Bags (B)">🎒</button>`;
     document.getElementById("game-ui").appendChild(btnRow);
     btnRow.querySelector("#btn-bags").onclick = () => this.toggleBags();
     btnRow.querySelector("#btn-char").onclick = () => this.toggleChar();
+    btnRow.querySelector("#btn-map").onclick = () => this.toggleMap(this.player);
 
     const bag = document.createElement("div");
     bag.id = "bag-panel"; bag.className = "panel hidden";
@@ -56,6 +59,16 @@ export class UI {
     ch.querySelector(".panel-close").onclick = () => this.toggleChar();
     this.charPanel = ch; this.charOpen = false;
 
+    // world map
+    const map = document.createElement("div");
+    map.id = "map-panel"; map.className = "panel hidden";
+    map.innerHTML = `<div class="panel-head"><h3>World Map — Continent of Azora</h3><button class="panel-close">✕</button></div>
+                     <div class="map-grid" id="map-grid"></div>
+                     <div class="panel-hint">★ marks your location. Each region has unique creatures and level ranges.</div>`;
+    document.getElementById("game-ui").appendChild(map);
+    map.querySelector(".panel-close").onclick = () => this.toggleMap();
+    this.mapPanel = map; this.mapOpen = false;
+
     // shared tooltip
     this.tip = document.createElement("div");
     this.tip.id = "item-tooltip"; this.tip.className = "hidden";
@@ -64,6 +77,30 @@ export class UI {
 
   toggleBags() { this.bagOpen = !this.bagOpen; this.bagPanel.classList.toggle("hidden", !this.bagOpen); if (this.bagOpen) this.renderBags(); }
   toggleChar() { this.charOpen = !this.charOpen; this.charPanel.classList.toggle("hidden", !this.charOpen); if (this.charOpen) this.renderChar(); }
+  toggleMap(player) { this.mapOpen = !this.mapOpen; this.mapPanel.classList.toggle("hidden", !this.mapOpen); if (this.mapOpen) this.renderMap(player || this.player); }
+
+  renderMap(player) {
+    const grid = $("map-grid");
+    grid.innerHTML = "";
+    const px = (player.position.x + WORLD_HALF) / CELL;
+    const pz = (player.position.z + WORLD_HALF) / CELL;
+    for (let cz = 0; cz < GRID; cz++) {
+      for (let cx = 0; cx < GRID; cx++) {
+        const r = REGION_DEFS[LAYOUT[cz][cx]];
+        const here = (Math.floor(px) === cx && Math.floor(pz) === cz);
+        const tile = document.createElement("div");
+        tile.className = "map-tile" + (here ? " here" : "");
+        const c = new THREE.Color(r.colGrass).getStyle();
+        tile.style.background = `linear-gradient(160deg, ${c}, ${new THREE.Color(r.colRock).getStyle()})`;
+        tile.innerHTML = `<div class="mt-name">${r.name}</div>
+          <div class="mt-lvl">Lv ${r.lvl[0]}–${r.lvl[1]}</div>
+          ${r.dungeon ? '<div class="mt-tag">⚑ Dungeon</div>' : ''}
+          ${r.start ? '<div class="mt-tag">⌂ Start</div>' : ''}
+          ${here ? '<div class="mt-here">★ You</div>' : ''}`;
+        grid.appendChild(tile);
+      }
+    }
+  }
 
   _rarityColor(it) { return RARITY[it.rarity].color; }
 
@@ -302,8 +339,8 @@ export class UI {
 
   // ---------- quests ----------
   _buildQuest() {
-    this.quest = { title: "Cull the Wilds", need: 8, have: 0, done: false,
-                   bonusNeed: 3, bonusHave: 0 };
+    this.quest = { title: "Tame the Frontier", need: 12, have: 0, done: false,
+                   bonusNeed: 4, bonusHave: 0 };
     this.renderQuest();
   }
 
@@ -312,7 +349,7 @@ export class UI {
     if (isElite && this.quest.bonusHave < this.quest.bonusNeed) this.quest.bonusHave++;
     if (this.quest.have >= this.quest.need && !this.quest.done) {
       this.quest.done = true;
-      this.log("Quest complete: Cull the Wilds! Slay a Hill Ogre for the bonus.", "log-crit");
+      this.log("Quest complete: Tame the Frontier! Keep slaying elites for the bonus.", "log-crit");
     }
     this.renderQuest();
   }
@@ -322,6 +359,6 @@ export class UI {
     $("quest-tracker").innerHTML = `
       <h4>${q.title}</h4>
       <div class="obj ${q.have >= q.need ? "done" : ""}">Creatures slain: ${q.have}/${q.need}</div>
-      <div class="obj ${q.bonusHave >= q.bonusNeed ? "done" : ""}">Bonus — Ogres slain: ${q.bonusHave}/${q.bonusNeed}</div>`;
+      <div class="obj ${q.bonusHave >= q.bonusNeed ? "done" : ""}">Bonus — Elites slain: ${q.bonusHave}/${q.bonusNeed}</div>`;
   }
 }

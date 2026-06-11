@@ -5,8 +5,9 @@
 import * as THREE from "three";
 import { FACTIONS, RACES, CLASSES, ABILITIES, CLASS_KIT, SCHOOL_COLOR, getRace } from "./data.js";
 import { buildCharacter } from "./characterModel.js";
-import { Zone } from "./world.js";
+import { Zone, Overworld } from "./world.js";
 import { ZONES } from "./zones.js";
+import { startSpawn, regionAtWorld } from "./regions.js";
 import { Player } from "./player.js";
 import { EnemyManager } from "./enemies.js";
 import { UI } from "./ui.js";
@@ -163,11 +164,12 @@ function initCharCreate() {
 // Game state
 // ---------------------------------------------------------------------------
 const G = {
-  scene: null, camera: null, renderer: null, zone: null, player: null,
+  scene: null, camera: null, renderer: null, world: null, player: null,
   enemies: null, ui: null, clock: null, target: null, projectiles: [],
   running: false, camYaw: 0, camPitch: 0.5, camDist: 9,
   input: { keys: {}, cameraYaw: 0, jump: false, mouseDown: false },
   audio: null, boss: null, bossDownAnnounced: false, portalCooldown: 0,
+  mode: "overworld", returnPos: null, currentRegion: null,
 };
 
 function startGame(raceId, classId, name) {
@@ -184,16 +186,21 @@ function startGame(raceId, classId, name) {
   document.body.appendChild(G.renderer.domElement);
   G.renderer.domElement.id = "game-canvas";
 
-  G.camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600);
+  G.camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1400);
 
   G.player = new Player(scene, getRace(raceId), classId, name);
-  G.enemies = new EnemyManager(scene, null);
+  G.enemies = new EnemyManager(scene);
   G.ui = new UI();
   G.ui.bind(G.player, G.camera);
 
-  loadZone("vale", true);
-  G.ui.log("Welcome, " + name + ". Your adventure begins.", "log-crit");
-  G.ui.log("Slay creatures, loot gear (B = bags, C = character), and seek the glowing portals.", "log-info");
+  // fade overlay for zone transitions
+  G.fadeEl = document.createElement("div");
+  G.fadeEl.id = "fade-overlay";
+  document.body.appendChild(G.fadeEl);
+
+  enterOverworld(startSpawn(), true);
+  G.ui.log("Welcome, " + name + ". The continent of Azora stretches before you.", "log-crit");
+  G.ui.log("Explore 16 regions. Loot gear (B/C), open the world map (M), seek portals.", "log-info");
 
   G.clock = new THREE.Clock();
   G.running = true;
@@ -201,48 +208,61 @@ function startGame(raceId, classId, name) {
   initAudio();
   animate();
 
-  // fade overlay for zone transitions
-  G.fadeEl = document.createElement("div");
-  G.fadeEl.id = "fade-overlay";
-  document.body.appendChild(G.fadeEl);
-
   // hide controls tip after a while
-  setTimeout(() => $("controls-tip")?.classList.add("hidden"), 14000);
+  setTimeout(() => $("controls-tip")?.classList.add("hidden"), 16000);
 }
 
 // ---------------------------------------------------------------------------
-// Zone loading & transitions
+// World loading & transitions
 // ---------------------------------------------------------------------------
-function loadZone(id, initial = false) {
-  const cfg = ZONES[id];
-  if (G.zone) G.zone.dispose();
-  if (G.enemies) G.enemies.clear();
+function clearTransients() {
+  G.enemies.clear();
   setTarget(null);
   G.projectiles.forEach(p => { G.scene.remove(p.mesh); p.mesh.geometry.dispose(); });
   G.projectiles = [];
   G.boss = null; G.bossDownAnnounced = false;
-
-  G.zone = new Zone(G.scene, { ...cfg });       // shallow copy keeps ZONES pristine
-  G.currentZoneId = id;
-
-  const e = cfg.entry;
-  G.player.position.set(e.x, G.zone.height(e.x, e.z), e.z);
-  G.player.model.position.copy(G.player.position);
-
-  G.enemies.populate({ ...cfg, bossSpot: G.zone.bossSpot }, boss => { G.boss = boss; });
-
-  $("zone-name").textContent = cfg.name;
-  G.portalCooldown = 1.5;
-  if (!initial) G.ui.log("You have entered " + cfg.name + ".", "log-crit");
-  // boss banner for dungeon
-  if (cfg.boss) G.ui.log("A great evil stirs in the depths. Beware Lord Mortis.", "log-crit");
 }
 
-function triggerTransition(toId) {
+function enterOverworld(atPos, initial = false) {
+  if (G.world) G.world.dispose();
+  clearTransients();
+  G.mode = "overworld";
+  G.world = new Overworld(G.scene, {
+    onSpawnChunk: (k, r, cx, cz) => G.enemies.spawnChunk(k, r, cx, cz),
+    onDespawnChunk: k => G.enemies.despawnChunk(k),
+  });
+  const p = atPos || startSpawn();
+  G.player.position.set(p.x, 0, p.z);
+  G.world.update(0, G.player);            // force initial chunk stream
+  G.player.position.y = G.world.height(p.x, p.z) + 1;
+  G.player.model.position.copy(G.player.position);
+  G.portalCooldown = 2;
+  G.currentRegion = null;                 // forces label refresh
+  if (!initial) G.ui.log("You step back into the open world.", "log-info");
+}
+
+function enterDungeon(id) {
+  G.returnPos = { x: G.player.position.x, z: G.player.position.z };
+  if (G.world) G.world.dispose();
+  clearTransients();
+  G.mode = "dungeon";
+  const cfg = { ...ZONES[id] };
+  G.world = new Zone(G.scene, cfg);
+  G.enemies.populateDungeon({ ...cfg, bossSpot: G.world.bossSpot }, G.world.bossSpot, b => { G.boss = b; });
+  const e = cfg.entry;
+  G.player.position.set(e.x, G.world.height(e.x, e.z), e.z);
+  G.player.model.position.copy(G.player.position);
+  $("zone-name").textContent = cfg.name;
+  G.portalCooldown = 2;
+  G.ui.log("You have entered " + cfg.name + ". A great evil stirs below…", "log-crit");
+}
+
+function triggerTransition(to) {
   if (G.transitioning) return;
   G.transitioning = true;
   fadeTo(1, () => {
-    loadZone(toId);
+    if (to === "overworld") enterOverworld(G.returnPos);
+    else enterDungeon(to);
     fadeTo(0, () => { G.transitioning = false; });
   });
 }
@@ -273,6 +293,7 @@ function setupInput() {
     if (k === "escape") toggleEscMenu();
     if (k === "b") G.ui.toggleBags();
     if (k === "c") G.ui.toggleChar();
+    if (k === "m") G.ui.toggleMap(G.player);
     if (["1","2","3","4","5","6"].includes(k)) useAbility(parseInt(k) - 1);
     if (k === "shift") keys.shift = true;
   });
@@ -311,9 +332,11 @@ function setupInput() {
   });
 
   $("respawn-btn").onclick = () => {
-    G.player.respawn();
+    const s = startSpawn();
+    if (G.mode !== "overworld") enterOverworld(s);
+    G.player.respawn(s);
     $("death-screen").classList.add("hidden");
-    G.ui.log("You return to life at the spirit healer.", "log-info");
+    G.ui.log("You return to life at the spirit healer in Whisperwood.", "log-info");
   };
   $("resume-btn").onclick = toggleEscMenu;
   $("back-to-select").onclick = () => location.reload();
@@ -434,7 +457,7 @@ function finishAbility(ab, abId, target) {
         const d = dir.length();
         dir.normalize();
         const dest = target.model.position.clone().addScaledVector(dir, -2);
-        const [nx, nz] = G.zone.resolveCollision(dest.x, dest.z, 0.6);
+        const [nx, nz] = G.world.resolveCollision(dest.x, dest.z, 0.6);
         p.position.x = nx; p.position.z = nz;
         target.applySlow(1.5);
         dealDamage(target, ab, false);
@@ -628,16 +651,16 @@ function animate() {
     }
   }
 
-  p.update(dt, G.input, G.zone, G.camera);
+  p.update(dt, G.input, G.world, G.camera);
   G.enemies.update(dt, p, t);
-  G.zone.update(t);
+  G.world.update(t, G.player);
   updateProjectiles(dt);
   updateCamera(dt);
 
   // portal proximity → travel between zones
   if (G.portalCooldown > 0) G.portalCooldown -= dt;
   if (!G.transitioning && G.portalCooldown <= 0 && !p.dead) {
-    for (const portal of G.zone.portals) {
+    for (const portal of G.world.portals) {
       if (Math.hypot(p.position.x - portal.x, p.position.z - portal.z) < portal.r) {
         triggerTransition(portal.to);
         break;
@@ -645,8 +668,18 @@ function animate() {
     }
   }
 
-  // target validity
-  if (G.target && G.target.dead && G.target.deathT > 2.5) setTarget(null);
+  // target validity (dead, faded, or despawned with its chunk)
+  if (G.target && ((G.target.dead && G.target.deathT > 2.5) || !G.enemies.enemies.includes(G.target))) setTarget(null);
+
+  // region label (overworld)
+  if (G.mode === "overworld" && !G.transitioning) {
+    const r = regionAtWorld(p.position.x, p.position.z);
+    if (r !== G.currentRegion) {
+      G.currentRegion = r;
+      $("zone-name").textContent = r.name;
+      G.ui.log("Entering " + r.name + " (lvl " + r.lvl[0] + "–" + r.lvl[1] + ").", "log-crit");
+    }
+  }
 
   // death handling
   if (p.dead && $("death-screen").classList.contains("hidden")) {
