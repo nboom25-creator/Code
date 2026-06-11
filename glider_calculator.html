@@ -628,6 +628,11 @@
         <div><label>Wall thickness (mm) — if hollow shell</label><input type="number" id="stlWall" value="6" step="0.5"></div>
         <div></div>
       </div>
+      <div class="row3">
+        <div><label>Forward axis (fore/aft)</label><select id="stlFwd"><option value="0">model X</option><option value="1">model Y</option><option value="2">model Z</option></select></div>
+        <div><label>Up axis (vertical)</label><select id="stlUp"><option value="2">model Z</option><option value="1">model Y</option><option value="0">model X</option></select></div>
+        <div class="hint" style="margin-top:24px">For multi-part assemblies, export each part keeping the <b>same origin</b>; positions then combine correctly.</div>
+      </div>
       <canvas id="stlCanvas" width="1100" height="300" style="touch-action:none;cursor:grab"></canvas>
       <div class="hint" style="text-align:center">Drag to rotate the model.</div>
       <div class="out" id="stl_out" style="font-size:13px">No model loaded yet.</div>
@@ -636,7 +641,7 @@
         <button class="tool" id="btnStlToHull">↧ Size → hull radius &amp; length</button>
         <button class="tool" id="btnStlToBuoy">↧ Volume → displaced volume</button>
         <button class="tool" id="btnStlToCG">↧ Centre of mass → Stability CG</button>
-        <button class="tool" id="btnStlToBudget">↧ Add as budget component</button>
+        <button class="tool" id="btnStlToBudget">➕ Add part to assembly (budget)</button>
       </div>
     </section>
 
@@ -1784,15 +1789,15 @@ function computeSTL(){
   const M=MATERIALS[$('stlMaterial').value], dens=M?M.d:NaN;
   const solid=$('stlSolid').checked, wall=num('stlWall')/1000;
   const mass = isFinite(dens) ? (solid? volM3*dens : areaM2*wall*dens) : NaN;
-  // map model axes to vehicle axes by extent: longest = fore/aft, thinnest = vertical
-  const order=[0,1,2].sort((a,b)=>stlModel.dims[b]-stlModel.dims[a]);
-  const aFore=order[0], aVert=order[2], aLat=order[1];
+  // map model axes to vehicle axes from the Forward/Up selectors (shared across parts)
+  const aFore=+$('stlFwd').value, aVert=+$('stlUp').value;
   const com=solid? stlModel.comVol : stlModel.comArea;        // model units
   const ctr=[stlModel.min[0]+stlModel.dims[0]/2, stlModel.min[1]+stlModel.dims[1]/2, stlModel.min[2]+stlModel.dims[2]/2];
-  const offFore=(com[aFore]-ctr[aFore])*s, offVert=(com[aVert]-ctr[aVert])*s, offLat=(com[aLat]-ctr[aLat])*s;
+  const offFore=(com[aFore]-ctr[aFore])*s, offVert=(com[aVert]-ctr[aVert])*s;   // offset from centre
+  const absFore=com[aFore]*s, absVert=com[aVert]*s;                              // absolute (assembly frame)
   const sorted=[...dims].sort((a,b)=>b-a);
   stlSI={volL:volM3*1000, mass, lengthMM:sorted[0]*1000, odMM:sorted[1]*1000, radiusMM:sorted[1]*1000/2,
-    cgx:offFore, cgz:offVert};
+    cgx:offFore, cgz:offVert, absForeMM:absFore*1000, absVertMM:absVert*1000, name:stlModel.fileName||'imported part'};
   const kv=(k,v)=>'<div class="kv"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>';
   $('stl_out').innerHTML=
     kv('Triangles', fmt(stlModel.tris,0))+
@@ -1801,17 +1806,19 @@ function computeSTL(){
     kv('Enclosed volume', fmt(volM3*1000,3)+' L  ('+fmt(volM3*1e6,1)+' cm³)')+
     kv('Material', M?M.n:'—')+
     kv(solid?'Mass (solid)':'Mass (shell, '+num('stlWall')+' mm wall)', isFinite(mass)?fmt(mass,3)+' kg':'pick a material')+
-    kv('Centre of mass offset', 'fore/aft '+fmt(offFore*1000,1)+' mm, vert '+fmt(offVert*1000,1)+' mm');
+    kv('Centre of mass offset', 'fore/aft '+fmt(offFore*1000,1)+' mm, vert '+fmt(offVert*1000,1)+' mm')+
+    kv('Assembly position (fwd, up)', fmt(absFore*1000,1)+', '+fmt(absVert*1000,1)+' mm');
 }
 $('stlFile').addEventListener('change', e=>{
   const f=e.target.files[0]; if(!f) return;
   $('stl_out').textContent='Reading '+f.name+' …';
   meshFromFile(f).then(mdl=>{ stlModel=mdl;
     if(!stlModel){ $('stl_out').textContent='Could not parse that file — is it a valid mesh?'; return; }
+    stlModel.fileName=f.name.replace(/\.[^.]+$/,'');
     setupMeshView(); computeSTL();
   }).catch(()=>{ $('stl_out').textContent='Could not read that file (3MF needs a modern browser).'; });
 });
-['stlUnits','stlMaterial','stlWall','stlSolid'].forEach(id=>$(id).addEventListener('input', ()=>{ if(stlModel) computeSTL(); }));
+['stlUnits','stlMaterial','stlWall','stlSolid','stlFwd','stlUp'].forEach(id=>$(id).addEventListener('input', ()=>{ if(stlModel) computeSTL(); }));
 function stlFlash(b){ const t=b.textContent; b.textContent='✓ done'; setTimeout(()=>b.textContent=t,1200); }
 $('btnStlToBuoy').addEventListener('click', e=>{ if(!stlSI) return;
   $('useBudget').checked=false; $('volL').disabled=false; $('volL').value=stlSI.volL.toFixed(2); compute(); stlFlash(e.target); });
@@ -1824,7 +1831,8 @@ $('btnStlToCG').addEventListener('click', e=>{ if(!stlSI) return;
   $('useBudgetCG').checked=false; $('cgx').disabled=$('cgz').disabled=false;
   $('cgx').value=stlSI.cgx.toFixed(4); $('cgz').value=stlSI.cgz.toFixed(4); compute(); stlFlash(e.target); });
 $('btnStlToBudget').addEventListener('click', e=>{ if(!stlSI) return;
-  components.push({name:'imported part', mass:+(isFinite(stlSI.mass)?stlSI.mass:0).toFixed(3), vol:+stlSI.volL.toFixed(3), x:0, z:0});
+  components.push({name:stlSI.name.slice(0,24), mass:+(isFinite(stlSI.mass)?stlSI.mass:0).toFixed(3),
+    vol:+stlSI.volL.toFixed(3), x:+stlSI.absForeMM.toFixed(1), z:+stlSI.absVertMM.toFixed(1)});
   renderComponents(); if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
 
 // ---- 3D mesh preview (software-rendered, drag to rotate) ----
