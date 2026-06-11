@@ -417,13 +417,6 @@
     <span class="appdate" id="appDate"></span>
   </div>
   <div class="appbar-right">
-    <select id="theme" title="Colour theme" aria-label="Colour theme">
-      <option value="ocean">🌊 Ocean</option>
-      <option value="sunset">🌅 Sunset</option>
-      <option value="aurora">🌌 Aurora</option>
-      <option value="midnight">🌑 Midnight</option>
-      <option value="daylight">☀️ Daylight</option>
-    </select>
     <button class="tool" id="btnMode" title="Switch appearance">💼 Professional</button>
     <button class="tool" id="btnFX" title="Sound &amp; vibration feedback">✨ FX: off</button>
   </div>
@@ -2239,10 +2232,9 @@ setupCollapse();
 // ===================== stylish & fun: themes, FX, dashboard =====================
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// ---- colour theme ----
+// ---- colour theme (fixed; default Ocean) ----
 function applyTheme(t){ document.documentElement.setAttribute('data-theme', t); try{ localStorage.setItem('gliderTheme', t); }catch(e){} }
-$('theme').addEventListener('change', ()=>applyTheme($('theme').value));
-(function(){ let t='ocean'; try{ t=localStorage.getItem('gliderTheme')||'ocean'; }catch(e){} $('theme').value=t; applyTheme(t); })();
+(function(){ let t='ocean'; try{ t=localStorage.getItem('gliderTheme')||'ocean'; }catch(e){} applyTheme(t); })();
 
 // ---- appearance mode (professional default / playful) ----
 function applyMode(m){ document.documentElement.setAttribute('data-mode', m);
