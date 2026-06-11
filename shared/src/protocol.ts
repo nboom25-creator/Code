@@ -10,6 +10,7 @@ import type { DamageSchool } from "./spells.js";
 import type { PowerType } from "./resources.js";
 import type { ClassId } from "./classes.js";
 import type { TalentState } from "./talents.js";
+import type { EquipSlot } from "./items.js";
 
 export type EntityKind = "player" | "monster";
 
@@ -35,6 +36,16 @@ export interface EntitySnapshot {
   cast: CastSnapshot | null;
   /** Whether auto-attack is toggled on (players only). */
   autoAttacking: boolean;
+  /** Lootable item ids on this entity's corpse (empty unless dead with loot). */
+  loot: string[];
+}
+
+/** Player-owned containers, sent only to the controlling client. */
+export interface ContainerState {
+  /** Backpack: item id per slot, or null for an empty slot. */
+  inventory: (string | null)[];
+  /** Equipped item id per slot. */
+  equipment: Record<EquipSlot, string | null>;
 }
 
 export interface CastSnapshot {
@@ -66,6 +77,8 @@ export interface SnapshotMessage {
   stanceCdRemaining: number;
   /** The receiving player's allocated talents. */
   talents: TalentState;
+  /** The receiving player's backpack + equipped gear. */
+  containers: ContainerState;
 }
 
 export interface CombatLogMessage {
@@ -144,6 +157,25 @@ export interface ResetTalentsMessage {
   type: "resetTalents";
 }
 
+/** Equip the item in a backpack slot to its matching equipment slot. */
+export interface EquipItemMessage {
+  type: "equipItem";
+  bagIndex: number;
+}
+
+/** Unequip the item in an equipment slot back into the backpack. */
+export interface UnequipItemMessage {
+  type: "unequipItem";
+  slot: EquipSlot;
+}
+
+/** Take an item off a monster's corpse into the backpack. */
+export interface LootItemMessage {
+  type: "lootItem";
+  sourceId: number;
+  lootIndex: number;
+}
+
 export type ClientMessage =
   | SetTargetMessage
   | CastSpellMessage
@@ -152,4 +184,7 @@ export type ClientMessage =
   | SetClassMessage
   | SetStanceMessage
   | SpendTalentMessage
-  | ResetTalentsMessage;
+  | ResetTalentsMessage
+  | EquipItemMessage
+  | UnequipItemMessage
+  | LootItemMessage;

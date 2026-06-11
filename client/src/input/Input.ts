@@ -10,6 +10,7 @@ import type { Renderer } from "../render/Renderer.js";
 import type { ActionBar } from "../render/ActionBar.js";
 import type { ClassBar } from "../render/ClassBar.js";
 import type { TalentPanel } from "../render/TalentPanel.js";
+import type { CharacterPanel } from "../render/CharacterPanel.js";
 
 const CLASS_KEYS: Record<string, ClassId> = {
   KeyZ: "warrior",
@@ -39,6 +40,7 @@ export class Input {
     private readonly actionBar: ActionBar,
     private readonly classBar: ClassBar,
     private readonly talentPanel: TalentPanel,
+    private readonly characterPanel: CharacterPanel,
     private readonly canvas: HTMLCanvasElement,
   ) {}
 
@@ -64,6 +66,11 @@ export class Input {
     // Talent panel.
     if (e.code === "KeyN") {
       this.talentPanel.toggle();
+      return;
+    }
+    // Character & bag panel.
+    if (e.code === "KeyB") {
+      this.characterPanel.toggle();
       return;
     }
     // Class swap hotkeys.

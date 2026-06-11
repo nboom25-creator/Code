@@ -4,11 +4,21 @@
  * combat-log buffer for the UI to read each frame.
  */
 
-import type { CombatLogEvent, EntitySnapshot, SnapshotMessage, TalentState } from "@wow/shared";
+import type {
+  ContainerState,
+  CombatLogEvent,
+  EntitySnapshot,
+  SnapshotMessage,
+  TalentState,
+} from "@wow/shared";
 
 const MAX_LOG = 50;
 
 const EMPTY_TALENTS: TalentState = { ranks: {}, pointsTotal: 0, pointsSpent: 0 };
+const EMPTY_CONTAINERS: ContainerState = {
+  inventory: [],
+  equipment: { head: null, chest: null, hands: null, legs: null, mainhand: null },
+};
 
 export class ClientState {
   playerId: number | null = null;
@@ -17,6 +27,8 @@ export class ClientState {
   stanceCdRemaining = 0;
   /** The controlling player's talent allocation (authoritative, server-sent). */
   talents: TalentState = EMPTY_TALENTS;
+  /** The controlling player's backpack + equipped gear (authoritative). */
+  containers: ContainerState = EMPTY_CONTAINERS;
   /** Server time of the latest snapshot (ms). */
   serverTime = 0;
   log: CombatLogEvent[] = [];
@@ -27,6 +39,7 @@ export class ClientState {
     this.gcdRemaining = msg.gcdRemaining;
     this.stanceCdRemaining = msg.stanceCdRemaining;
     this.talents = msg.talents;
+    this.containers = msg.containers;
     this.serverTime = msg.serverTime;
   }
 

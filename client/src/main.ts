@@ -11,6 +11,9 @@ import { CastBar } from "./render/CastBar.js";
 import { ActionBar } from "./render/ActionBar.js";
 import { ClassBar } from "./render/ClassBar.js";
 import { TalentPanel } from "./render/TalentPanel.js";
+import { CharacterPanel } from "./render/CharacterPanel.js";
+import { LootWindow } from "./render/LootWindow.js";
+import { ItemTooltip } from "./render/ItemTooltip.js";
 import { CombatLog } from "./render/CombatLog.js";
 import { Input } from "./input/Input.js";
 
@@ -31,9 +34,12 @@ const castBar = new CastBar(el("cast-bar-container"));
 const combatLog = new CombatLog(el("combat-log"));
 const actionBar = new ActionBar(el("action-bar"), state, ActionBar.defaultSlots(connection), connection);
 const classBar = new ClassBar(el("class-bar"), state, connection);
+const tooltip = new ItemTooltip(el("tooltip-root"));
 const talentPanel = new TalentPanel(el("talent-root"), state, connection);
+const characterPanel = new CharacterPanel(el("character-root"), state, connection, tooltip);
+const lootWindow = new LootWindow(el("loot-root"), state, connection, renderer, tooltip);
 
-const input = new Input(connection, state, renderer, actionBar, classBar, talentPanel, canvas);
+const input = new Input(connection, state, renderer, actionBar, classBar, talentPanel, characterPanel, canvas);
 input.attach();
 
 connection.connect();
@@ -45,6 +51,8 @@ function frame(): void {
   actionBar.update();
   classBar.update();
   talentPanel.update();
+  characterPanel.update();
+  lootWindow.update();
   combatLog.update(state);
   requestAnimationFrame(frame);
 }

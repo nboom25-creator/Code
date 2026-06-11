@@ -69,7 +69,24 @@ zones) can be layered in cleanly.
     aggregated effects via `computeTalentEffects()` and `server/.../derive.ts`,
     so new talents reusing existing modifier kinds need no engine change.
 
-### 6. Frontend visualization
+### 6. Items, inventory & loot (Phase 3)
+- **Data-driven items** (`shared/items.ts`): quality/rarity (Poor→Epic), an
+  equip slot (Head/Chest/Hands/Legs/Main Hand) and additive stat modifiers.
+  Test DB: Whirlwind Axe (Epic weapon), Robes of the Archmage (Epic chest),
+  Tattered Leather Gloves (Poor hands).
+- **Containers**: a 16-slot `Inventory` and a slot-keyed `Equipment` component
+  on the player.
+- **`recalculateStats()`** (`server/.../stats.ts`): effective Stats =
+  Base + Talents + Gear, recomputed on every equip/unequip/talent/class change.
+  Equipping a weapon instantly changes the `WeaponMin/MaxDamage` used by the
+  combat engine; **Stamina scales Max HP** live on the unit frame.
+- **Loot**: monsters roll an independent drop table on death, become a lootable
+  corpse, and **respawn** after a delay. Clicking loot fires a packet that the
+  server validates (range + space) before moving the item to the backpack.
+- All moves are **server-authoritative** — the client only sends requests and
+  re-renders from the next snapshot.
+
+### 7. Frontend visualization
 - Canvas world with player/monster circles, nameplates and a selection ring.
 - WoW-style **unit frames**: resource bar **recolors by power type**
   (blue mana / yellow energy / red rage) and a **stance/buff badge**.
@@ -78,6 +95,9 @@ zones) can be layered in cleanly.
   **stance toggle** with cooldown sweep).
 - **Talent panel** overlay (toggle **N**) with +/Reset, syncing every change to
   the server immediately (no client-side rank mutation).
+- **Character & Bag panel** (toggle **B**): paper-doll of 5 equipment slots +
+  16-slot backpack, click-to-equip/unequip, item tooltips with rarity colors.
+- **Loot window** anchored over slain monsters; click to take items.
 - Scrolling **combat log** with school colors, **crit highlighting**, and
   mitigated/avoided strings (misses, dodges, "blocked by Armor").
 
@@ -94,6 +114,7 @@ zones) can be layered in cleanly.
 │       ├── resources.ts    #   power types & colors
 │       ├── classes.ts      #   class defs, base stats & stances (data-driven)
 │       ├── talents.ts      #   talent defs, modifiers & effect aggregator
+│       ├── items.ts        #   item defs, slots, qualities & item database
 │       └── constants.ts    #   GCD, stance CD, attack table, armor, regen
 │
 ├── server/                 # Authoritative Node.js + Express + ws backend
@@ -101,10 +122,11 @@ zones) can be layered in cleanly.
 │       ├── ecs/            #   World + components (data only)
 │       ├── game/
 │       │   ├── Game.ts     #   world ownership, spawns, snapshots, commands
-│       │   ├── combat.ts   #   damage / threat / casting rules
-│       │   ├── derive.ts   #   effective stats from class + stance + talents
+│       │   ├── combat.ts   #   damage / threat / casting / loot-on-death rules
+│       │   ├── derive.ts   #   dynamic effects: crit, cast time, stance mults
+│       │   ├── stats.ts    #   recalculateStats(): Base + Talents + Gear
 │       │   ├── context.ts  #   per-tick context + combat-log sink
-│       │   └── systems/    #   Movement, MonsterAI, Casting, AutoAttack, Resource
+│       │   └── systems/    #   Movement, MonsterAI, Casting, AutoAttack, Resource, Corpse
 │       ├── net/            #   WebSocket transport
 │       └── index.ts        #   entry point + demo sandbox
 │
@@ -158,6 +180,7 @@ npm run typecheck
 | `4`                | Fireball (Mana, 2.0s cast)            |
 | `R`                | Toggle stance (Warrior)               |
 | `N`                | Open/close the Talent panel           |
+| `B`                | Open/close the Character & Bag panel  |
 | `Z` / `X` / `C`    | Become: Warrior / Rogue / Mage        |
 
 ---
@@ -177,3 +200,6 @@ npm run typecheck
   `server/src/game/derive.ts`.
 - **New stances / classes:** append to `shared/src/classes.ts` — the engine
   reads stance multipliers and class base stats purely as data.
+- **New items:** append an `ItemDef` to `shared/src/items.ts`; its stat
+  modifiers flow through `recalculateStats()` with no engine change. Add it to a
+  monster's `LootTable` to make it drop.

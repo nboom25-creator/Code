@@ -14,6 +14,7 @@ import {
   BASE_MISS_CHANCE,
   DEFAULT_LEVEL,
   GCD_MS,
+  MONSTER_RESPAWN_MS,
   RAGE_DAMAGE_DIVISOR,
   getSpell,
   type DamageSchool,
@@ -21,7 +22,9 @@ import {
 import {
   ActiveCast,
   Combat,
+  Corpse,
   Identity,
+  LootTable,
   Power,
   Stats,
   ThreatTable,
@@ -30,7 +33,6 @@ import type { EntityId } from "../ecs/World.js";
 import type { GameContext } from "./context.js";
 import { distance } from "./util.js";
 import {
-  effectiveArmor,
   effectiveCastTime,
   physicalCritChance,
   spellCritChance,
@@ -250,8 +252,10 @@ function applyResolvedDamage(
   // Attacker stance scales outgoing damage before any mitigation.
   const outgoing = raw * attackerStance.damageDealt;
 
-  // Armor mitigation (physical only), using talent-scaled armor.
-  const reduction = school === "physical" ? armorReduction(effectiveArmor(ctx.world, target)) : 0;
+  // Armor mitigation (physical only). Armor is already gear/talent-scaled by
+  // recalculateStats(), so the engine reads it straight off Stats.
+  const targetArmor = ctx.world.get(target, Stats)?.armor ?? 0;
+  const reduction = school === "physical" ? armorReduction(targetArmor) : 0;
   const blocked = Math.round(outgoing * reduction);
   const afterArmor = outgoing - blocked;
 
@@ -409,7 +413,7 @@ export function resolveSpell(
   }
 }
 
-/** Clean up references to a dead entity (drop it as everyone's target). */
+/** Clean up references to a dead entity, then roll its loot table. */
 function onDeath(ctx: GameContext, dead: EntityId): void {
   for (const id of ctx.world.entities()) {
     const combat = ctx.world.get(id, Combat);
@@ -419,5 +423,18 @@ function onDeath(ctx: GameContext, dead: EntityId): void {
       combat.inCombat = false;
     }
     ctx.world.get(id, ThreatTable)?.remove(dead);
+  }
+
+  // Roll the loot table (each entry independently) and create a corpse.
+  const table = ctx.world.get(dead, LootTable);
+  if (table) {
+    const loot: string[] = [];
+    for (const entry of table.entries) {
+      if (Math.random() < entry.chance) loot.push(entry.itemId);
+    }
+    ctx.world.add(dead, new Corpse(loot, ctx.now + MONSTER_RESPAWN_MS));
+    if (loot.length > 0) {
+      ctx.log.push("info", `${nameOf(ctx, dead)} can be looted.`);
+    }
   }
 }

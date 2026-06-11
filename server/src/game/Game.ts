@@ -7,18 +7,25 @@ import {
   STANCE_COOLDOWN_MS,
   STARTING_TALENT_POINTS,
   getClass,
+  getItem,
   getTalent,
   pointsSpent,
   type ClassId,
   type CombatLogEvent,
+  type ContainerState,
   type EntitySnapshot,
+  type EquipSlot,
   type TalentState,
 } from "@wow/shared";
 import { World, type EntityId } from "../ecs/World.js";
 import {
   ClassState,
   Combat,
+  Corpse,
+  Equipment,
   Identity,
+  Inventory,
+  LootTable,
   MonsterAI,
   MoveIntent,
   Position,
@@ -29,11 +36,17 @@ import {
 } from "../ecs/components.js";
 import { CombatLog, type GameContext, type System } from "./context.js";
 import { tryStartCast } from "./combat.js";
+import { recalculateStats } from "./stats.js";
+import { distance } from "./util.js";
 import { CastingSystem } from "./systems/CastingSystem.js";
 import { AutoAttackSystem } from "./systems/AutoAttackSystem.js";
+import { CorpseSystem } from "./systems/CorpseSystem.js";
 import { MonsterAISystem } from "./systems/MonsterAISystem.js";
 import { MovementSystem } from "./systems/MovementSystem.js";
 import { ResourceSystem } from "./systems/ResourceSystem.js";
+
+/** How close a player must be to loot a corpse (world units). */
+const LOOT_RANGE = 140;
 
 /** Class a freshly-spawned player is instantiated as. */
 const DEFAULT_CLASS: ClassId = "mage";
@@ -52,6 +65,7 @@ export class Game {
       new CastingSystem(),
       new AutoAttackSystem(),
       new ResourceSystem(),
+      new CorpseSystem(),
     ];
   }
 
@@ -86,6 +100,16 @@ export class Game {
     this.world.add(id, new Talents({}, STARTING_TALENT_POINTS));
     this.world.add(id, new Combat());
     this.world.add(id, new MoveIntent());
+
+    // Containers: seed the backpack with the test items so equipping can be
+    // tried immediately (loot drops add more on top).
+    const inventory = this.world.add(id, new Inventory());
+    this.world.add(id, new Equipment());
+    inventory.add("whirlwind_axe");
+    inventory.add("robes_archmage");
+    inventory.add("tattered_gloves");
+    recalculateStats(this.world, id);
+
     this.log.push("info", `${name} has entered the world as a ${getClass(DEFAULT_CLASS).name}.`);
     return id;
   }
@@ -97,8 +121,8 @@ export class Game {
     this.world.add(
       id,
       new Stats(
-        /*hp*/ 1000,
-        /*maxHp*/ 1000,
+        /*hp*/ 200,
+        /*maxHp*/ 200,
         { strength: 10, agility: 10, intellect: 10, stamina: 10 },
         /*armor*/ 150,
         /*weaponMin*/ 3,
@@ -111,6 +135,15 @@ export class Game {
     this.world.add(id, new ThreatTable());
     // Non-passive: swings back lightly so cast interrupts can be demonstrated.
     this.world.add(id, new MonsterAI(/*passive*/ false));
+    // Loot table: each entry rolls independently when the monster dies.
+    this.world.add(
+      id,
+      new LootTable([
+        { itemId: "tattered_gloves", chance: 0.5 },
+        { itemId: "robes_archmage", chance: 0.3 },
+        { itemId: "whirlwind_axe", chance: 0.1 },
+      ]),
+    );
     return id;
   }
 
@@ -145,6 +178,7 @@ export class Game {
   setClass(player: EntityId, classId: ClassId): void {
     if (!this.world.exists(player) || !getClass(classId)) return;
     this.instantiateClass(player, classId); // resets Stats / Power / stance
+    recalculateStats(this.world, player); // re-fold equipped gear + talents
     const combat = this.world.get(player, Combat);
     if (combat) combat.cast = null;
     const def = getClass(classId);
@@ -188,6 +222,7 @@ export class Game {
       return;
     }
     talents.ranks[talentId] = current + 1;
+    recalculateStats(this.world, player); // e.g. Armored To The Teeth -> armor
     this.log.push("info", `Learned ${talent.name} (rank ${current + 1}/${talent.maxRank}).`);
   }
 
@@ -196,7 +231,68 @@ export class Game {
     const talents = this.world.get(player, Talents);
     if (!talents) return;
     talents.ranks = {};
+    recalculateStats(this.world, player);
     this.log.push("info", "Talents reset.");
+  }
+
+  // -- Inventory / equipment / loot -----------------------------------------
+
+  /** Equip the item in a backpack slot, swapping any item already in that slot. */
+  equipItem(player: EntityId, bagIndex: number): void {
+    const inv = this.world.get(player, Inventory);
+    const equip = this.world.get(player, Equipment);
+    if (!inv || !equip) return;
+    if (bagIndex < 0 || bagIndex >= inv.slots.length) return;
+
+    const itemId = inv.slots[bagIndex];
+    if (!itemId) return;
+    const item = getItem(itemId);
+    if (!item) return;
+
+    const previous = equip.slots[item.slot];
+    equip.slots[item.slot] = itemId;
+    inv.slots[bagIndex] = previous; // previously-equipped item drops into the bag
+    recalculateStats(this.world, player);
+    this.log.push("info", `Equipped ${item.name}.`);
+  }
+
+  /** Unequip an item back into the first free backpack slot. */
+  unequipItem(player: EntityId, slot: EquipSlot): void {
+    const inv = this.world.get(player, Inventory);
+    const equip = this.world.get(player, Equipment);
+    if (!inv || !equip) return;
+
+    const itemId = equip.slots[slot];
+    if (!itemId) return;
+    if (inv.firstFree() < 0) {
+      this.log.push("info", "Your backpack is full.");
+      return;
+    }
+    inv.add(itemId);
+    equip.slots[slot] = null;
+    recalculateStats(this.world, player);
+    this.log.push("info", `Unequipped ${getItem(itemId)?.name ?? itemId}.`);
+  }
+
+  /** Move an item from a monster's corpse into the player's backpack. */
+  lootItem(player: EntityId, sourceId: EntityId, lootIndex: number): void {
+    const corpse = this.world.get(sourceId, Corpse);
+    if (!corpse) return;
+    if (lootIndex < 0 || lootIndex >= corpse.loot.length) return;
+    if (distance(this.world, player, sourceId) > LOOT_RANGE) {
+      this.log.push("info", "You are too far away to loot that.");
+      return;
+    }
+    const inv = this.world.get(player, Inventory);
+    if (!inv) return;
+    if (inv.firstFree() < 0) {
+      this.log.push("info", "Your backpack is full.");
+      return;
+    }
+    const itemId = corpse.loot[lootIndex];
+    inv.add(itemId);
+    corpse.loot.splice(lootIndex, 1);
+    this.log.push("info", `You receive loot: ${getItem(itemId)?.name ?? itemId}.`);
   }
 
   setMoveIntent(player: EntityId, dx: number, dy: number): void {
@@ -261,6 +357,18 @@ export class Game {
     };
   }
 
+  /** The player's backpack + equipped gear, serialized for the client. */
+  containerState(player: EntityId): ContainerState {
+    const inv = this.world.get(player, Inventory);
+    const equip = this.world.get(player, Equipment);
+    return {
+      inventory: inv ? [...inv.slots] : [],
+      equipment: equip
+        ? { ...equip.slots }
+        : { head: null, chest: null, hands: null, legs: null, mainhand: null },
+    };
+  }
+
   snapshot(): EntitySnapshot[] {
     const out: EntitySnapshot[] = [];
     for (const id of this.world.query(Identity, Position, Stats, Combat)) {
@@ -270,6 +378,7 @@ export class Game {
       const combat = this.world.get(id, Combat)!;
       const power = this.world.get(id, Power);
       const cls = this.world.get(id, ClassState);
+      const corpse = this.world.get(id, Corpse);
       out.push({
         id,
         kind: ident.kind,
@@ -286,6 +395,7 @@ export class Game {
         inCombat: combat.inCombat,
         targetId: combat.targetId,
         autoAttacking: combat.autoAttacking,
+        loot: corpse ? [...corpse.loot] : [],
         cast: combat.cast
           ? {
               spellId: combat.cast.spellId,

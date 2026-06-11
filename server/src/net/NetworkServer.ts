@@ -83,6 +83,15 @@ export class NetworkServer {
       case "resetTalents":
         this.game.resetTalents(playerId);
         break;
+      case "equipItem":
+        this.game.equipItem(playerId, msg.bagIndex);
+        break;
+      case "unequipItem":
+        this.game.unequipItem(playerId, msg.slot);
+        break;
+      case "lootItem":
+        this.game.lootItem(playerId, msg.sourceId, msg.lootIndex);
+        break;
     }
   }
 
@@ -100,6 +109,7 @@ export class NetworkServer {
         gcdRemaining: this.game.gcdRemaining(playerId, now),
         stanceCdRemaining: this.game.stanceCdRemaining(playerId, now),
         talents: this.game.talentState(playerId),
+        containers: this.game.containerState(playerId),
       });
       if (logEvents.length > 0) {
         this.send(socket, { type: "combatLog", events: logEvents });

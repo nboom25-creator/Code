@@ -5,7 +5,8 @@
  * not here — this keeps the data model easy to serialize and reason about.
  */
 
-import type { ClassId, EntityKind, PowerType, TalentRanks } from "@wow/shared";
+import type { ClassId, EntityKind, EquipSlot, PowerType, TalentRanks } from "@wow/shared";
+import { EQUIP_SLOTS, INVENTORY_SIZE } from "@wow/shared";
 import { Component, type EntityId } from "./World.js";
 
 /** Human-readable identity used for nameplates and the kind discriminator. */
@@ -89,6 +90,46 @@ export class Talents extends Component {
   constructor(
     public ranks: TalentRanks = {},
     public pointsTotal = 0,
+  ) {
+    super();
+  }
+}
+
+/** Fixed-size backpack of item ids (null = empty slot). */
+export class Inventory extends Component {
+  readonly slots: (string | null)[] = new Array(INVENTORY_SIZE).fill(null);
+
+  /** Index of the first empty slot, or -1 if full. */
+  firstFree(): number {
+    return this.slots.indexOf(null);
+  }
+  add(itemId: string): boolean {
+    const i = this.firstFree();
+    if (i < 0) return false;
+    this.slots[i] = itemId;
+    return true;
+  }
+}
+
+/** Equipped items keyed by slot. */
+export class Equipment extends Component {
+  readonly slots: Record<EquipSlot, string | null> = Object.fromEntries(
+    EQUIP_SLOTS.map((s) => [s, null]),
+  ) as Record<EquipSlot, string | null>;
+}
+
+/** A monster's drop table: each entry rolls independently on death. */
+export class LootTable extends Component {
+  constructor(public readonly entries: { itemId: string; chance: number }[]) {
+    super();
+  }
+}
+
+/** State of a slain monster: the rolled loot and when it respawns. */
+export class Corpse extends Component {
+  constructor(
+    public loot: string[],
+    public respawnAt: number,
   ) {
     super();
   }

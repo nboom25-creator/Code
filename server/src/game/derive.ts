@@ -34,13 +34,6 @@ export function talentEffects(world: World, id: EntityId): TalentEffects {
   return talents ? computeTalentEffects(talents.ranks) : NO_EFFECTS;
 }
 
-/** Base armor scaled by the Armored To The Teeth talent. */
-export function effectiveArmor(world: World, id: EntityId): number {
-  const stats = world.get(id, Stats);
-  if (!stats) return 0;
-  return stats.armor * talentEffects(world, id).armorMultiplier;
-}
-
 /** Crit chance (%) for a physical attack: base crit + Cruelty. */
 export function physicalCritChance(world: World, id: EntityId): number {
   const base = world.get(id, Stats)?.critChance ?? 0;

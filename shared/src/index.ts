@@ -4,4 +4,5 @@ export * from "./spells.js";
 export * from "./resources.js";
 export * from "./classes.js";
 export * from "./talents.js";
+export * from "./items.js";
 export * from "./constants.js";

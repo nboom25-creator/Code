@@ -3,7 +3,7 @@
  * and exposes typed senders for the input layer to drive.
  */
 
-import type { ClassId, ClientMessage, ServerMessage } from "@wow/shared";
+import type { ClassId, ClientMessage, EquipSlot, ServerMessage } from "@wow/shared";
 import type { ClientState } from "../state/ClientState.js";
 
 const WS_URL =
@@ -78,6 +78,18 @@ export class Connection {
 
   resetTalents(): void {
     this.send({ type: "resetTalents" });
+  }
+
+  equipItem(bagIndex: number): void {
+    this.send({ type: "equipItem", bagIndex });
+  }
+
+  unequipItem(slot: EquipSlot): void {
+    this.send({ type: "unequipItem", slot });
+  }
+
+  lootItem(sourceId: number, lootIndex: number): void {
+    this.send({ type: "lootItem", sourceId, lootIndex });
   }
 
   /** Send a movement vector only when it changes, to avoid socket spam. */

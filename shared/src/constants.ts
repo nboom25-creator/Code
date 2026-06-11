@@ -66,3 +66,9 @@ export const RAGE_DAMAGE_DIVISOR = 2;
 export const MANA_REGEN_PER_SEC = 8;
 /** Default out-of-combat health regen (points per second). */
 export const HP_REGEN_PER_SEC = 6;
+
+/** Each point of Stamina above the class base grants this much Max HP. */
+export const HP_PER_STAMINA = 10;
+
+/** Delay before a slain monster respawns (ms). */
+export const MONSTER_RESPAWN_MS = 6000;
