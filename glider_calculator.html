@@ -354,6 +354,14 @@
   canvas.gauge{width:100% !important; height:96px !important; max-width:180px; background:none; border:none; box-shadow:none}
   .glabel{font-size:11px; color:var(--muted); margin-top:-6px}
   .toolbar select{vertical-align:middle}
+  .work{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:4px}
+  .work th,.work td{padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left}
+  .work thead th{color:var(--accent); font-size:12px; position:sticky; top:0}
+  .work tbody tr:nth-child(odd){background:rgba(63,208,230,.04)}
+  .work .wq{display:block; font-size:10.5px; color:var(--muted); margin-bottom:1px}
+  .work .wsym{font-weight:600; color:var(--ink); white-space:nowrap}
+  .work .wsub{font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--muted); font-variant-numeric:tabular-nums}
+  .work .wres{font-family:ui-monospace,Menlo,Consolas,monospace; font-weight:700; color:#e9f7fb; white-space:nowrap}
 
   /* ===================== professional shell ===================== */
   body{font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility}
@@ -844,6 +852,13 @@
       <div class="hint" style="text-align:center;margin-top:6px">C<sub>L</sub> on the horizontal axis. The peak of the blue curve is the most efficient glide; moving right trades efficiency for slower, steeper flight.</div>
     </section>
 
+    <!-- CALCULATION WORKSHEET -->
+    <section class="card span2" id="card-work">
+      <h2><span class="ic">📝</span> Calculation worksheet — equation · numbers · result</h2>
+      <div style="overflow-x:auto" id="worksheet"></div>
+      <div class="hint">Every quantity above, shown as the symbolic equation, the values substituted in, and the computed result. Updates live as you change inputs.</div>
+    </section>
+
   </div>
 
   <footer>
@@ -1200,6 +1215,49 @@ function compute(){
     rangePerCycle:isFinite(rangePerCycle)?rangePerCycle:0 };
   if(typeof drawTimeline==='function'){ drawTimeline(); if(!sim.running) drawSim(); updateSimReadouts(); }
   if(typeof updateHealth==='function') updateHealth({netg:net/g*1000, bg:bg, ysf:ysf, bsf:bsf, glideRatio:glideRatio});
+
+  // ---- calculation worksheet: equation · numbers · result ----
+  if($('worksheet')){
+    const WS=[], PI=Math.PI, e=(q,sym,sub,res)=>WS.push([q,sym,sub,res]);
+    if(useWater){
+      e('Density gradient','γ = ρ₀²·g / K', fmt(surface,1)+'² · '+fmt(g,2)+' / 2.2×10⁹', fmt(grad,4)+' kg/m³·m⁻¹');
+      e('Local density','ρ = ρ₀ + γ·d', fmt(surface,1)+' + '+fmt(grad,4)+'·'+fmt(workingDepth,0), fmt(localRho,2)+' kg/m³');
+      e('Pressure @ depth','P = g·(ρ₀·d + ½γ·d²)', fmt(g,2)+'·('+fmt(surface,1)+'·'+fmt(workingDepth,0)+' + ½·'+fmt(grad,4)+'·'+fmt(workingDepth,0)+'²)', fmt(wPress/1e6,3)+' MPa');
+    } else e('Pressure @ depth','P = ρ·g·d', fmt(surface,1)+'·'+fmt(g,2)+'·'+fmt(workingDepth,0), fmt(wPress/1e6,3)+' MPa');
+    e('Buoyancy force','B = ρ·g·V', fmt(rho,2)+'·'+fmt(g,2)+'·'+fmt(vol,5), fmt(B,2)+' N');
+    e('Weight','W = m·g', fmt(mass,3)+'·'+fmt(g,2), fmt(W,2)+' N');
+    e('Net force','Fₙ = B − W', fmt(B,2)+' − '+fmt(W,2), (net>=0?'+':'')+fmt(net,3)+' N');
+    e('Neutral volume','V₀ = m/ρ', fmt(mass,3)+'/'+fmt(rho,2), fmt(neutralVol*1000,3)+' L');
+    if(isFinite(glideRatio)){
+      const gd=gamma*180/PI;
+      e('Drag coefficient','C_D = C_D0 + k·C_L²', fmt(cd0,3)+' + '+fmt(k,3)+'·'+fmt(cl,3)+'²', fmt(cd,3));
+      e('Glide ratio','L/D = C_L / C_D', fmt(cl,3)+' / '+fmt(cd,3), fmt(glideRatio,2));
+      e('Glide angle','γ = atan(C_D / C_L)', 'atan('+fmt(cd,3)+' / '+fmt(cl,3)+')', fmt(gd,1)+'°');
+      e('Path speed','V = √(2·Fₙ·cosγ / (ρ·S·C_L))', '√(2·'+fmt(netMag,3)+'·cos'+fmt(gd,0)+'° / ('+fmt(rho,1)+'·'+fmt(wingArea,3)+'·'+fmt(cl,3)+'))', fmt(V,3)+' m/s');
+      e('Horizontal speed','Vₕ = V·cosγ', fmt(V,3)+'·cos'+fmt(gd,0)+'°', fmt(vh,3)+' m/s');
+      e('Vertical speed','V_v = V·sinγ', fmt(V,3)+'·sin'+fmt(gd,0)+'°', fmt(vv,3)+' m/s');
+    }
+    e('Static margin','BG = z_CB − z_CG', fmt(cbz*1000,1)+' − ('+fmt(cgz*1000,1)+')', fmt(bg*1000,1)+' mm');
+    e('Righting stiffness','K_θ = B·BG', fmt(B,2)+'·'+fmt(bg,4), fmt(stiffness,3)+' N·m/rad');
+    if(bg>0) e('Natural pitch','θ = atan((x_CG−x_CB)/BG)', 'atan('+fmt(longOffset*1000,1)+' / '+fmt(bg*1000,1)+')', fmt(naturalPitch,2)+'°');
+    e('Hull pressure','P = ρ·g·d'+(useWater?' (+compr.)':''), fmt(rho,0)+'·'+fmt(g,2)+'·'+fmt(hullDepth,0), fmt(hp/1e6,3)+' MPa');
+    e('Wall stress (hoop)','σ = P·r/t', fmt(hp/1e6,3)+'e6·'+fmt(radius*1000,0)+'/'+fmt(thickness*1000,1), fmt(hoop/1e6,1)+' MPa');
+    e('Yield safety factor','SF_y = σ_yield / σ', fmt(yieldPa/1e6,0)+' / '+fmt(hoop/1e6,1), fmt(ysf,2));
+    e('Buckling pressure','P_cr = E/(4(1−ν²))·(t/r)³', fmt(E/1e9,0)+'e9 /(4(1−'+fmt(nu,2)+'²))·('+fmt(thickness*1000,1)+'/'+fmt(radius*1000,0)+')³', fmt(pBuckle/1e6,3)+' MPa');
+    e('Buckling safety factor','SF_b = P_cr / P', fmt(pBuckle/1e6,3)+' / '+fmt(hp/1e6,3), fmt(bsf,2));
+    e('Swept volume','V_s = (π/4)·d²·L', '(π/4)·'+fmt(bore*1000,1)+'²·'+fmt(pStroke*1000,0), fmt(sweptVol*1e6,1)+' mL');
+    e('Plunger force','F_p = (P+P_atm)·A', '('+fmt(hp/1e6,3)+'e6 + 101325)·'+fmt(Abore*1e4,2)+'e-4', fmt(plungerF,1)+' N');
+    e('Motor torque','τ = F_p·pitch / (2π·η)', fmt(plungerF,1)+'·'+fmt(pitch*1000,1)+'e-3 / (2π·'+fmt(screwEff,2)+')', fmt(torque*1000,1)+' mN·m');
+    e('Pump energy/cycle','E_p = (ρg·d_b + P_atm)·V_b / η', '('+fmt(rho,0)+'·'+fmt(g,2)+'·'+fmt(depthBand,0)+' + 101325)·'+fmt(ballast*1000,3)+'e-3 / '+fmt(pumpEff,2), fmt(pumpPerCycle,1)+' J');
+    if(isFinite(cycles)){
+      e('Range / cycle','R_c = 2·d_b·(L/D)', '2·'+fmt(depthBand,0)+'·'+fmt(glideRatio,2), fmt(rangePerCycle,0)+' m');
+      e('Cycle time','t_c = R_c/Vₕ + 2·t_stroke', fmt(rangePerCycle,0)+'/'+fmt(vh,3)+' + 2·'+fmt(strokeTime,1), fmt(cycleTime/3600,2)+' h');
+      e('Number of cycles','N = E_batt / (E_p + P_h·t_c)', fmt(batteryJ,0)+' / ('+fmt(pumpPerCycle,1)+' + '+fmt(hotelW,2)+'·'+fmt(cycleTime,0)+')', fmt(cycles,0));
+      e('Total range','R = N·R_c', fmt(cycles,0)+'·'+fmt(rangePerCycle,0), fmt(totalRange/1000,1)+' km');
+      e('Endurance','T = N·t_c', fmt(cycles,0)+'·'+fmt(cycleTime/3600,2)+' h', fmt(endurance/86400,1)+' days');
+    }
+    renderWorksheet(WS);
+  }
   save();
 }
 
@@ -1207,6 +1265,13 @@ function sfBadge(sf,thresh){
   const cls = sf>=thresh*1.33 ? "good" : sf>=thresh ? "warn" : "bad";
   const txt = isFinite(sf)? fmt(sf,2) : "∞";
   return '<span class="badge '+cls+'">'+txt+'</span>';
+}
+function renderWorksheet(W){
+  const el=$('worksheet'); if(!el) return;
+  if(!W.length){ el.innerHTML='<div class="empty">No calculations to show.</div>'; return; }
+  el.innerHTML='<table class="work"><thead><tr><th>Quantity &amp; equation</th><th>Numbers substituted</th><th>Result</th></tr></thead><tbody>'+
+    W.map(r=>'<tr><td><span class="wq">'+r[0]+'</span><span class="wsym">'+r[1]+'</span></td>'+
+      '<td class="wsub">'+r[2]+'</td><td class="wres">'+r[3]+'</td></tr>').join('')+'</tbody></table>';
 }
 // check the chosen motor can supply the pump's torque at the set speed
 function updateMotorCheck(torqueNm, pumpRpm){
