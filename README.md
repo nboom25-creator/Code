@@ -33,7 +33,7 @@ simplest host is Pages' *branch* mode:
 1. In the repo, go to **Settings → Pages**.
 2. Under **Build and deployment → Source**, choose **"Deploy from a branch"**
    (this is the one with a **Save** button — "GitHub Actions" mode has no Save).
-3. Pick branch **`claude/wow-style-game-build-u792fs`** and folder **`/ (root)`**,
+3. Pick branch **`claude/wow-style-game-build-u792fs`** and folder **`/docs`**,
    then click **Save**.
 4. Wait ~1 minute; your game is live at
    `https://nboom25-creator.github.io/<repo>/` — open that on your phone.
@@ -160,10 +160,11 @@ exact spot you left.
 ## Project layout
 
 ```
-index.html            # shell + screens + import map
-styles.css            # all UI / HUD styling
-vendor/three.module.js# bundled Three.js (offline)
-src/
+docs/                   # the playable site (served by GitHub Pages /docs)
+  index.html            # shell + screens + import map
+  styles.css            # all UI / HUD styling
+  vendor/three.module.js# bundled Three.js (offline)
+  src/
   data.js             # factions, races, classes, abilities
   items.js            # item rarities, procedural loot, drop tables
   regions.js          # 16-region world grid + global terrain samplers
@@ -175,6 +176,7 @@ src/
   enemies.js          # creature instances, AI, chunk streaming, boss
   ui.js               # HUD, minimap, world map, panels, combat text
   main.js             # bootstrap, char creation, loop, combat, travel
+  touch.js            # on-screen joystick + buttons for phones
 ```
 
 Built with Three.js. Original world, names, and lore.

@@ -4,8 +4,8 @@
   "description": "A World of Warcraft-style 3D browser MMORPG built with Three.js — two factions, 12 playable races, classes, combat, leveling and quests.",
   "type": "module",
   "scripts": {
-    "start": "npx --yes serve -l 8080 .",
-    "dev": "python3 -m http.server 8080"
+    "start": "npx --yes serve -l 8080 docs",
+    "dev": "python3 -m http.server 8080 -d docs"
   },
   "keywords": [
     "game",
