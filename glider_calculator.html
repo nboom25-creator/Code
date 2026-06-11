@@ -624,9 +624,9 @@
         <div><label>Material</label><select id="stlMaterial"></select></div>
       </div>
       <div class="row3">
-        <div class="chk" style="margin-top:24px"><input type="checkbox" id="stlSolid"><label style="margin:0">Solid part (mass = volume × density)</label></div>
-        <div><label>Wall thickness (mm) — if hollow shell</label><input type="number" id="stlWall" value="6" step="0.5"></div>
-        <div></div>
+        <div><label>Shell thickness (mm)</label><input type="number" id="stlShell" value="1.2" step="0.2"></div>
+        <div><label>Infill %</label><input type="number" id="stlInfill" value="20" step="5"></div>
+        <div class="hint" style="margin-top:24px">3D-print density: a solid shell of this thickness plus the interior filled to the infill fraction (100 % = solid).</div>
       </div>
       <div class="row3">
         <div><label>Forward axis (fore/aft)</label><select id="stlFwd"><option value="0">model X</option><option value="1">model Y</option><option value="2">model Z</option></select></div>
@@ -656,6 +656,7 @@
         <span><i class="swatch" style="background:#5be0c0;width:10px;height:10px"></i> combined CB</span>
       </div>
       <div class="hint" style="text-align:center">Each part sits at its centroid; markers are the assembled CG &amp; CB. <b>Drag a part</b> to nudge it (side view moves fore/aft &amp; up-down, top view moves fore/aft &amp; left-right).</div>
+      <div class="out" id="asm_stab" style="font-size:13px"></div>
     </section>
 
     <!-- BILL OF MATERIALS -->
@@ -1584,6 +1585,20 @@ function updateBudgetTotals(){
   drawLayout(b);
   if($('asmCanvas')) drawLayout(b,'asmCanvas','z');
   if($('asmTop')) drawLayout(b,'asmTop','y');
+  if($('asm_stab')){
+    const bgV=b.cbz-b.cgz, latOff=b.cgy-b.cby;            // mm
+    const heel=bgV>0? Math.atan2(latOff,bgV)*180/Math.PI : 0;
+    const kv=(k,v,cls)=>'<div class="kv"><span class="k">'+k+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>';
+    const badge=bgV>0?'<span class="badge good">stable</span>':'<span class="badge bad">UNSTABLE</span>';
+    let html=kv('Vertical static margin (BG = CB−CG)', fmt(bgV,1)+' mm  '+badge)+
+      kv('Lateral CG offset (CG−CB)', fmt(latOff,1)+' mm')+
+      kv('Static heel estimate', fmt(heel,1)+'°');
+    const w=[];
+    if(bgV<=0) w.push('CG is at or above CB (BG '+fmt(bgV,1)+' mm) — statically UNSTABLE; lower heavy items or add buoyancy up high.');
+    if(Math.abs(latOff)>Math.max((num('radius')||100)*0.12,5)) w.push('Lateral CG is off-centre by '+fmt(latOff,1)+' mm — the vehicle will list/roll; balance port–starboard.');
+    html+=w.map(x=>'<div style="color:var(--warn);padding:4px 0;font-size:13px">⚠️ '+x+'</div>').join('');
+    $('asm_stab').innerHTML=html;
+  }
   return b;
 }
 function syncBudgetMode(){
@@ -1816,18 +1831,25 @@ function computeSTL(){
   const s=parseFloat($('stlUnits').value);              // metres per model unit
   const volM3=stlModel.vol*s*s*s, areaM2=stlModel.area*s*s, dims=stlModel.dims.map(d=>d*s);
   const M=MATERIALS[$('stlMaterial').value], dens=M?M.d:NaN;
-  const solid=$('stlSolid').checked, wall=num('stlWall')/1000;
-  const mass = isFinite(dens) ? (solid? volM3*dens : areaM2*wall*dens) : NaN;
+  // 3D-print mass model: solid shell of t_shell + interior at the infill fraction
+  const tShell=Math.max(num('stlShell'),0)/1000, infill=Math.min(Math.max(num('stlInfill'),0),100)/100;
+  const shellVolM3=Math.min(areaM2*tShell, volM3), coreVolM3=Math.max(volM3-shellVolM3,0);
+  const shellMass=isFinite(dens)? dens*shellVolM3:0, coreMass=isFinite(dens)? dens*infill*coreVolM3:0;
+  const mass = isFinite(dens)? shellMass+coreMass : NaN;
+  // mass centroid (CG): shell distributed at the surface (area centroid),
+  // infill at the volume centroid — so 3D-print density shifts the CG
+  const comV=stlModel.comVol, comA=stlModel.comArea, mt=shellMass+coreMass;
+  let cg=[...comV]; if(mt>0) cg=[0,1,2].map(k=>(shellMass*comA[k]+coreMass*comV[k])/mt);
   // map model axes to vehicle axes from the Forward/Up selectors (shared across parts)
   const aFore=+$('stlFwd').value, aVert=+$('stlUp').value, aLat=3-aFore-aVert;
-  const com=solid? stlModel.comVol : stlModel.comArea;        // model units
   const ctr=[stlModel.min[0]+stlModel.dims[0]/2, stlModel.min[1]+stlModel.dims[1]/2, stlModel.min[2]+stlModel.dims[2]/2];
-  const offFore=(com[aFore]-ctr[aFore])*s, offVert=(com[aVert]-ctr[aVert])*s;   // offset from centre
-  const absFore=com[aFore]*s, absVert=com[aVert]*s, absLat=(aLat>=0&&aLat<=2?com[aLat]:0)*s;  // assembly frame
+  const offFore=(cg[aFore]-ctr[aFore])*s, offVert=(cg[aVert]-ctr[aVert])*s;       // CG offset from centre
+  const absFore=cg[aFore]*s, absVert=cg[aVert]*s, absLat=(aLat>=0&&aLat<=2?cg[aLat]:0)*s;  // place at CG
   const sorted=[...dims].sort((a,b)=>b-a);
   stlSI={volL:volM3*1000, mass, lengthMM:sorted[0]*1000, odMM:sorted[1]*1000, radiusMM:sorted[1]*1000/2,
     cgx:offFore, cgz:offVert, absForeMM:absFore*1000, absVertMM:absVert*1000, absLatMM:absLat*1000,
-    name:stlModel.fileName||'imported part'};
+    cgModel:cg, cbModel:comV, name:stlModel.fileName||'imported part'};
+  drawMesh();
   const kv=(k,v)=>'<div class="kv"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>';
   $('stl_out').innerHTML=
     kv('Triangles', fmt(stlModel.tris,0))+
@@ -1835,8 +1857,8 @@ function computeSTL(){
     kv('Surface area', fmt(areaM2*1e4,1)+' cm²')+
     kv('Enclosed volume', fmt(volM3*1000,3)+' L  ('+fmt(volM3*1e6,1)+' cm³)')+
     kv('Material', M?M.n:'—')+
-    kv(solid?'Mass (solid)':'Mass (shell, '+num('stlWall')+' mm wall)', isFinite(mass)?fmt(mass,3)+' kg':'pick a material')+
-    kv('Centre of mass offset', 'fore/aft '+fmt(offFore*1000,1)+' mm, vert '+fmt(offVert*1000,1)+' mm')+
+    kv('Mass (shell '+fmt(num('stlShell'),1)+' mm + '+fmt(num('stlInfill'),0)+'% infill)', isFinite(mass)?fmt(mass,3)+' kg':'pick a material')+
+    kv('CG vs CB offset (this part)', 'fore/aft '+fmt((cg[aFore]-comV[aFore])*s*1000,1)+' mm, vert '+fmt((cg[aVert]-comV[aVert])*s*1000,1)+' mm')+
     kv('Assembly position (fwd, up)', fmt(absFore*1000,1)+', '+fmt(absVert*1000,1)+' mm');
 }
 $('stlFile').addEventListener('change', e=>{
@@ -1848,7 +1870,7 @@ $('stlFile').addEventListener('change', e=>{
     setupMeshView(); computeSTL();
   }).catch(()=>{ $('stl_out').textContent='Could not read that file (3MF needs a modern browser).'; });
 });
-['stlUnits','stlMaterial','stlWall','stlSolid','stlFwd','stlUp'].forEach(id=>$(id).addEventListener('input', ()=>{ if(stlModel) computeSTL(); }));
+['stlUnits','stlMaterial','stlShell','stlInfill','stlFwd','stlUp'].forEach(id=>$(id).addEventListener('input', ()=>{ if(stlModel) computeSTL(); }));
 function stlFlash(b){ const t=b.textContent; b.textContent='✓ done'; setTimeout(()=>b.textContent=t,1200); }
 $('btnStlToBuoy').addEventListener('click', e=>{ if(!stlSI) return;
   $('useBudget').checked=false; $('volL').disabled=false; $('volL').value=stlSI.volL.toFixed(2); compute(); stlFlash(e.target); });
@@ -1933,6 +1955,21 @@ function drawMesh(){
     ctx.beginPath(); ctx.moveTo(f.p[0][0],f.p[0][1]); ctx.lineTo(f.p[1][0],f.p[1][1]); ctx.lineTo(f.p[2][0],f.p[2][1]); ctx.closePath();
     ctx.fill(); ctx.stroke();
   }
+  // project a model point with the same transform as the mesh
+  const project=p=>{
+    const x=p[0]-cx, y=p[1]-cy, z=p[2]-cz;
+    const x1=x*cosy+z*siny, z1=-x*siny+z*cosy;
+    const y2=y*cosx-z1*sinx;
+    return [ox+x1*sc, oy-y2*sc];
+  };
+  function sphere(p, col, label){
+    if(!p) return; const s=project(p), R=9;
+    const grad=ctx.createRadialGradient(s[0]-R*0.35,s[1]-R*0.35,1, s[0],s[1],R);
+    grad.addColorStop(0,'#fff'); grad.addColorStop(0.25,col); grad.addColorStop(1,'rgba(0,0,0,.55)');
+    ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(s[0],s[1],R,0,7); ctx.fill();
+    ctx.fillStyle=col; ctx.font='bold 11px system-ui'; ctx.fillText(label, s[0]+R+2, s[1]+4);
+  }
+  if(stlSI){ sphere(stlSI.cbModel,'#4aa3ff','CB'); sphere(stlSI.cgModel,'#ff5a5a','CG'); }
 }
 (function(){
   const c=$('stlCanvas'); if(!c) return; let drag=false, lx=0, ly=0;
