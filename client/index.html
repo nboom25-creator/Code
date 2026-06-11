@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WoW Mini-MMORPG — Combat Sandbox</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <!-- Top-center unit frames (player + target) -->
+      <div id="unit-frames"></div>
+
+      <!-- Center cast bar -->
+      <div id="cast-bar-container"></div>
+
+      <!-- Bottom action bar -->
+      <div id="action-bar"></div>
+
+      <!-- Scrolling combat log -->
+      <div id="combat-log"></div>
+
+      <div id="hint">
+        WASD / Arrows: move &nbsp;•&nbsp; Tab / Click: target &nbsp;•&nbsp;
+        1: Auto-Attack &nbsp;•&nbsp; 2: Shadowbolt &nbsp;•&nbsp; 3: Life Tap
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
