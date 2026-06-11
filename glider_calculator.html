@@ -2,8 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Underwater Glider Calculator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="GliderLab — a professional underwater-glider design calculator and 6-DOF flight simulator.">
+<meta name="theme-color" content="#06141d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GliderLab">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a2230'/%3E%3Cellipse cx='34' cy='34' rx='20' ry='6' fill='%23eafaf3'/%3E%3Cpath d='M30 34 L14 22 L22 34 Z' fill='%233fd0e6'/%3E%3Cpath d='M30 34 L14 46 L22 34 Z' fill='%235be0c0'/%3E%3Ccircle cx='50' cy='34' r='3' fill='%23ffd166'/%3E%3C/svg%3E">
+<title>GliderLab · Underwater Glider Calculator</title>
 <style>
   :root{
     --bg:#0b1f2a; --bg2:#0f2a38; --card:#13323f; --card2:#163a49;
@@ -348,6 +354,37 @@
   canvas.gauge{width:100% !important; height:96px !important; max-width:180px; background:none; border:none; box-shadow:none}
   .glabel{font-size:11px; color:var(--muted); margin-top:-6px}
   .toolbar select{vertical-align:middle}
+
+  /* ===================== professional shell ===================== */
+  body{font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility}
+  .card h2{font-weight:700; letter-spacing:.2px}
+  label{letter-spacing:.1px}
+  .appbar{position:sticky; top:0; z-index:40; display:flex; align-items:center; justify-content:space-between;
+    gap:12px; padding:10px 16px; background:rgba(6,18,26,.82); backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px); border-bottom:1px solid var(--line)}
+  .brand{display:flex; align-items:center; gap:10px}
+  .brand .logo{border-radius:8px; flex:none; box-shadow:0 2px 8px rgba(0,0,0,.3)}
+  .wordmark{font-size:17px; font-weight:700; letter-spacing:.2px; color:var(--ink)}
+  .wordmark b{color:var(--accent); font-weight:800}
+  .ver{font-size:11px; font-weight:700; color:var(--accent); background:rgba(63,208,230,.12);
+    border:1px solid rgba(63,208,230,.3); padding:2px 7px; border-radius:999px}
+  .appdate{font-size:12px; color:var(--muted); margin-left:2px}
+  .appbar-right{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+  .appbar .tool{padding:7px 12px}
+  @media(max-width:620px){ .appdate{display:none} .appbar{padding:8px 12px} .wordmark{font-size:15px} }
+
+  /* Professional appearance mode (default) — calmer, flatter, no playful bits */
+  :root[data-mode="pro"] .bubbles,
+  :root[data-mode="pro"] .swimmer,
+  :root[data-mode="pro"] #btnSurprise{display:none !important}
+  :root[data-mode="pro"] body::before{animation:none}
+  :root[data-mode="pro"] .card::before{animation:none; height:2px; opacity:.7}
+  :root[data-mode="pro"] .card{box-shadow:0 1px 3px rgba(0,0,0,.30), 0 10px 24px rgba(0,0,0,.16)}
+  :root[data-mode="pro"] .card:hover{transform:none; box-shadow:0 1px 3px rgba(0,0,0,.30), 0 12px 26px rgba(0,0,0,.2)}
+  :root[data-mode="pro"] .grid > .card{animation:none}
+  :root[data-mode="pro"] header{padding:22px 20px 8px}
+  :root[data-mode="pro"] header h1{font-size:clamp(20px,3.6vw,29px)}
+  :root[data-mode="pro"] header h1 .wave{filter:none}
 </style>
 </head>
 <body>
@@ -366,6 +403,31 @@
   <span style="left:94%;width:9px;height:9px;animation-duration:23s;animation-delay:10s"></span>
 </div>
 <canvas id="confetti" aria-hidden="true"></canvas>
+<div class="appbar">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 64 64" width="30" height="30" aria-hidden="true">
+      <rect width="64" height="64" rx="14" fill="#0c2a38"/>
+      <ellipse cx="34" cy="34" rx="20" ry="6" fill="#eafaf3"/>
+      <path d="M30 34 L14 22 L22 34 Z" fill="#3fd0e6"/>
+      <path d="M30 34 L14 46 L22 34 Z" fill="#5be0c0"/>
+      <circle cx="50" cy="34" r="3" fill="#ffd166"/>
+    </svg>
+    <span class="wordmark">Glider<b>Lab</b></span>
+    <span class="ver">v1.0</span>
+    <span class="appdate" id="appDate"></span>
+  </div>
+  <div class="appbar-right">
+    <select id="theme" title="Colour theme" aria-label="Colour theme">
+      <option value="ocean">🌊 Ocean</option>
+      <option value="sunset">🌅 Sunset</option>
+      <option value="aurora">🌌 Aurora</option>
+      <option value="midnight">🌑 Midnight</option>
+      <option value="daylight">☀️ Daylight</option>
+    </select>
+    <button class="tool" id="btnMode" title="Switch appearance">💼 Professional</button>
+    <button class="tool" id="btnFX" title="Sound &amp; vibration feedback">✨ FX: off</button>
+  </div>
+</div>
 <header>
   <div class="swimmer" aria-hidden="true">
     <svg viewBox="0 0 120 48" width="74" height="30">
@@ -392,14 +454,6 @@
     <button class="tool" id="btnTxt">⬇ Download .txt</button>
     <button class="tool" id="btnPrint">🖨 Save as PDF</button>
     <button class="tool" id="btnSurprise">🎲 Surprise me</button>
-    <select id="theme" title="Colour theme" aria-label="Colour theme">
-      <option value="ocean">🌊 Ocean</option>
-      <option value="sunset">🌅 Sunset</option>
-      <option value="aurora">🌌 Aurora</option>
-      <option value="midnight">🌑 Midnight</option>
-      <option value="daylight">☀️ Daylight</option>
-    </select>
-    <button class="tool" id="btnFX" title="Sound &amp; vibration feedback">✨ FX: on</button>
   </div>
 
   <div class="warnbar" id="warnbar"></div>
@@ -2190,8 +2244,33 @@ function applyTheme(t){ document.documentElement.setAttribute('data-theme', t); 
 $('theme').addEventListener('change', ()=>applyTheme($('theme').value));
 (function(){ let t='ocean'; try{ t=localStorage.getItem('gliderTheme')||'ocean'; }catch(e){} $('theme').value=t; applyTheme(t); })();
 
+// ---- appearance mode (professional default / playful) ----
+function applyMode(m){ document.documentElement.setAttribute('data-mode', m);
+  $('btnMode').textContent = m==='pro' ? '💼 Professional' : '🎉 Playful';
+  try{ localStorage.setItem('gliderMode', m); }catch(e){} }
+(function(){ let m='pro'; try{ m=localStorage.getItem('gliderMode')||'pro'; }catch(e){} applyMode(m); })();
+$('btnMode').addEventListener('click', ()=>{ applyMode(document.documentElement.dataset.mode==='pro'?'fun':'pro'); blip(640); });
+
+// ---- app date + installable icon / manifest ----
+if($('appDate')) $('appDate').textContent = new Date().toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+(function(){ try{
+  const c=document.createElement('canvas'); c.width=c.height=180; const x=c.getContext('2d');
+  x.fillStyle='#0c2a38'; const r=34; x.beginPath();
+  x.moveTo(r,0); x.arcTo(180,0,180,180,r); x.arcTo(180,180,0,180,r); x.arcTo(0,180,0,0,r); x.arcTo(0,0,180,0,r); x.closePath(); x.fill();
+  x.fillStyle='#eafaf3'; x.beginPath(); x.ellipse(96,96,56,17,0,0,7); x.fill();
+  x.fillStyle='#3fd0e6'; x.beginPath(); x.moveTo(84,96); x.lineTo(40,62); x.lineTo(62,96); x.closePath(); x.fill();
+  x.fillStyle='#5be0c0'; x.beginPath(); x.moveTo(84,96); x.lineTo(40,130); x.lineTo(62,96); x.closePath(); x.fill();
+  x.fillStyle='#ffd166'; x.beginPath(); x.arc(140,96,9,0,7); x.fill();
+  const png=c.toDataURL('image/png');
+  const al=document.createElement('link'); al.rel='apple-touch-icon'; al.href=png; document.head.appendChild(al);
+  const manifest={name:'GliderLab — Underwater Glider Calculator', short_name:'GliderLab', display:'standalone',
+    background_color:'#06141d', theme_color:'#06141d', start_url:'.', icons:[{src:png, sizes:'180x180', type:'image/png'}]};
+  const ml=document.createElement('link'); ml.rel='manifest';
+  ml.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'})); document.head.appendChild(ml);
+}catch(e){} })();
+
 // ---- effects: sound + haptics, gated by a toggle ----
-let fxOn=true; try{ fxOn=localStorage.getItem('gliderFX')!=='0'; }catch(e){}
+let fxOn=false; try{ const _v=localStorage.getItem('gliderFX'); if(_v!==null) fxOn=_v==='1'; }catch(e){}
 $('btnFX').textContent='✨ FX: '+(fxOn?'on':'off');
 let _audio=null;
 function blip(freq){ if(!fxOn||reduceMotion) return; try{ _audio=_audio||new (window.AudioContext||window.webkitAudioContext)();
@@ -2283,7 +2362,8 @@ function updateHealth(d){
 // ---- confetti ----
 let confettiParts=[], confettiRAF=0;
 function fireConfetti(){
-  if(reduceMotion) return; const c=$('confetti'); if(!c) return;
+  if(reduceMotion || document.documentElement.dataset.mode!=='fun') return;
+  const c=$('confetti'); if(!c) return;
   c.width=innerWidth; c.height=innerHeight;
   const cols=['#3fd0e6','#5be0c0','#ffd166','#ff7a7a','#9b8cff','#ffffff'];
   for(let i=0;i<130;i++) confettiParts.push({x:innerWidth*(0.3+0.4*Math.random()), y:innerHeight*0.28,
