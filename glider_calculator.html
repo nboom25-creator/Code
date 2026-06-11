@@ -309,7 +309,45 @@
   @media (prefers-reduced-motion:reduce){
     *,*::before{animation:none !important}
   }
-  @media print{ .bubbles,body::before{display:none !important} }
+  @media print{ .bubbles,body::before,#confetti,.swimmer{display:none !important} }
+
+  /* ===================== stylish & fun ===================== */
+  #confetti{position:fixed; inset:0; width:100%; height:100%; z-index:50; pointer-events:none; background:none; border:none; box-shadow:none}
+  header{position:relative; overflow:hidden}
+  .swimmer{position:absolute; top:14px; left:-90px; opacity:.5; filter:drop-shadow(0 0 8px rgba(63,208,230,.4));
+    animation:swim 16s linear infinite}
+  @keyframes swim{
+    0%{transform:translateX(-10vw) translateY(0) rotate(2deg)}
+    50%{transform:translateX(50vw) translateY(10px) rotate(-3deg)}
+    100%{transform:translateX(115vw) translateY(0) rotate(2deg)}}
+  /* value change flash */
+  .kv .v.flash, .badge.flash{animation:vflash .6s ease}
+  @keyframes vflash{0%{background:rgba(63,208,230,.45); border-radius:6px}
+    60%{background:rgba(63,208,230,.12)} 100%{background:transparent}}
+  /* button press + ripple */
+  button{position:relative; overflow:hidden}
+  button:active{transform:scale(.97)}
+  .ripple{position:absolute; border-radius:50%; transform:scale(0); background:rgba(255,255,255,.35);
+    animation:rip .5s ease-out; pointer-events:none}
+  @keyframes rip{to{transform:scale(3.5); opacity:0}}
+  /* health dashboard */
+  #card-health .health-wrap{display:flex; gap:22px; align-items:center; flex-wrap:wrap}
+  .score-box{position:relative; width:120px; height:120px; flex:none}
+  #scoreRing{width:120px !important; height:120px !important; background:none; border:none; box-shadow:none}
+  .score-label{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center}
+  .score-label span{font-size:30px; font-weight:800; color:var(--ink)}
+  .score-label small{font-size:11px; color:var(--muted)}
+  .chips{display:flex; gap:8px; flex-wrap:wrap}
+  .chip{font-size:12px; font-weight:700; padding:5px 11px; border-radius:999px; border:1px solid transparent; display:inline-flex; gap:6px; align-items:center}
+  .chip.good{background:rgba(79,224,166,.14); color:var(--good); border-color:rgba(79,224,166,.4)}
+  .chip.warn{background:rgba(255,209,102,.14); color:var(--warn); border-color:rgba(255,209,102,.4)}
+  .chip.bad{background:rgba(255,122,122,.14); color:var(--bad); border-color:rgba(255,122,122,.4)}
+  .chip.gold{background:linear-gradient(180deg,rgba(255,209,102,.25),rgba(255,160,60,.18)); color:#ffd166; border-color:rgba(255,209,102,.5)}
+  .gauges{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin-top:12px}
+  .gwrap{text-align:center}
+  canvas.gauge{width:100% !important; height:96px !important; max-width:180px; background:none; border:none; box-shadow:none}
+  .glabel{font-size:11px; color:var(--muted); margin-top:-6px}
+  .toolbar select{vertical-align:middle}
 </style>
 </head>
 <body>
@@ -327,7 +365,18 @@
   <span style="left:88%;width:12px;height:12px;animation-duration:29s;animation-delay:5s"></span>
   <span style="left:94%;width:9px;height:9px;animation-duration:23s;animation-delay:10s"></span>
 </div>
+<canvas id="confetti" aria-hidden="true"></canvas>
 <header>
+  <div class="swimmer" aria-hidden="true">
+    <svg viewBox="0 0 120 48" width="74" height="30">
+      <ellipse cx="58" cy="24" rx="46" ry="11" fill="#bfe9f2"/>
+      <ellipse cx="58" cy="22" rx="46" ry="8" fill="#eafaf3"/>
+      <path d="M52 24 L24 6 L34 24 Z" fill="#3fd0e6"/>
+      <path d="M52 24 L24 42 L34 24 Z" fill="#5be0c0"/>
+      <path d="M100 24 L116 14 L116 34 Z" fill="#3fd0e6"/>
+      <circle cx="98" cy="24" r="3.4" fill="#ffd166"/>
+    </svg>
+  </div>
   <h1><span class="wave">🌊</span> Underwater Glider Calculator</h1>
   <p>Live design calculations that update as you type — build from one parts list to buoyancy, glide, stability, hull strength, power &amp; range.</p>
   <div class="pills">
@@ -342,12 +391,41 @@
     <button class="tool" id="btnUnits">📋 Copy report</button>
     <button class="tool" id="btnTxt">⬇ Download .txt</button>
     <button class="tool" id="btnPrint">🖨 Save as PDF</button>
+    <button class="tool" id="btnSurprise">🎲 Surprise me</button>
+    <select id="theme" title="Colour theme" aria-label="Colour theme">
+      <option value="ocean">🌊 Ocean</option>
+      <option value="sunset">🌅 Sunset</option>
+      <option value="aurora">🌌 Aurora</option>
+      <option value="midnight">🌑 Midnight</option>
+      <option value="daylight">☀️ Daylight</option>
+    </select>
+    <button class="tool" id="btnFX" title="Sound &amp; vibration feedback">✨ FX: on</button>
   </div>
 
   <div class="warnbar" id="warnbar"></div>
   <div class="recbar" id="recbar"></div>
 
   <div class="grid">
+
+    <!-- DESIGN HEALTH DASHBOARD -->
+    <section class="card span2" id="card-health">
+      <h2><span class="ic">🩺</span> Design health</h2>
+      <div class="health-wrap">
+        <div class="score-box">
+          <canvas id="scoreRing" width="200" height="200"></canvas>
+          <div class="score-label"><span id="scoreNum">–</span><small>/ 100</small></div>
+        </div>
+        <div style="flex:1;min-width:240px">
+          <div id="healthChips" class="chips"></div>
+          <div class="gauges">
+            <div class="gwrap"><canvas class="gauge" id="gYield" width="200" height="130"></canvas><div class="glabel">Yield SF</div></div>
+            <div class="gwrap"><canvas class="gauge" id="gBuckle" width="200" height="130"></canvas><div class="glabel">Buckling SF</div></div>
+            <div class="gwrap"><canvas class="gauge" id="gGlide" width="200" height="130"></canvas><div class="glabel">Glide ratio</div></div>
+          </div>
+        </div>
+      </div>
+      <div id="achv" class="chips" style="margin-top:10px"></div>
+    </section>
 
     <!-- REQUIREMENTS-DRIVEN DESIGN -->
     <section class="card span2" id="card-req">
@@ -1074,6 +1152,7 @@ function compute(){
     strokeTime:isFinite(strokeTime)?strokeTime:0,
     rangePerCycle:isFinite(rangePerCycle)?rangePerCycle:0 };
   if(typeof drawTimeline==='function'){ drawTimeline(); if(!sim.running) drawSim(); updateSimReadouts(); }
+  if(typeof updateHealth==='function') updateHealth({netg:net/g*1000, bg:bg, ysf:ysf, bsf:bsf, glideRatio:glideRatio});
   save();
 }
 
@@ -1288,9 +1367,18 @@ function drawSim(){
   // glider
   const gx=X(sim.x), gy=Yd(sim.depth);
   ctx.save(); ctx.translate(gx,gy); ctx.rotate(sim.pitch);
-  ctx.fillStyle='#eafaf3'; ctx.beginPath(); ctx.ellipse(0,0,15,5,0,0,7); ctx.fill();
-  ctx.strokeStyle='#3fd0e6'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(-3,-10); ctx.lineTo(-3,10); ctx.stroke();
-  ctx.fillStyle='#ffd166'; ctx.beginPath(); ctx.arc(11,0,2.4,0,7); ctx.fill();
+  // swept wings
+  ctx.fillStyle='rgba(63,208,230,.85)';
+  ctx.beginPath(); ctx.moveTo(-2,0); ctx.lineTo(-12,-13); ctx.lineTo(-6,-13); ctx.lineTo(4,0); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-2,0); ctx.lineTo(-12,13); ctx.lineTo(-6,13); ctx.lineTo(4,0); ctx.closePath(); ctx.fill();
+  // tail fin
+  ctx.fillStyle='rgba(91,224,192,.9)';
+  ctx.beginPath(); ctx.moveTo(-14,0); ctx.lineTo(-19,-7); ctx.lineTo(-11,0); ctx.closePath(); ctx.fill();
+  // body
+  const bg2=ctx.createLinearGradient(0,-5,0,5); bg2.addColorStop(0,'#fff'); bg2.addColorStop(1,'#bfe9f2');
+  ctx.fillStyle=bg2; ctx.beginPath(); ctx.ellipse(0,0,16,5,0,0,7); ctx.fill();
+  // nose
+  ctx.fillStyle='#ffd166'; ctx.beginPath(); ctx.arc(13,0,2.6,0,7); ctx.fill();
   ctx.restore();
 }
 function drawTimeline(){
@@ -2092,6 +2180,140 @@ setupCollapse();
     b._t=setTimeout(()=>{ b.classList.remove('done'); b.textContent='↻ Calculate'; },1200);
   });
   card.appendChild(b);
+});
+
+// ===================== stylish & fun: themes, FX, dashboard =====================
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---- colour theme ----
+function applyTheme(t){ document.documentElement.setAttribute('data-theme', t); try{ localStorage.setItem('gliderTheme', t); }catch(e){} }
+$('theme').addEventListener('change', ()=>applyTheme($('theme').value));
+(function(){ let t='ocean'; try{ t=localStorage.getItem('gliderTheme')||'ocean'; }catch(e){} $('theme').value=t; applyTheme(t); })();
+
+// ---- effects: sound + haptics, gated by a toggle ----
+let fxOn=true; try{ fxOn=localStorage.getItem('gliderFX')!=='0'; }catch(e){}
+$('btnFX').textContent='✨ FX: '+(fxOn?'on':'off');
+let _audio=null;
+function blip(freq){ if(!fxOn||reduceMotion) return; try{ _audio=_audio||new (window.AudioContext||window.webkitAudioContext)();
+  const o=_audio.createOscillator(), g=_audio.createGain(); o.type='sine'; o.frequency.value=freq||660;
+  g.gain.value=0.04; o.connect(g); g.connect(_audio.destination); o.start();
+  g.gain.exponentialRampToValueAtTime(0.0001,_audio.currentTime+0.13); o.stop(_audio.currentTime+0.14);
+}catch(e){} }
+function haptic(ms){ if(fxOn && navigator.vibrate) try{ navigator.vibrate(ms||8); }catch(e){} }
+$('btnFX').addEventListener('click', ()=>{ fxOn=!fxOn; $('btnFX').textContent='✨ FX: '+(fxOn?'on':'off');
+  try{ localStorage.setItem('gliderFX', fxOn?'1':'0'); }catch(e){} if(fxOn) blip(720); });
+
+// ---- button ripple + haptic on every click ----
+document.addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return; haptic(8);
+  if(reduceMotion) return;
+  const rect=b.getBoundingClientRect(), d=Math.max(rect.width,rect.height);
+  const r=document.createElement('span'); r.className='ripple';
+  r.style.width=r.style.height=d+'px';
+  r.style.left=((e.clientX||rect.left+rect.width/2)-rect.left-d/2)+'px';
+  r.style.top=((e.clientY||rect.top+rect.height/2)-rect.top-d/2)+'px';
+  b.appendChild(r); setTimeout(()=>r.remove(),520);
+});
+
+// ---- value-change flash (only when the value actually changes) ----
+(function(){
+  if(reduceMotion) return;
+  const obs=new MutationObserver(muts=>{ for(const m of muts){
+    let el=m.target; if(el.nodeType===3) el=el.parentElement;
+    if(!el) continue;
+    const host = el.classList && el.classList.contains('v') ? el : (el.closest? el.closest('.kv .v'):null);
+    if(!host) continue;
+    const t=host.textContent;
+    if(host._last!==undefined && host._last!==t){ host.classList.remove('flash'); void host.offsetWidth; host.classList.add('flash'); }
+    host._last=t;
+  } });
+  document.querySelectorAll('.kv .v').forEach(el=>obs.observe(el,{childList:true,characterData:true,subtree:true}));
+})();
+
+// ---- design-health dashboard ----
+let lastAllPass=false, healthInit=false;
+function drawScoreRing(sc){
+  const c=$('scoreRing'); if(!c) return; const ctx=c.getContext('2d'), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H); const cx=W/2, cy=H/2, r=W*0.38;
+  ctx.lineWidth=W*0.10; ctx.lineCap='round';
+  ctx.strokeStyle='rgba(120,170,190,.16)'; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+  const col= sc>=80?'#4fe0a6': sc>=50?'#ffd166':'#ff7a7a';
+  ctx.strokeStyle=col; ctx.beginPath(); ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+Math.PI*2*sc/100); ctx.stroke();
+}
+function drawGauge(id,value,max,thr){
+  const c=$(id); if(!c) return; const ctx=c.getContext('2d'), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H); const cx=W/2, cy=H*0.86, r=W*0.40;
+  const ang=v=>Math.PI + Math.min(Math.max(v,0),max)/max*Math.PI;
+  const arc=(v0,v1,col)=>{ ctx.beginPath(); ctx.arc(cx,cy,r,ang(v0),ang(v1),false); ctx.strokeStyle=col; ctx.lineWidth=W*0.07; ctx.stroke(); };
+  arc(0,thr,'#ff7a7a'); arc(thr,thr*1.34,'#ffd166'); arc(thr*1.34,max,'#4fe0a6');
+  const va=ang(isFinite(value)?value:max);
+  ctx.strokeStyle='#eaf6fa'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(va)*r*0.9, cy+Math.sin(va)*r*0.9); ctx.stroke();
+  ctx.fillStyle='#eaf6fa'; ctx.beginPath(); ctx.arc(cx,cy,3.5,0,7); ctx.fill();
+  ctx.fillStyle='#dff3f8'; ctx.font='bold 24px system-ui'; ctx.textAlign='center';
+  ctx.fillText(isFinite(value)?value.toFixed(2):'∞', cx, cy-r*0.22);
+}
+function updateHealth(d){
+  const netg=d.netg, bg=d.bg, ysf=d.ysf, bsf=d.bsf, gr=d.glideRatio;
+  const buoy=Math.abs(netg)<25, stable=bg>0, yOK=isFinite(ysf)?ysf>=1.5:true, bOK=isFinite(bsf)?bsf>=2.0:true, glide=isFinite(gr)&&gr>0;
+  let sc=0;
+  sc+=Math.max(0,20*(1-Math.min(1,Math.abs(netg)/60)));
+  sc+=stable?Math.min(25,12+bg*1300):0;
+  sc+=isFinite(ysf)?Math.min(15,ysf/1.5*15):15;
+  sc+=isFinite(bsf)?Math.min(20,bsf/2*20):20;
+  sc+=glide?Math.min(20,gr/3*20):0;
+  sc=Math.max(0,Math.min(100,Math.round(sc)));
+  if($('scoreNum')) $('scoreNum').textContent=sc;
+  drawScoreRing(sc);
+  const chip=(ok,label)=>'<span class="chip '+(ok?'good':'bad')+'">'+(ok?'✅':'⚠️')+' '+label+'</span>';
+  if($('healthChips')) $('healthChips').innerHTML=
+    chip(buoy,'Buoyancy')+chip(stable,'Stability')+chip(yOK,'Hull yield')+chip(bOK,'Hull buckling')+chip(glide,'Glide');
+  drawGauge('gYield', ysf, 4, 1.5); drawGauge('gBuckle', bsf, 4, 2.0); drawGauge('gGlide', gr, 6, 1.0);
+  const ach=[];
+  if(buoy) ach.push('🎯 Neutrally buoyant');
+  if(stable) ach.push('🧭 Statically stable');
+  if(yOK&&bOK) ach.push('🛡️ Hull rated');
+  if(glide&&gr>=2.5) ach.push('✈️ Efficient glider');
+  if(sc>=90) ach.push('🏆 Top design');
+  if($('achv')) $('achv').innerHTML=ach.map(a=>'<span class="chip gold">'+a+'</span>').join('');
+  const allPass=buoy&&stable&&yOK&&bOK&&glide;
+  if(healthInit && allPass && !lastAllPass){ fireConfetti(); blip(880); haptic(20); }
+  lastAllPass=allPass; healthInit=true;
+}
+
+// ---- confetti ----
+let confettiParts=[], confettiRAF=0;
+function fireConfetti(){
+  if(reduceMotion) return; const c=$('confetti'); if(!c) return;
+  c.width=innerWidth; c.height=innerHeight;
+  const cols=['#3fd0e6','#5be0c0','#ffd166','#ff7a7a','#9b8cff','#ffffff'];
+  for(let i=0;i<130;i++) confettiParts.push({x:innerWidth*(0.3+0.4*Math.random()), y:innerHeight*0.28,
+    vx:(Math.random()-.5)*9, vy:-7-Math.random()*9, g:0.22+Math.random()*0.12, r:3+Math.random()*4,
+    col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*0.4, life:0});
+  if(!confettiRAF) confettiRAF=requestAnimationFrame(confettiStep);
+}
+function confettiStep(){
+  const c=$('confetti'); if(!c){ confettiRAF=0; return; } const ctx=c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  confettiParts.forEach(p=>{ p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr; p.life++;
+    ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.globalAlpha=Math.max(0,1-p.life/130);
+    ctx.fillStyle=p.col; ctx.fillRect(-p.r,-p.r*0.6,p.r*2,p.r*1.2); ctx.restore(); });
+  confettiParts=confettiParts.filter(p=>p.life<130 && p.y<c.height+30);
+  if(confettiParts.length) confettiRAF=requestAnimationFrame(confettiStep);
+  else { confettiRAF=0; ctx.clearRect(0,0,c.width,c.height); }
+}
+
+// ---- surprise me ----
+$('btnSurprise').addEventListener('click', ()=>{
+  const rnd=(a,b)=>a+Math.random()*(b-a), rho=+($('surfaceDensity').value||1025);
+  const m=rnd(20,80); $('mass').value=m.toFixed(1);
+  $('volL').value=(m/rho*1000*rnd(0.985,1.015)).toFixed(1);
+  $('wingArea').value=rnd(0.05,0.2).toFixed(3); $('cd0').value=rnd(0.05,0.14).toFixed(3); $('k').value=rnd(0.06,0.3).toFixed(3);
+  $('cgz').value=(-rnd(6,25)/1000).toFixed(3); $('cbz').value='0'; $('cgx').value='0'; $('cbx').value='0';
+  $('radius').value=rnd(60,140).toFixed(0); $('thickness').value=rnd(3,10).toFixed(1); $('hullDepth').value=rnd(50,400).toFixed(0);
+  $('useBestCl').checked=Math.random()<0.6;
+  $('useBudget').checked=$('useBudgetCG').checked=$('useBudgetCB').checked=false;
+  ['mass','volL','cgx','cgz','cbx','cbz'].forEach(id=>$(id).disabled=false);
+  compute(); blip(520);
 });
 
 renderComponents();
