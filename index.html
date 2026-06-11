@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Realms of Azora — A WoW-Style Adventure</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- ===================== LOADING ===================== -->
+  <div id="loading-screen">
+    <div class="loading-inner">
+      <h1 class="game-logo">REALMS OF AZORA</h1>
+      <p class="tagline">A World of Adventure Awaits</p>
+      <div class="loading-bar"><div class="loading-fill"></div></div>
+      <p class="loading-text">Forging the world…</p>
+    </div>
+  </div>
+
+  <!-- ===================== CHARACTER CREATION ===================== -->
+  <div id="char-create" class="hidden">
+    <div class="cc-header">
+      <h1 class="game-logo small">REALMS OF AZORA</h1>
+      <p class="tagline">Choose your allegiance and your people</p>
+    </div>
+
+    <div class="faction-tabs">
+      <button class="faction-tab active" data-faction="alliance">
+        <span class="faction-crest alliance-crest">⚜</span> The Covenant
+      </button>
+      <button class="faction-tab" data-faction="horde">
+        <span class="faction-crest horde-crest">⚔</span> The Dominion
+      </button>
+    </div>
+
+    <div class="cc-body">
+      <div class="race-list" id="race-list"></div>
+
+      <div class="race-preview">
+        <div id="preview-canvas-wrap"></div>
+        <div class="race-info" id="race-info"></div>
+      </div>
+
+      <div class="class-panel">
+        <h3>Class</h3>
+        <div class="class-list" id="class-list"></div>
+        <h3>Name</h3>
+        <input id="char-name" type="text" maxlength="14" placeholder="Hero's name…" />
+        <button id="enter-world" class="big-btn">Enter World</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== GAME HUD ===================== -->
+  <div id="game-ui" class="hidden">
+    <!-- Player unit frame -->
+    <div class="unit-frame player-frame">
+      <div class="portrait" id="player-portrait"></div>
+      <div class="bars">
+        <div class="name-row"><span id="player-name">Hero</span><span id="player-level-badge">1</span></div>
+        <div class="bar health-bar"><div class="bar-fill" id="player-health"></div><span class="bar-text" id="player-health-text"></span></div>
+        <div class="bar mana-bar"><div class="bar-fill" id="player-mana"></div><span class="bar-text" id="player-mana-text"></span></div>
+      </div>
+    </div>
+
+    <!-- Target unit frame -->
+    <div class="unit-frame target-frame hidden" id="target-frame">
+      <div class="portrait" id="target-portrait"></div>
+      <div class="bars">
+        <div class="name-row"><span id="target-name">Target</span><span id="target-level-badge">1</span></div>
+        <div class="bar health-bar"><div class="bar-fill" id="target-health"></div><span class="bar-text" id="target-health-text"></span></div>
+      </div>
+    </div>
+
+    <!-- Minimap -->
+    <div class="minimap">
+      <canvas id="minimap-canvas" width="160" height="160"></canvas>
+      <div class="minimap-ring"></div>
+      <div class="zone-name" id="zone-name">Northshire Vale</div>
+    </div>
+
+    <!-- XP bar -->
+    <div class="xp-bar"><div class="xp-fill" id="xp-fill"></div><span class="xp-text" id="xp-text"></span></div>
+
+    <!-- Action bar -->
+    <div class="action-bar" id="action-bar"></div>
+
+    <!-- Cast bar -->
+    <div class="cast-bar hidden" id="cast-bar"><div class="cast-fill" id="cast-fill"></div><span id="cast-text"></span></div>
+
+    <!-- Combat / quest log -->
+    <div class="combat-log" id="combat-log"></div>
+
+    <!-- Quest tracker -->
+    <div class="quest-tracker" id="quest-tracker"></div>
+
+    <!-- Floating tip -->
+    <div class="controls-tip" id="controls-tip">
+      <b>WASD</b> move · <b>Mouse</b> look (hold right-btn) · <b>Tab</b> target · <b>1–6</b> abilities · <b>Space</b> jump · <b>Esc</b> menu
+    </div>
+  </div>
+
+  <!-- ===================== DEATH / RESPAWN ===================== -->
+  <div id="death-screen" class="hidden">
+    <h1>You have died</h1>
+    <button id="respawn-btn" class="big-btn">Release Spirit & Respawn</button>
+  </div>
+
+  <!-- ===================== ESC MENU ===================== -->
+  <div id="esc-menu" class="hidden">
+    <div class="esc-panel">
+      <h2>Game Menu</h2>
+      <button id="resume-btn" class="big-btn">Resume</button>
+      <button id="back-to-select" class="big-btn secondary">Change Character</button>
+      <div class="settings-row">
+        <label>Music <input type="checkbox" id="music-toggle" checked></label>
+      </div>
+      <p class="hint">Realms of Azora — built with Three.js</p>
+    </div>
+  </div>
+
+  <div id="dmg-layer"></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
