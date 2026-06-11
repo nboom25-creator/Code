@@ -460,11 +460,11 @@
         <label style="margin:0">Drive the Stability CB from the component volumes</label></div>
       <div style="overflow-x:auto">
       <table class="budget" id="budgetTable">
-        <thead><tr><th>Component</th><th>Mass (kg)</th><th>Volume (L)</th><th>x (mm)</th><th>z (mm)</th><th></th></tr></thead>
+        <thead><tr><th>Component</th><th>Mass (kg)</th><th>Volume (L)</th><th>x (mm)</th><th>y (mm)</th><th>z (mm)</th><th></th></tr></thead>
         <tbody id="budgetBody"></tbody>
         <tfoot>
-          <tr><td>Total / CG</td><td id="budMass">–</td><td id="budVol">–</td><td id="budCGx">–</td><td id="budCGz">–</td><td></td></tr>
-          <tr><td>Centre of buoyancy</td><td></td><td></td><td id="budCBx">–</td><td id="budCBz">–</td><td></td></tr>
+          <tr><td>Total / CG</td><td id="budMass">–</td><td id="budVol">–</td><td id="budCGx">–</td><td id="budCGy">–</td><td id="budCGz">–</td><td></td></tr>
+          <tr><td>Centre of buoyancy</td><td></td><td></td><td id="budCBx">–</td><td id="budCBy">–</td><td id="budCBz">–</td><td></td></tr>
         </tfoot>
       </table>
       </div>
@@ -472,7 +472,7 @@
         <button class="tool" id="btnAddComp">+ Add component</button>
         <button class="tool" id="btnHullComp">⟳ Pull hull from Pressure-hull section</button>
       </div>
-      <div class="hint">“Volume” is the water each part displaces (sealed/external volume; flooded parts ≈ 0). Positions: <b>x</b> = fore/aft (+ forward), <b>z</b> = vertical (+ up, − below the centre axis). Tick the boxes to feed Buoyancy and Stability automatically.</div>
+      <div class="hint">“Volume” is the water each part displaces (sealed/external volume; flooded parts ≈ 0). Positions: <b>x</b> = fore/aft (+ forward), <b>y</b> = lateral (+ port), <b>z</b> = vertical (+ up). Tick the boxes to feed Buoyancy and Stability automatically.</div>
       <canvas id="layout" width="1100" height="340" style="margin-top:14px"></canvas>
       <div class="legend">
         <span><i class="swatch" style="background:#7fd4e6;border-radius:50%;width:10px;height:10px"></i> Component (size ∝ mass)</span>
@@ -645,13 +645,17 @@
         <button class="tool" id="btnAsmClear">🗑 Start fresh assembly</button>
       </div>
       <div class="subhead" style="margin-top:16px"><span class="ic">🧩</span> Assembly preview</div>
-      <canvas id="asmCanvas" width="1100" height="300"></canvas>
+      <div class="sub" style="margin-bottom:4px">Side view (fore/aft × vertical)</div>
+      <canvas id="asmCanvas" width="1100" height="280" style="touch-action:none;cursor:grab"></canvas>
+      <div class="sub" style="margin:10px 0 4px">Top-down view (fore/aft × lateral)</div>
+      <canvas id="asmTop" width="1100" height="240" style="touch-action:none;cursor:grab"></canvas>
       <div class="legend">
         <span><i class="swatch" style="background:#7fd4e6;border-radius:50%;width:10px;height:10px"></i> Part (size ∝ mass)</span>
+        <span><i class="swatch" style="background:#ffd166;border-radius:50%;width:10px;height:10px"></i> selected</span>
         <span><i class="swatch" style="background:#ff6b6b;border-radius:50%;width:10px;height:10px"></i> combined CG</span>
         <span><i class="swatch" style="background:#5be0c0;width:10px;height:10px"></i> combined CB</span>
       </div>
-      <div class="hint" style="text-align:center">Each added part shown at its centroid (fore/aft × vertical); markers are the assembled CG &amp; CB.</div>
+      <div class="hint" style="text-align:center">Each part sits at its centroid; markers are the assembled CG &amp; CB. <b>Drag a part</b> to nudge it (side view moves fore/aft &amp; up-down, top view moves fore/aft &amp; left-right).</div>
     </section>
 
     <!-- BILL OF MATERIALS -->
@@ -741,13 +745,13 @@ const MATERIALS={
 // mass-CG ≈ (0, -15) mm and volume-CB ≈ (0, 0) mm.
 // x = fore/aft (+ forward), z = vertical (+ up, - below centre axis), in mm
 const DEFAULT_COMPONENTS=[
-  {name:'Pressure hull',            mass:6.94, vol:18.85, x:0,    z:0},
-  {name:'Battery',                  mass:8,    vol:4,     x:-50,  z:-30},
-  {name:'Electronics & payload',    mass:5,    vol:3,     x:259,  z:0},
-  {name:'Ballast / pump system',    mass:6,    vol:4,     x:-150, z:0},
-  {name:'Syntactic foam / fairing', mass:4,    vol:16,    x:1.5,  z:14.7},
-  {name:'Wings & tail',             mass:2,    vol:1,     x:0,    z:0},
-  {name:'Trim ballast',             mass:20.06,vol:3.85,  x:0,    z:-29.85},
+  {name:'Pressure hull',            mass:6.94, vol:18.85, x:0,    y:0, z:0},
+  {name:'Battery',                  mass:8,    vol:4,     x:-50,  y:0, z:-30},
+  {name:'Electronics & payload',    mass:5,    vol:3,     x:259,  y:0, z:0},
+  {name:'Ballast / pump system',    mass:6,    vol:4,     x:-150, y:0, z:0},
+  {name:'Syntactic foam / fairing', mass:4,    vol:16,    x:1.5,  y:0, z:14.7},
+  {name:'Wings & tail',             mass:2,    vol:1,     x:0,    y:0, z:0},
+  {name:'Trim ballast',             mass:20.06,vol:3.85,  x:0,    y:0, z:-29.85},
 ];
 let components = DEFAULT_COMPONENTS.map(c=>({...c}));
 // default bill of materials for a lab syringe-pump glider (rough placeholder costs)
@@ -1293,7 +1297,7 @@ function drawTimeline(){
 
 // ---- persistence & controls ----
 let hullShellMass=NaN, hullExtVolL=NaN, pumpSweptML=NaN, lastDesign=null;
-let stlModel=null, stlSI=null;
+let stlModel=null, stlSI=null, selComp=-1;
 const IDS=['surfaceDensity','g','useWater','workingDepth','gradient','mass','volL','wingArea','cd0','k',
   'useBestCl','cl','cgz','cbz','cgx','cbx','moveMass','moveDist','targetPitch','hullDepth',
   'radius','thickness','hullLength','poisson','yieldMPa','youngGPa','matDensity','batteryWh','ballastL',
@@ -1550,18 +1554,19 @@ function renderComponents(){
     '<td><input class="bnum" type="number" step="0.1" data-i="'+i+'" data-f="mass" value="'+c.mass+'"></td>'+
     '<td><input class="bnum" type="number" step="0.1" data-i="'+i+'" data-f="vol" value="'+c.vol+'"></td>'+
     '<td><input class="bnum" type="number" step="1" data-i="'+i+'" data-f="x" value="'+(c.x||0)+'"></td>'+
+    '<td><input class="bnum" type="number" step="1" data-i="'+i+'" data-f="y" value="'+(c.y||0)+'"></td>'+
     '<td><input class="bnum" type="number" step="1" data-i="'+i+'" data-f="z" value="'+(c.z||0)+'"></td>'+
     '<td><button class="mini del" data-del="'+i+'" title="Remove">✕</button></td>'+
     '</tr>').join('');
   updateBudgetTotals();
 }
 function budgetCentroids(){
-  let tm=0,tv=0,mx=0,mz=0,vx=0,vz=0;
-  components.forEach(c=>{ const m=+c.mass||0, v=+c.vol||0, x=+c.x||0, z=+c.z||0;
-    tm+=m; tv+=v; mx+=m*x; mz+=m*z; vx+=v*x; vz+=v*z; });
+  let tm=0,tv=0,mx=0,my=0,mz=0,vx=0,vy=0,vz=0;
+  components.forEach(c=>{ const m=+c.mass||0, v=+c.vol||0, x=+c.x||0, y=+c.y||0, z=+c.z||0;
+    tm+=m; tv+=v; mx+=m*x; my+=m*y; mz+=m*z; vx+=v*x; vy+=v*y; vz+=v*z; });
   return {tm, tv,
-    cgx: tm>0? mx/tm:0, cgz: tm>0? mz/tm:0,
-    cbx: tv>0? vx/tv:0, cbz: tv>0? vz/tv:0};   // mm
+    cgx: tm>0? mx/tm:0, cgy: tm>0? my/tm:0, cgz: tm>0? mz/tm:0,
+    cbx: tv>0? vx/tv:0, cby: tv>0? vy/tv:0, cbz: tv>0? vz/tv:0};   // mm
 }
 function updateBudgetTotals(){
   const b=budgetCentroids();
@@ -1574,8 +1579,11 @@ function updateBudgetTotals(){
   if($('useBudget').checked){ $('mass').value=b.tm.toFixed(2); $('volL').value=b.tv.toFixed(2); }
   if($('useBudgetCG').checked){ $('cgx').value=(b.cgx/1000).toFixed(4); $('cgz').value=(b.cgz/1000).toFixed(4); }
   if($('useBudgetCB').checked){ $('cbx').value=(b.cbx/1000).toFixed(4); $('cbz').value=(b.cbz/1000).toFixed(4); }
+  if($('budCGy')) $('budCGy').textContent=fmt(b.cgy,1)+' mm';
+  if($('budCBy')) $('budCBy').textContent=fmt(b.cby,1)+' mm';
   drawLayout(b);
-  if($('asmCanvas')) drawLayout(b,'asmCanvas');
+  if($('asmCanvas')) drawLayout(b,'asmCanvas','z');
+  if($('asmTop')) drawLayout(b,'asmTop','y');
   return b;
 }
 function syncBudgetMode(){
@@ -1585,49 +1593,60 @@ function syncBudgetMode(){
   updateBudgetTotals();
   compute();
 }
-// side-profile layout diagram (x = fore/aft, z = vertical)
-function drawLayout(b, canvasId){
+// layout diagram. vAxis='z' -> side view (fore/aft × vertical);
+// vAxis='y' -> top-down view (fore/aft × lateral). Stores hit-test data for drag.
+function drawLayout(b, canvasId, vAxis){
   const c=$(canvasId||'layout'); if(!c) return;
+  vAxis = vAxis || 'z';
   const ctx=c.getContext('2d'), W=c.width, H=c.height;
   ctx.clearRect(0,0,W,H);
   b = b || budgetCentroids();
   const R=num('radius')||100, L=num('hullLength')||600;
-  const xs=components.map(k=>+k.x||0), zs=components.map(k=>+k.z||0);
+  const half = vAxis==='z' ? R : R;   // hull half-extent in the vertical screen axis
+  const xs=components.map(k=>+k.x||0), vs=components.map(k=>+k[vAxis]||0);
+  const cgv=b['cg'+vAxis], cbv=b['cb'+vAxis];
   let xmin=Math.min(-L/2,...xs,b.cgx,b.cbx), xmax=Math.max(L/2,...xs,b.cgx,b.cbx);
-  let zmin=Math.min(-R,...zs,b.cgz,b.cbz), zmax=Math.max(R,...zs,b.cgz,b.cbz);
-  const xp=(xmax-xmin)*0.12+15, zp=(zmax-zmin)*0.18+15;
-  xmin-=xp; xmax+=xp; zmin-=zp; zmax+=zp;
+  let vmin=Math.min(-half,...vs,cgv,cbv), vmax=Math.max(half,...vs,cgv,cbv);
+  const xp=(xmax-xmin)*0.12+15, vp=(vmax-vmin)*0.18+15;
+  xmin-=xp; xmax+=xp; vmin-=vp; vmax+=vp;
   const pad=30;
   const X=x=> pad+(x-xmin)/(xmax-xmin)*(W-2*pad);
-  const Z=z=> H-pad-(z-zmin)/(zmax-zmin)*(H-2*pad);
+  const V=v=> H-pad-(v-vmin)/(vmax-vmin)*(H-2*pad);
+  const invX=sx=> xmin+(sx-pad)/(W-2*pad)*(xmax-xmin);
+  const invV=sy=> vmin+(H-pad-sy)/(H-2*pad)*(vmax-vmin);
+  c._map={invX,invV,vAxis};
   // hull envelope
   ctx.strokeStyle='#3a6c7d'; ctx.lineWidth=1.5; ctx.fillStyle='rgba(55,192,216,.06)';
-  ctx.beginPath(); ctx.rect(X(-L/2),Z(R),X(L/2)-X(-L/2),Z(-R)-Z(R)); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(X(-L/2),V(half),X(L/2)-X(-L/2),V(-half)-V(half)); ctx.fill(); ctx.stroke();
   // origin axes
   ctx.strokeStyle='#2a5b6b'; ctx.setLineDash([4,4]); ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(X(0),Z(zmin)); ctx.lineTo(X(0),Z(zmax)); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(X(xmin),Z(0)); ctx.lineTo(X(xmax),Z(0)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X(0),V(vmin)); ctx.lineTo(X(0),V(vmax)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X(xmin),V(0)); ctx.lineTo(X(xmax),V(0)); ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle='#9fc1cf'; ctx.font='11px system-ui'; ctx.textAlign='left';
-  ctx.fillText('← aft',X(xmin)+4,Z(0)-6); ctx.textAlign='right'; ctx.fillText('forward →',X(xmax)-4,Z(0)-6);
-  ctx.textAlign='left'; ctx.fillText('up ↑',X(0)+6,Z(zmax)+12);
+  ctx.fillText('← aft',X(xmin)+4,V(0)-6); ctx.textAlign='right'; ctx.fillText('forward →',X(xmax)-4,V(0)-6);
+  ctx.textAlign='left'; ctx.fillText(vAxis==='z'?'up ↑':'port ↑',X(0)+6,V(vmax)+12);
   // components
   const mMax=Math.max(...components.map(k=>+k.mass||0),1);
-  ctx.textAlign='left';
-  components.forEach(k=>{
-    const x=X(+k.x||0), z=Z(+k.z||0), r=5+9*Math.sqrt((+k.mass||0)/mMax);
-    ctx.fillStyle='rgba(127,212,230,.85)'; ctx.strokeStyle='#0a222e'; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.arc(x,z,r,0,7); ctx.fill(); ctx.stroke();
+  const dots=[]; ctx.textAlign='left';
+  components.forEach((k,i)=>{
+    const sx=X(+k.x||0), sy=V(+k[vAxis]||0), r=5+9*Math.sqrt((+k.mass||0)/mMax);
+    const sel = selComp===i;
+    ctx.fillStyle= sel?'rgba(255,207,92,.9)':'rgba(127,212,230,.85)';
+    ctx.strokeStyle= sel?'#ffd166':'#0a222e'; ctx.lineWidth= sel?2:1;
+    ctx.beginPath(); ctx.arc(sx,sy,r,0,7); ctx.fill(); ctx.stroke();
     ctx.fillStyle='#cfe8f0'; ctx.font='10px system-ui';
-    ctx.fillText(String(k.name).slice(0,14), x+r+3, z+3);
+    ctx.fillText(String(k.name).slice(0,14), sx+r+3, sy+3);
+    dots.push({i,sx,sy,r});
   });
+  c._dots=dots;
   // CB marker (triangle)
-  const cbx=X(b.cbx), cbz=Z(b.cbz);
+  const cbx=X(b.cbx), cbz=V(cbv);
   ctx.fillStyle='#5be0c0'; ctx.beginPath();
   ctx.moveTo(cbx,cbz-7); ctx.lineTo(cbx-7,cbz+5); ctx.lineTo(cbx+7,cbz+5); ctx.closePath(); ctx.fill();
   ctx.fillStyle='#5be0c0'; ctx.font='bold 11px system-ui'; ctx.fillText('CB',cbx+9,cbz+4);
   // CG marker (crosshair circle)
-  const cgx=X(b.cgx), cgz=Z(b.cgz);
+  const cgx=X(b.cgx), cgz=V(cgv);
   ctx.strokeStyle='#ff6b6b'; ctx.fillStyle='#ff6b6b'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.arc(cgx,cgz,7,0,7); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(cgx-10,cgz); ctx.lineTo(cgx+10,cgz);
@@ -1800,14 +1819,15 @@ function computeSTL(){
   const solid=$('stlSolid').checked, wall=num('stlWall')/1000;
   const mass = isFinite(dens) ? (solid? volM3*dens : areaM2*wall*dens) : NaN;
   // map model axes to vehicle axes from the Forward/Up selectors (shared across parts)
-  const aFore=+$('stlFwd').value, aVert=+$('stlUp').value;
+  const aFore=+$('stlFwd').value, aVert=+$('stlUp').value, aLat=3-aFore-aVert;
   const com=solid? stlModel.comVol : stlModel.comArea;        // model units
   const ctr=[stlModel.min[0]+stlModel.dims[0]/2, stlModel.min[1]+stlModel.dims[1]/2, stlModel.min[2]+stlModel.dims[2]/2];
   const offFore=(com[aFore]-ctr[aFore])*s, offVert=(com[aVert]-ctr[aVert])*s;   // offset from centre
-  const absFore=com[aFore]*s, absVert=com[aVert]*s;                              // absolute (assembly frame)
+  const absFore=com[aFore]*s, absVert=com[aVert]*s, absLat=(aLat>=0&&aLat<=2?com[aLat]:0)*s;  // assembly frame
   const sorted=[...dims].sort((a,b)=>b-a);
   stlSI={volL:volM3*1000, mass, lengthMM:sorted[0]*1000, odMM:sorted[1]*1000, radiusMM:sorted[1]*1000/2,
-    cgx:offFore, cgz:offVert, absForeMM:absFore*1000, absVertMM:absVert*1000, name:stlModel.fileName||'imported part'};
+    cgx:offFore, cgz:offVert, absForeMM:absFore*1000, absVertMM:absVert*1000, absLatMM:absLat*1000,
+    name:stlModel.fileName||'imported part'};
   const kv=(k,v)=>'<div class="kv"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>';
   $('stl_out').innerHTML=
     kv('Triangles', fmt(stlModel.tris,0))+
@@ -1842,11 +1862,32 @@ $('btnStlToCG').addEventListener('click', e=>{ if(!stlSI) return;
   $('cgx').value=stlSI.cgx.toFixed(4); $('cgz').value=stlSI.cgz.toFixed(4); compute(); stlFlash(e.target); });
 $('btnStlToBudget').addEventListener('click', e=>{ if(!stlSI) return;
   components.push({name:stlSI.name.slice(0,24), mass:+(isFinite(stlSI.mass)?stlSI.mass:0).toFixed(3),
-    vol:+stlSI.volL.toFixed(3), x:+stlSI.absForeMM.toFixed(1), z:+stlSI.absVertMM.toFixed(1)});
+    vol:+stlSI.volL.toFixed(3), x:+stlSI.absForeMM.toFixed(1), y:+stlSI.absLatMM.toFixed(1), z:+stlSI.absVertMM.toFixed(1)});
   renderComponents(); if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
 $('btnAsmClear').addEventListener('click', e=>{
-  components=[]; renderComponents();
+  components=[]; selComp=-1; renderComponents();
   if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
+// drag a part dot in the assembly preview to nudge its position
+function attachAsmDrag(canvasId, vAxis){
+  const c=$(canvasId); if(!c) return; let dragging=false;
+  const pos=e=>{ const r=c.getBoundingClientRect(); return {sx:(e.clientX-r.left)*c.width/r.width, sy:(e.clientY-r.top)*c.height/r.height}; };
+  c.addEventListener('pointerdown', e=>{
+    const p=pos(e); let best=-1, bd=1e9;
+    (c._dots||[]).forEach(d=>{ const dd=Math.hypot(d.sx-p.sx,d.sy-p.sy); if(dd<Math.max(d.r+8,14)&&dd<bd){ bd=dd; best=d.i; } });
+    selComp=best; if(best>=0){ dragging=true; c.setPointerCapture(e.pointerId); c.style.cursor='grabbing'; }
+    updateBudgetTotals();
+  });
+  c.addEventListener('pointermove', e=>{ if(!dragging||selComp<0||!c._map) return;
+    const p=pos(e);
+    components[selComp].x = Math.round(c._map.invX(p.sx));
+    components[selComp][vAxis] = Math.round(c._map.invV(p.sy));
+    renderComponents();
+    if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute();
+  });
+  c.addEventListener('pointerup', ()=>{ if(dragging){ dragging=false; c.style.cursor='grab'; save(); } });
+}
+attachAsmDrag('asmCanvas','z');
+attachAsmDrag('asmTop','y');
 
 // ---- 3D mesh preview (software-rendered, drag to rotate) ----
 const meshView={rx:-0.45, ry:0.7, stride:1};
