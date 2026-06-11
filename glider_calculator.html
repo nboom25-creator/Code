@@ -642,7 +642,16 @@
         <button class="tool" id="btnStlToBuoy">↧ Volume → displaced volume</button>
         <button class="tool" id="btnStlToCG">↧ Centre of mass → Stability CG</button>
         <button class="tool" id="btnStlToBudget">➕ Add part to assembly (budget)</button>
+        <button class="tool" id="btnAsmClear">🗑 Start fresh assembly</button>
       </div>
+      <div class="subhead" style="margin-top:16px"><span class="ic">🧩</span> Assembly preview</div>
+      <canvas id="asmCanvas" width="1100" height="300"></canvas>
+      <div class="legend">
+        <span><i class="swatch" style="background:#7fd4e6;border-radius:50%;width:10px;height:10px"></i> Part (size ∝ mass)</span>
+        <span><i class="swatch" style="background:#ff6b6b;border-radius:50%;width:10px;height:10px"></i> combined CG</span>
+        <span><i class="swatch" style="background:#5be0c0;width:10px;height:10px"></i> combined CB</span>
+      </div>
+      <div class="hint" style="text-align:center">Each added part shown at its centroid (fore/aft × vertical); markers are the assembled CG &amp; CB.</div>
     </section>
 
     <!-- BILL OF MATERIALS -->
@@ -1566,6 +1575,7 @@ function updateBudgetTotals(){
   if($('useBudgetCG').checked){ $('cgx').value=(b.cgx/1000).toFixed(4); $('cgz').value=(b.cgz/1000).toFixed(4); }
   if($('useBudgetCB').checked){ $('cbx').value=(b.cbx/1000).toFixed(4); $('cbz').value=(b.cbz/1000).toFixed(4); }
   drawLayout(b);
+  if($('asmCanvas')) drawLayout(b,'asmCanvas');
   return b;
 }
 function syncBudgetMode(){
@@ -1576,8 +1586,8 @@ function syncBudgetMode(){
   compute();
 }
 // side-profile layout diagram (x = fore/aft, z = vertical)
-function drawLayout(b){
-  const c=$('layout'); if(!c) return;
+function drawLayout(b, canvasId){
+  const c=$(canvasId||'layout'); if(!c) return;
   const ctx=c.getContext('2d'), W=c.width, H=c.height;
   ctx.clearRect(0,0,W,H);
   b = b || budgetCentroids();
@@ -1834,6 +1844,9 @@ $('btnStlToBudget').addEventListener('click', e=>{ if(!stlSI) return;
   components.push({name:stlSI.name.slice(0,24), mass:+(isFinite(stlSI.mass)?stlSI.mass:0).toFixed(3),
     vol:+stlSI.volL.toFixed(3), x:+stlSI.absForeMM.toFixed(1), z:+stlSI.absVertMM.toFixed(1)});
   renderComponents(); if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
+$('btnAsmClear').addEventListener('click', e=>{
+  components=[]; renderComponents();
+  if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
 
 // ---- 3D mesh preview (software-rendered, drag to rotate) ----
 const meshView={rx:-0.45, ry:0.7, stride:1};
