@@ -422,6 +422,45 @@ canvas { display: block; }
   pointer-events: none;
 }
 
+/* ---------- touch controls (mobile) ---------- */
+#game-canvas { touch-action: none; }
+body.touch { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+#touch-joystick {
+  position: absolute; left: 22px; bottom: 90px;
+  width: 132px; height: 132px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.06), rgba(0,0,0,.28));
+  border: 2px solid rgba(212,175,55,.55);
+  touch-action: none; z-index: 130;
+}
+#touch-joystick .joy-thumb {
+  position: absolute; left: 50%; top: 50%;
+  width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
+  background: radial-gradient(circle, #f0d98a, #8a6d1a);
+  border: 2px solid var(--gold-bright);
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+  transition: transform .03s linear;
+}
+
+#touch-buttons {
+  position: absolute; right: 18px; bottom: 96px;
+  display: flex; align-items: flex-end; gap: 12px; z-index: 130;
+}
+.touch-btn {
+  width: 60px; height: 60px; border-radius: 50%;
+  background: linear-gradient(#3a2c12, #1c1408);
+  border: 2px solid var(--gold); color: var(--gold-bright);
+  font-size: 26px; touch-action: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+.touch-btn.big { width: 74px; height: 74px; font-size: 34px; }
+.touch-btn:active { background: linear-gradient(#5a4420, #2c2010); }
+
+/* on phones, give the action bar bigger tap targets and tuck the tip away */
+body.touch .action-slot { width: 46px; height: 46px; font-size: 22px; }
+body.touch #controls-tip { display: none; }
+body.touch .combat-log { bottom: 180px; max-height: 120px; }
+
 /* floating combat text */
 #dmg-layer { position: fixed; inset: 0; pointer-events: none; z-index: 200; overflow: hidden; }
 .float-dmg {

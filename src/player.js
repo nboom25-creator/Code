@@ -207,25 +207,28 @@ export class Player {
 
     if (this.dead) { this.moving = false; return; }
 
-    // ---- movement (camera-relative) ----
+    // ---- movement (camera-relative, analog) ----
     const fwd = new THREE.Vector3(-Math.sin(input.cameraYaw), 0, -Math.cos(input.cameraYaw));
     const right = new THREE.Vector3(Math.cos(input.cameraYaw), 0, -Math.sin(input.cameraYaw));
-    const move = new THREE.Vector3();
-    if (input.keys.w) move.add(fwd);
-    if (input.keys.s) move.sub(fwd);
-    if (input.keys.a) move.sub(right);
-    if (input.keys.d) move.add(right);
+    let f = 0, r = 0;
+    if (input.keys.w) f += 1;
+    if (input.keys.s) f -= 1;
+    if (input.keys.d) r += 1;
+    if (input.keys.a) r -= 1;
+    if (input.axis) { f += input.axis.f; r += input.axis.r; }
+    const move = new THREE.Vector3().addScaledVector(fwd, f).addScaledVector(right, r);
+    let mag = move.length();
+    if (mag > 1) { move.multiplyScalar(1 / mag); mag = 1; }
 
     // casting interrupts on move
-    if (this.casting && move.lengthSq() > 0) { this.casting = null; }
+    if (this.casting && mag > 0.08) { this.casting = null; }
 
-    this.moving = move.lengthSq() > 0 && !this.casting;
+    this.moving = mag > 0.08 && !this.casting;
     let speed = this.moveSpeed;
     this.sprinting = input.keys.shift && this.moving;
     if (this.sprinting) speed *= 1.4;
 
     if (this.moving) {
-      move.normalize();
       this.yaw = Math.atan2(move.x, move.z);
       let nx = this.position.x + move.x * speed * dt;
       let nz = this.position.z + move.z * speed * dt;

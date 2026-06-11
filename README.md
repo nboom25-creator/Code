@@ -25,6 +25,34 @@ Then open **http://localhost:8080** in a modern browser (Chrome/Edge/Firefox).
 > **Runs fully offline.** Three.js is vendored locally in `vendor/` — no CDN or
 > internet connection required.
 
+## Play on your phone 📱
+
+**Option A — GitHub Pages (a public URL).** This repo includes a workflow
+(`.github/workflows/deploy-pages.yml`) that deploys the game automatically.
+One-time setup: in the repo go to **Settings → Pages → Build and deployment →
+Source: "GitHub Actions"**. After the next push, your game is live at
+`https://<your-user>.github.io/<repo>/` — open that on your phone.
+
+**Option B — same Wi-Fi.** Run `npm start` on your computer, find its local IP
+(e.g. `192.168.1.42`), and open `http://192.168.1.42:8080` on your phone while
+both are on the same network.
+
+The game **auto-detects touch devices** and shows on-screen controls:
+
+| Touch | Action |
+|---|---|
+| **Left joystick** | Move (analog) |
+| **Drag the screen** | Rotate camera |
+| **Pinch** | Zoom |
+| **Tap a creature** | Select target |
+| **🎯 button** | Cycle target |
+| **⤒ button** | Jump |
+| **Action-bar icons** | Use abilities |
+| **🗺️ / 🧍 / 🎒 buttons** | Map / Character / Bags |
+
+On phones it also drops shadows, caps resolution, and thins out foliage to keep
+the framerate smooth.
+
 ## Factions & Races
 
 Pick a side, then choose your people. Each race has its own look (skin, build,

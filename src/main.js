@@ -12,6 +12,7 @@ import { Player } from "./player.js";
 import { EnemyManager } from "./enemies.js";
 import { UI } from "./ui.js";
 import { rollLoot } from "./items.js";
+import { isTouchDevice, initTouchControls } from "./touch.js";
 
 const $ = id => document.getElementById(id);
 
@@ -176,12 +177,15 @@ function startGame(raceId, classId, name) {
   $("char-create").classList.add("hidden");
   $("game-ui").classList.remove("hidden");
 
+  G.mobile = isTouchDevice();
+
   const scene = new THREE.Scene();
   G.scene = scene;
-  G.renderer = new THREE.WebGLRenderer({ antialias: true });
+  G.renderer = new THREE.WebGLRenderer({ antialias: !G.mobile });
   G.renderer.setSize(innerWidth, innerHeight);
-  G.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  G.renderer.shadowMap.enabled = true;
+  // lighter settings on phones (DPR cap + no shadows) keep the framerate up
+  G.renderer.setPixelRatio(Math.min(devicePixelRatio, G.mobile ? 1.3 : 2));
+  G.renderer.shadowMap.enabled = !G.mobile;
   G.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(G.renderer.domElement);
   G.renderer.domElement.id = "game-canvas";
@@ -205,6 +209,7 @@ function startGame(raceId, classId, name) {
   G.clock = new THREE.Clock();
   G.running = true;
   setupInput();
+  if (G.mobile) initTouchControls(G, { jump: () => G.input.jump = true, cycleTarget });
   initAudio();
   animate();
 
@@ -230,7 +235,7 @@ function enterOverworld(atPos, initial = false) {
   G.world = new Overworld(G.scene, {
     onSpawnChunk: (k, r, cx, cz) => G.enemies.spawnChunk(k, r, cx, cz),
     onDespawnChunk: k => G.enemies.despawnChunk(k),
-  });
+  }, { mobile: G.mobile });
   const p = atPos || startSpawn();
   G.player.position.set(p.x, 0, p.z);
   G.world.update(0, G.player);            // force initial chunk stream
@@ -303,18 +308,61 @@ function setupInput() {
     if (k === "shift") keys.shift = false;
   });
 
+  // ---- unified pointer input: camera-look drag, tap-to-select, pinch-zoom ----
+  // Works for both mouse and touch. (The on-screen joystick/buttons live in
+  // touch.js and target their own elements, so they don't reach the canvas.)
   const cvs = G.renderer.domElement;
-  cvs.addEventListener("mousedown", e => {
-    if (e.button === 2 || e.button === 0) { G.input.mouseDown = true; G._lastBtn = e.button; }
-    if (e.button === 0) clickSelect(e);
+  const pointers = new Map();           // id -> {x, y}
+  let look = null;                      // active look pointer
+  let pinchDist = 0;
+
+  cvs.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse" && e.button !== 0 && e.button !== 2) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      look = { id: e.pointerId, lastX: e.clientX, lastY: e.clientY, startX: e.clientX, startY: e.clientY, t: performance.now(), moved: 0 };
+    } else if (pointers.size === 2) {
+      look = null;
+      const pts = [...pointers.values()];
+      pinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    }
+    try { cvs.setPointerCapture(e.pointerId); } catch {}
   });
-  addEventListener("mouseup", () => G.input.mouseDown = false);
-  addEventListener("mousemove", e => {
-    if (G.input.mouseDown) {
-      G.camYaw -= e.movementX * 0.004;
-      G.camPitch = THREE.MathUtils.clamp(G.camPitch + e.movementY * 0.004, 0.1, 1.3);
+
+  cvs.addEventListener("pointermove", e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size >= 2) {
+      const pts = [...pointers.values()];
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (pinchDist) G.camDist = THREE.MathUtils.clamp(G.camDist - (d - pinchDist) * 0.03, 4, 22);
+      pinchDist = d;
+      return;
+    }
+    if (look && e.pointerId === look.id) {
+      const dx = e.clientX - look.lastX, dy = e.clientY - look.lastY;
+      look.lastX = e.clientX; look.lastY = e.clientY;
+      look.moved += Math.abs(dx) + Math.abs(dy);
+      G.camYaw -= dx * 0.005;
+      G.camPitch = THREE.MathUtils.clamp(G.camPitch + dy * 0.005, 0.1, 1.3);
     }
   });
+
+  const endPointer = e => {
+    if (look && e.pointerId === look.id) {
+      const dt = performance.now() - look.t;
+      if (look.moved < 12 && dt < 350) clickSelect({ clientX: look.startX, clientY: look.startY });
+      look = null;
+    }
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchDist = 0;
+    if (pointers.size === 1) {
+      const [id, p] = [...pointers.entries()][0];
+      look = { id, lastX: p.x, lastY: p.y, startX: p.x, startY: p.y, t: performance.now(), moved: 99 };
+    }
+  };
+  cvs.addEventListener("pointerup", endPointer);
+  cvs.addEventListener("pointercancel", endPointer);
   cvs.addEventListener("contextmenu", e => e.preventDefault());
   cvs.addEventListener("wheel", e => {
     G.camDist = THREE.MathUtils.clamp(G.camDist + Math.sign(e.deltaY) * 0.8, 4, 18);

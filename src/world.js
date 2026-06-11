@@ -403,9 +403,10 @@ function buildTree(kind, leafColors, trunkColor) {
 }
 
 export class Overworld {
-  constructor(scene, callbacks = {}) {
+  constructor(scene, callbacks = {}, opts = {}) {
     this.scene = scene;
     this.cb = callbacks;            // {onSpawnChunk, onDespawnChunk}
+    this.mobile = !!opts.mobile;    // lighter prop/shadow budget on phones
     this.chunks = new Map();        // key -> {objects, colliders, portals}
     this.colliders = [];            // aggregate (rebuilt on chunk change)
     this.portals = [];              // aggregate
@@ -422,8 +423,8 @@ export class Overworld {
     scene.fog = new THREE.Fog(0x9fc0e4, 180, 520);
 
     this.sun = new THREE.DirectionalLight(0xfff2d6, 1.5);
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.castShadow = !this.mobile;
+    this.sun.shadow.mapSize.set(this.mobile ? 1024 : 2048, this.mobile ? 1024 : 2048);
     const sc = this.sun.shadow.camera;
     sc.near = 1; sc.far = 260; sc.left = -90; sc.right = 90; sc.top = 90; sc.bottom = -90;
     this.sun.shadow.bias = -0.0004;
@@ -481,7 +482,7 @@ export class Overworld {
 
   _scatterProps(chunk, region, ccx, ccz) {
     const half = CELL / 2 - 6;
-    const treeCount = Math.round((region.trees || 0) * 0.7);
+    const treeCount = Math.round((region.trees || 0) * (this.mobile ? 0.4 : 0.7));
     for (let i = 0; i < treeCount; i++) {
       const x = ccx + (Math.random() * 2 - 1) * half;
       const z = ccz + (Math.random() * 2 - 1) * half;
@@ -505,7 +506,7 @@ export class Overworld {
       this.scene.add(rk); chunk.objects.push(rk);
       if (rk.geometry.parameters.radius > 1.1) chunk.colliders.push({ x, z, r: 1.3 });
     }
-    if (region.flowers) {
+    if (region.flowers && !this.mobile) {
       const fc = [0xffe14a, 0xff5a7a, 0xffffff, 0x9a6aff];
       const fgeo = new THREE.PlaneGeometry(0.5, 0.5);
       for (let i = 0; i < 120; i++) {
