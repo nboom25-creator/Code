@@ -2,7 +2,7 @@
 // Enemies: spawning, simple AI (idle/patrol/chase/attack), death.
 // ===========================================================
 import * as THREE from "three";
-import { terrainHeight } from "./world.js";
+import { groundHeight } from "./world.js";
 
 function mat(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, flatShading: true }); }
 
@@ -54,12 +54,69 @@ function buildHumanoid(color) {
   return g;
 }
 
+function buildSkeleton() {
+  const bone = 0xe8e2d0;
+  const g = new THREE.Group();
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.34), mat(bone));
+  torso.position.y = 1.4; torso.castShadow = true; g.add(torso);
+  // rib gaps
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.2), mat(0x3a3a3a));
+  spine.position.set(0,1.4,0.08); g.add(spine);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.42,0.4), mat(bone));
+  head.position.y = 2.0; head.castShadow = true; g.add(head);
+  const eMat = new THREE.MeshStandardMaterial({ color:0xff3020, emissive:0xff2010, emissiveIntensity:1.3 });
+  for (const ex of [-1,1]) { const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.05),eMat); eye.position.set(ex*0.1,2.02,0.21); g.add(eye); }
+  const armL=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.8,0.12),mat(bone)); armL.position.set(-0.42,1.35,0); armL.castShadow=true; g.add(armL);
+  const armR=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.8,0.12),mat(bone)); armR.position.set(0.42,1.35,0); armR.castShadow=true; g.add(armR);
+  for (const sx of [-0.16,0.16]) { const leg=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.9,0.14),mat(bone)); leg.position.set(sx,0.5,0); leg.castShadow=true; g.add(leg); }
+  g.userData.legs = g.children.slice(-2);
+  g.userData.arms = [armL, armR];
+  return g;
+}
+function buildWraith() {
+  const g = new THREE.Group();
+  const robe = new THREE.MeshStandardMaterial({ color:0x2a1840, roughness:1, flatShading:true, transparent:true, opacity:0.85, emissive:0x3a1060, emissiveIntensity:0.5 });
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.7,2.2,7), robe); body.position.y=1.4; body.castShadow=true; g.add(body);
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), robe); hood.position.y=2.3; g.add(hood);
+  const eMat = new THREE.MeshStandardMaterial({ color:0x80f0ff, emissive:0x40d0ff, emissiveIntensity:1.6 });
+  for (const ex of [-1,1]) { const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.1,0.05),eMat); eye.position.set(ex*0.12,2.32,0.26); g.add(eye); }
+  const glow = new THREE.PointLight(0x6a40ff, 1.5, 8); glow.position.y=2; g.add(glow);
+  g.userData.float = true;
+  return g;
+}
+function buildBoss() {
+  const g = new THREE.Group();
+  const armor = new THREE.MeshStandardMaterial({ color:0x2a1030, roughness:0.6, metalness:0.4, flatShading:true, emissive:0x3a0820, emissiveIntensity:0.4 });
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(1.4,1.7,0.8), armor); torso.position.y=2.6; torso.castShadow=true; g.add(torso);
+  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(1.3,0.6,0.7), armor); pelvis.position.y=1.7; g.add(pelvis);
+  for (const sx of [-1,1]) { const pad=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.5,0.9), armor); pad.position.set(sx*1.0,3.4,0); pad.castShadow=true; g.add(pad);
+    const spike=new THREE.Mesh(new THREE.ConeGeometry(0.2,0.7,5), mat(0x901040)); spike.position.set(sx*1.0,3.9,0); g.add(spike); }
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), mat(0x6a7a6a)); head.position.y=3.9; head.castShadow=true; g.add(head);
+  const eMat = new THREE.MeshStandardMaterial({ color:0xff2020, emissive:0xff1010, emissiveIntensity:1.8 });
+  for (const ex of [-1,1]) { const eye=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.06),eMat); eye.position.set(ex*0.2,3.95,0.41); g.add(eye); }
+  const armL=new THREE.Mesh(new THREE.BoxGeometry(0.4,1.5,0.4), armor); armL.position.set(-1.0,2.4,0); armL.castShadow=true; g.add(armL);
+  const armR=new THREE.Mesh(new THREE.BoxGeometry(0.4,1.5,0.4), armor); armR.position.set(1.0,2.4,0); armR.castShadow=true; g.add(armR);
+  for (const sx of [-0.4,0.4]) { const leg=new THREE.Mesh(new THREE.BoxGeometry(0.5,1.7,0.5), armor); leg.position.set(sx,0.85,0); leg.castShadow=true; g.add(leg); }
+  // huge axe
+  const axe = new THREE.Group();
+  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,2.4,6), mat(0x2a1a10)); axe.add(handle);
+  const blade=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.8,0.1), mat(0xb02040)); blade.position.y=1.0; axe.add(blade);
+  axe.position.set(1.0,1.6,0.3); axe.rotation.z=0.3; g.add(axe);
+  const aura = new THREE.PointLight(0x9a20ff, 2.5, 14); aura.position.y=3; g.add(aura);
+  g.userData.legs = g.children.filter((c,i)=>false); // boss doesn't leg-walk much
+  g.userData.arms = [armL, armR];
+  return g;
+}
+
 const ENEMY_TYPES = {
   boar:    { name: "Ridgeback Boar", build: buildBoar,    hp: 45,  dmg: 5,  xp: 22, speed: 4.2, aggro: 11, range: 2.2, scale: 1.0, elite:false, hostile:"neutral" },
   wolf:    { name: "Gray Stalker",   build: buildWolf,    hp: 40,  dmg: 6,  xp: 25, speed: 5.5, aggro: 14, range: 2.2, scale: 1.0, elite:false, hostile:"hostile" },
   bandit:  { name: "Defias Brigand", build: () => buildHumanoid(0x7a2a2a), hp: 60, dmg: 8, xp: 35, speed: 4.8, aggro: 13, range: 2.4, scale: 1.0, elite:false, hostile:"hostile" },
   scout:   { name: "Kobold Tunneler",build: () => buildHumanoid(0x6a6030), hp: 30, dmg: 4, xp: 18, speed: 4.0, aggro: 10, range: 2.2, scale: 0.8, elite:false, hostile:"hostile" },
   ogre:    { name: "Hill Ogre",      build: () => buildHumanoid(0x4a6a3a), hp: 220, dmg: 18, xp: 140, speed: 3.8, aggro: 15, range: 3.0, scale: 1.8, elite:true, hostile:"hostile" },
+  skeleton:{ name: "Crypt Skeleton", build: buildSkeleton, hp: 70,  dmg: 11, xp: 55,  speed: 4.6, aggro: 13, range: 2.2, scale: 1.0, elite:false, hostile:"hostile" },
+  wraith:  { name: "Tormented Wraith",build: buildWraith,  hp: 90,  dmg: 14, xp: 80,  speed: 5.2, aggro: 15, range: 2.4, scale: 1.0, elite:false, hostile:"hostile", flying:true },
+  boss:    { name: "Lord Mortis",    build: buildBoss,     hp: 1400,dmg: 38, xp: 1200,speed: 3.6, aggro: 30, range: 4.0, scale: 1.0, elite:true, hostile:"hostile", boss:true },
 };
 
 let _id = 0;
@@ -81,7 +138,7 @@ export class Enemy {
 
     this.model = this.type.build();
     this.model.scale.setScalar(this.type.scale);
-    this.model.position.set(x, terrainHeight(x, z), z);
+    this.model.position.set(x, groundHeight(x, z), z);
     this.model.userData.enemy = this;
     // make children pickable
     this.model.traverse(o => { if (o.isMesh) o.userData.enemy = this; });
@@ -109,8 +166,10 @@ export class Enemy {
     this._barTex = tex;
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
     spr.scale.set(3.2, 0.8, 1);
-    const top = (this.typeKey === "ogre") ? 5.2 : (this.typeKey === "bandit" || this.typeKey === "scout") ? 3.0 : 2.4;
+    const tops = { ogre: 5.2, boss: 6.6, skeleton: 3.0, wraith: 3.4, bandit: 3.0, scout: 3.0 };
+    const top = tops[this.typeKey] ?? 2.4;
     spr.position.y = top * this.type.scale;
+    if (this.type.boss) spr.scale.set(5.5, 1.4, 1);
     this.bar = spr;
     this.model.add(spr);
     this._drawBar();
@@ -163,9 +222,10 @@ export class Enemy {
       return;
     }
 
-    // ground
+    // ground (flyers bob above it)
     const px = this.model.position.x, pz = this.model.position.z;
-    this.model.position.y = terrainHeight(px, pz);
+    const baseY = groundHeight(px, pz);
+    this.model.position.y = this.type.flying ? baseY + 1.4 + Math.sin(t * 2 + this.id) * 0.3 : baseY;
 
     if (this.atkCd > 0) this.atkCd -= dt;
     if (this.slowT > 0) this.slowT -= dt;
@@ -264,26 +324,40 @@ export class EnemyManager {
     this.spawnPoints = [];
   }
 
-  populate() {
-    // rings of spawns with rising difficulty outward
-    const packs = [
-      { key: "boar",   count: 10, rMin: 35,  rMax: 70,  lvl: [1, 3] },
-      { key: "scout",  count: 10, rMin: 45,  rMax: 80,  lvl: [2, 4] },
-      { key: "wolf",   count: 12, rMin: 60,  rMax: 110, lvl: [3, 6] },
-      { key: "bandit", count: 12, rMin: 80,  rMax: 140, lvl: [5, 9] },
-      { key: "ogre",   count: 4,  rMin: 120, rMax: 180, lvl: [9, 12] },
-    ];
-    for (const p of packs) {
+  // Populate from a zone config. `onBoss` is called with the boss enemy if any.
+  populate(zone, onBoss) {
+    this.zone = zone;
+    const dungeon = zone.type === "dungeon";
+    for (const p of (zone.packs || [])) {
       for (let i = 0; i < p.count; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const r = p.rMin + Math.random() * (p.rMax - p.rMin);
-        const x = Math.cos(a) * r, z = Math.sin(a) * r;
+        let x, z;
+        if (p.dungeon) {
+          x = (Math.random() * 2 - 1) * ((zone.width || 26) / 2 - 3);
+          z = p.zStart + Math.random() * (p.zEnd - p.zStart);
+        } else {
+          const a = Math.random() * Math.PI * 2;
+          const r = p.rMin + Math.random() * (p.rMax - p.rMin);
+          x = Math.cos(a) * r; z = Math.sin(a) * r;
+        }
         const lvl = p.lvl[0] + ((Math.random() * (p.lvl[1] - p.lvl[0] + 1)) | 0);
         const e = new Enemy(this.scene, p.key, x, z, lvl);
+        e.respawns = !dungeon;
         this.enemies.push(e);
-        this.spawnPoints.push({ key: p.key, x, z, lvl, respawn: 0 });
       }
     }
+    if (zone.boss) {
+      const spot = zone.bossSpot || { x: 0, z: -(zone.length || 130) + 22 };
+      const b = new Enemy(this.scene, zone.boss.key, spot.x, spot.z, zone.boss.lvl);
+      b.respawns = false;
+      b.isBoss = true;
+      this.enemies.push(b);
+      onBoss?.(b);
+    }
+  }
+
+  clear() {
+    for (const e of this.enemies) e.dispose();
+    this.enemies = [];
   }
 
   update(dt, player, t) {
@@ -292,14 +366,16 @@ export class EnemyManager {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (e.dead && e.deathT > 3) {
+        const respawns = e.respawns !== false;
+        const key = e.typeKey, lvl = e.level, hx = e.home.x, hz = e.home.z;
         e.dispose();
         this.enemies.splice(i, 1);
-        // respawn after delay
-        const key = e.typeKey, lvl = e.level, hx = e.home.x, hz = e.home.z;
-        setTimeout(() => {
-          const ne = new Enemy(this.scene, key, hx, hz, lvl);
-          this.enemies.push(ne);
-        }, 12000);
+        if (respawns) {
+          setTimeout(() => {
+            const ne = new Enemy(this.scene, key, hx, hz, lvl);
+            this.enemies.push(ne);
+          }, 12000);
+        }
       }
     }
   }

@@ -5,10 +5,12 @@
 import * as THREE from "three";
 import { FACTIONS, RACES, CLASSES, ABILITIES, CLASS_KIT, SCHOOL_COLOR, getRace } from "./data.js";
 import { buildCharacter } from "./characterModel.js";
-import { World } from "./world.js";
+import { Zone } from "./world.js";
+import { ZONES } from "./zones.js";
 import { Player } from "./player.js";
 import { EnemyManager } from "./enemies.js";
 import { UI } from "./ui.js";
+import { rollLoot } from "./items.js";
 
 const $ = id => document.getElementById(id);
 
@@ -161,11 +163,11 @@ function initCharCreate() {
 // Game state
 // ---------------------------------------------------------------------------
 const G = {
-  scene: null, camera: null, renderer: null, world: null, player: null,
+  scene: null, camera: null, renderer: null, zone: null, player: null,
   enemies: null, ui: null, clock: null, target: null, projectiles: [],
   running: false, camYaw: 0, camPitch: 0.5, camDist: 9,
   input: { keys: {}, cameraYaw: 0, jump: false, mouseDown: false },
-  audio: null,
+  audio: null, boss: null, bossDownAnnounced: false, portalCooldown: 0,
 };
 
 function startGame(raceId, classId, name) {
@@ -184,14 +186,14 @@ function startGame(raceId, classId, name) {
 
   G.camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600);
 
-  G.world = new World(scene);
   G.player = new Player(scene, getRace(raceId), classId, name);
-  G.enemies = new EnemyManager(scene, G.world);
-  G.enemies.populate();
+  G.enemies = new EnemyManager(scene, null);
   G.ui = new UI();
   G.ui.bind(G.player, G.camera);
-  G.ui.log("Welcome to Northshire Vale, " + name + ".", "log-crit");
-  G.ui.log("Speak with the locals… or just go slay something.", "log-info");
+
+  loadZone("vale", true);
+  G.ui.log("Welcome, " + name + ". Your adventure begins.", "log-crit");
+  G.ui.log("Slay creatures, loot gear (B = bags, C = character), and seek the glowing portals.", "log-info");
 
   G.clock = new THREE.Clock();
   G.running = true;
@@ -199,8 +201,63 @@ function startGame(raceId, classId, name) {
   initAudio();
   animate();
 
+  // fade overlay for zone transitions
+  G.fadeEl = document.createElement("div");
+  G.fadeEl.id = "fade-overlay";
+  document.body.appendChild(G.fadeEl);
+
   // hide controls tip after a while
   setTimeout(() => $("controls-tip")?.classList.add("hidden"), 14000);
+}
+
+// ---------------------------------------------------------------------------
+// Zone loading & transitions
+// ---------------------------------------------------------------------------
+function loadZone(id, initial = false) {
+  const cfg = ZONES[id];
+  if (G.zone) G.zone.dispose();
+  if (G.enemies) G.enemies.clear();
+  setTarget(null);
+  G.projectiles.forEach(p => { G.scene.remove(p.mesh); p.mesh.geometry.dispose(); });
+  G.projectiles = [];
+  G.boss = null; G.bossDownAnnounced = false;
+
+  G.zone = new Zone(G.scene, { ...cfg });       // shallow copy keeps ZONES pristine
+  G.currentZoneId = id;
+
+  const e = cfg.entry;
+  G.player.position.set(e.x, G.zone.height(e.x, e.z), e.z);
+  G.player.model.position.copy(G.player.position);
+
+  G.enemies.populate({ ...cfg, bossSpot: G.zone.bossSpot }, boss => { G.boss = boss; });
+
+  $("zone-name").textContent = cfg.name;
+  G.portalCooldown = 1.5;
+  if (!initial) G.ui.log("You have entered " + cfg.name + ".", "log-crit");
+  // boss banner for dungeon
+  if (cfg.boss) G.ui.log("A great evil stirs in the depths. Beware Lord Mortis.", "log-crit");
+}
+
+function triggerTransition(toId) {
+  if (G.transitioning) return;
+  G.transitioning = true;
+  fadeTo(1, () => {
+    loadZone(toId);
+    fadeTo(0, () => { G.transitioning = false; });
+  });
+}
+
+function fadeTo(target, done) {
+  const el = G.fadeEl;
+  const start = parseFloat(el.style.opacity || "0");
+  const t0 = performance.now();
+  const dur = 380;
+  const step = now => {
+    const k = Math.min(1, (now - t0) / dur);
+    el.style.opacity = (start + (target - start) * k).toFixed(3);
+    if (k < 1) requestAnimationFrame(step); else done?.();
+  };
+  requestAnimationFrame(step);
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +271,8 @@ function setupInput() {
     if (k === " ") { G.input.jump = true; e.preventDefault(); }
     if (k === "tab") { e.preventDefault(); cycleTarget(); }
     if (k === "escape") toggleEscMenu();
+    if (k === "b") G.ui.toggleBags();
+    if (k === "c") G.ui.toggleChar();
     if (["1","2","3","4","5","6"].includes(k)) useAbility(parseInt(k) - 1);
     if (k === "shift") keys.shift = true;
   });
@@ -375,7 +434,7 @@ function finishAbility(ab, abId, target) {
         const d = dir.length();
         dir.normalize();
         const dest = target.model.position.clone().addScaledVector(dir, -2);
-        const [nx, nz] = G.world.resolveCollision(dest.x, dest.z, 0.6);
+        const [nx, nz] = G.zone.resolveCollision(dest.x, dest.z, 0.6);
         p.position.x = nx; p.position.z = nz;
         target.applySlow(1.5);
         dealDamage(target, ab, false);
@@ -400,12 +459,11 @@ function finishAbility(ab, abId, target) {
 
 function rollDamage(ab) {
   const p = G.player;
+  const isPhys = !ab.school || ab.school === "phys";
   let base = ab.min + Math.random() * (ab.max - ab.min);
-  base += p.attackPower * 0.4;
+  base += (isPhys ? p.getAttackPower() : p.getSpellPower()) * 0.4;
   base *= 1 + (p.level - 1) * 0.05;
-  // crit
-  let critChance = 0.12 + (p.race.id === "wildkin" ? 0.05 : 0);
-  const crit = Math.random() < critChance;
+  const crit = Math.random() < p.getCritChance();
   if (crit) base *= 2;
   return { value: Math.round(base), crit };
 }
@@ -425,7 +483,19 @@ function onEnemyKilled(enemy) {
   G.ui.log(`You have slain ${enemy.type.name}.`, "log-info");
   G.player.gainXP(enemy.xp, G.ui);
   G.ui.questProgress(enemy.type.elite);
-  if (G.target === enemy) { /* keep frame until it fades */ }
+
+  // loot
+  const loot = rollLoot(enemy, G.player.level);
+  for (const item of loot) {
+    if (G.player.addItem(item)) G.ui.lootToast(item);
+    else G.ui.log("Your bags are full! " + item.name + " was left behind.", "log-info");
+  }
+  if (loot.length && G.ui.bagOpen) G.ui.renderBags();
+
+  if (enemy.isBoss && !G.bossDownAnnounced) {
+    G.bossDownAnnounced = true;
+    G.ui.log("⚔ Lord Mortis has fallen! Glory to you, champion! ⚔", "log-crit");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -558,11 +628,22 @@ function animate() {
     }
   }
 
-  p.update(dt, G.input, G.world, G.camera);
+  p.update(dt, G.input, G.zone, G.camera);
   G.enemies.update(dt, p, t);
-  G.world.update(t);
+  G.zone.update(t);
   updateProjectiles(dt);
   updateCamera(dt);
+
+  // portal proximity → travel between zones
+  if (G.portalCooldown > 0) G.portalCooldown -= dt;
+  if (!G.transitioning && G.portalCooldown <= 0 && !p.dead) {
+    for (const portal of G.zone.portals) {
+      if (Math.hypot(p.position.x - portal.x, p.position.z - portal.z) < portal.r) {
+        triggerTransition(portal.to);
+        break;
+      }
+    }
+  }
 
   // target validity
   if (G.target && G.target.dead && G.target.deathT > 2.5) setTarget(null);

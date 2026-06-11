@@ -6,7 +6,8 @@
 import * as THREE from "three";
 import { buildCharacter, animateCharacter } from "./characterModel.js";
 import { CLASSES } from "./data.js";
-import { terrainHeight } from "./world.js";
+import { groundHeight } from "./world.js";
+import { SLOTS } from "./items.js";
 
 const GRAVITY = -26;
 const JUMP_V = 9;
@@ -22,6 +23,13 @@ export class Player {
     this.xp = 0;
     this.xpNeeded = this._xpForLevel(1);
 
+    // inventory & gear
+    this.equipped = {};
+    for (const s of SLOTS) this.equipped[s] = null;
+    this.bags = [];
+    this.bagSize = 24;
+    this.gear = { stamina: 0, intellect: 0, attackPower: 0, spellPower: 0, crit: 0, armor: 0 };
+
     this._recalcStats();
     this.hp = this.maxHp;
     this.resource = this.cls.resource === "rage" ? 0 : this.maxResource; // rage starts empty
@@ -30,7 +38,7 @@ export class Player {
     // model
     this.model = buildCharacter(race, this.cls.color);
     this.position = new THREE.Vector3(6, 0, 6);
-    this.position.y = terrainHeight(6, 6);
+    this.position.y = groundHeight(6, 6);
     this.model.position.copy(this.position);
     scene.add(this.model);
 
@@ -52,16 +60,72 @@ export class Player {
   _recalcStats() {
     const c = this.cls;
     const racialHp = this.race.id === "tauren" ? 1.25 : this.race.id === "human" ? 1.05 : 1.0;
-    this.maxHp = Math.round((c.baseHp + c.hpPerLvl * (this.level - 1)) * racialHp);
+    this._baseMaxHp = Math.round((c.baseHp + c.hpPerLvl * (this.level - 1)) * racialHp);
     if (c.resource === "mana") {
       const racialMp = this.race.id === "gnome" ? 1.15 : 1.0;
-      this.maxResource = Math.round((c.baseMp + c.mpPerLvl * (this.level - 1)) * racialMp);
-    } else if (c.resource === "energy") {
-      this.maxResource = 100;
-    } else { // rage
-      this.maxResource = 100;
+      this._baseMaxResource = Math.round((c.baseMp + c.mpPerLvl * (this.level - 1)) * racialMp);
+    } else {
+      this._baseMaxResource = 100; // rage / energy
     }
-    this.attackPower = 4 + this.level * 2;
+    this._baseAttackPower = 4 + this.level * 2;
+    this._applyGear();
+  }
+
+  // Sum equipped item stats into this.gear, then derive final stats.
+  recomputeGear() {
+    const g = { stamina: 0, intellect: 0, attackPower: 0, spellPower: 0, crit: 0, armor: 0 };
+    for (const s of SLOTS) {
+      const it = this.equipped[s];
+      if (!it) continue;
+      for (const k in it.stats) g[k] = (g[k] || 0) + it.stats[k];
+    }
+    this.gear = g;
+    this._applyGear();
+  }
+
+  _applyGear() {
+    const g = this.gear;
+    const hpPctBefore = this.maxHp ? this.hp / this.maxHp : 1;
+    this.maxHp = this._baseMaxHp + g.stamina * 8;
+    this.maxResource = this._baseMaxResource + (this.resourceType === "mana" ? g.intellect * 7 : 0);
+    this.attackPower = this._baseAttackPower + g.attackPower;
+    this.spellPower = g.spellPower + Math.floor(g.intellect * 0.5);
+    // keep current hp ratio when max changes from gear swaps
+    if (this.hp !== undefined) this.hp = Math.min(this.maxHp, Math.round(hpPctBefore * this.maxHp));
+  }
+
+  getAttackPower() { return this.attackPower; }
+  getSpellPower() { return this.spellPower || 0; }
+  getCritChance() { return 0.12 + this.gear.crit * 0.0025 + (this.race.id === "wildkin" ? 0.05 : 0); }
+  getArmorDR() { return Math.min(0.65, this.gear.armor / (this.gear.armor + 350 + this.level * 25)); }
+  itemLevel() {
+    const items = SLOTS.map(s => this.equipped[s]).filter(Boolean);
+    if (!items.length) return 0;
+    return Math.round(items.reduce((a, b) => a + b.ilvl, 0) / items.length);
+  }
+
+  // ---- inventory ----
+  addItem(item) {
+    if (this.bags.length >= this.bagSize) return false;
+    this.bags.push(item);
+    return true;
+  }
+  equip(item) {
+    const idx = this.bags.indexOf(item);
+    if (idx >= 0) this.bags.splice(idx, 1);
+    const prev = this.equipped[item.slot];
+    this.equipped[item.slot] = item;
+    if (prev) this.bags.push(prev);
+    this.recomputeGear();
+    return prev;
+  }
+  unequip(slot) {
+    const it = this.equipped[slot];
+    if (!it) return;
+    if (this.bags.length >= this.bagSize) return; // no room
+    this.equipped[slot] = null;
+    this.bags.push(it);
+    this.recomputeGear();
   }
 
   get resourceType() { return this.cls.resource; }
@@ -91,6 +155,7 @@ export class Player {
   // ---------- combat in ----------
   takeDamage(amount, source, ui) {
     if (this.dead) return;
+    amount = Math.max(1, Math.round(amount * (1 - this.getArmorDR())));
     // rage generation on taking damage
     if (this.resourceType === "rage") this.addResource(amount * 0.5);
     this.hp -= amount;
@@ -120,7 +185,7 @@ export class Player {
     this.dead = false;
     this.hp = this.maxHp;
     this.resource = this.resourceType === "rage" ? 0 : this.maxResource;
-    this.position.set(6, terrainHeight(6, 6), 6);
+    this.position.set(6, groundHeight(6, 6), 6);
     this.model.position.copy(this.position);
     this.vy = 0;
   }
@@ -169,7 +234,7 @@ export class Player {
     }
 
     // jump + gravity
-    const groundY = terrainHeight(this.position.x, this.position.z);
+    const groundY = groundHeight(this.position.x, this.position.z);
     if (input.jump && this.grounded) { this.vy = JUMP_V; this.grounded = false; }
     input.jump = false;
     this.vy += GRAVITY * dt;

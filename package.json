@@ -7,6 +7,15 @@
     "start": "npx --yes serve -l 8080 .",
     "dev": "python3 -m http.server 8080"
   },
-  "keywords": ["game", "rpg", "mmorpg", "three.js", "wow"],
-  "license": "MIT"
+  "keywords": [
+    "game",
+    "rpg",
+    "mmorpg",
+    "three.js",
+    "wow"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.160.0"
+  }
 }

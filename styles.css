@@ -290,7 +290,7 @@ canvas { display: block; }
 
 /* quest tracker */
 .quest-tracker {
-  position: absolute; right: 16px; top: 200px; width: 240px;
+  position: absolute; right: 16px; top: 252px; width: 240px;
   background: rgba(0,0,0,.35); border-left: 3px solid var(--gold);
   padding: 8px 12px; font-size: 13px;
 }
@@ -328,6 +328,83 @@ canvas { display: block; }
 .esc-panel h2 { color: var(--gold-bright); text-align: center; margin-bottom: 8px; }
 .settings-row { color: #cdbb8e; text-align: center; }
 .esc-panel .hint { color: #7a6a45; font-size: 12px; text-align: center; }
+
+/* ---------- inventory / character panels ---------- */
+.ui-buttons {
+  position: absolute; right: 16px; top: 202px; display: flex; gap: 6px;
+}
+.ui-buttons button {
+  width: 38px; height: 38px; font-size: 20px;
+  background: linear-gradient(#241a0a, #120c04); border: 2px solid var(--gold);
+  border-radius: 8px; cursor: pointer;
+}
+.ui-buttons button:hover { box-shadow: 0 0 12px rgba(212,175,55,.5); }
+
+.panel {
+  position: absolute; top: 200px; z-index: 120;
+  background: linear-gradient(#241a0a, #140e06);
+  border: 2px solid var(--gold); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  padding: 10px 12px; color: var(--parch);
+}
+#bag-panel { right: 16px; width: 280px; }
+#char-panel { right: 308px; width: 360px; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.panel-head h3 { color: var(--gold-bright); letter-spacing: 1px; }
+.panel-close { background: none; border: 1px solid #4a3c1c; color: var(--parch); border-radius: 5px; cursor: pointer; width: 24px; height: 24px; }
+.panel-close:hover { border-color: var(--gold); }
+.panel-hint { color: #8a7a55; font-size: 11px; margin-top: 8px; text-align: center; }
+
+.bag-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.bag-cell {
+  aspect-ratio: 1; border: 2px solid #3a2f17; border-radius: 6px;
+  background: #0c0c0c; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; cursor: pointer;
+}
+.bag-cell:hover { background: #1a1408; }
+
+.char-body { display: flex; gap: 12px; }
+.equip-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; width: 150px; }
+.equip-cell {
+  border: 2px solid #3a2f17; border-radius: 6px; background: #0c0c0c;
+  padding: 4px; cursor: default; display: flex; flex-direction: column; align-items: center;
+}
+.equip-cell.filled { cursor: pointer; }
+.equip-cell.filled:hover { background: #1a1408; }
+.es-label { font-size: 9px; color: #8a7a55; }
+.es-icon { font-size: 20px; }
+.char-stats { flex: 1; font-size: 13px; }
+.char-stats h4 { color: var(--gold-bright); }
+.cs-sub { color: #b09c70; font-size: 11px; margin-bottom: 2px; }
+.cs-line { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.05); padding: 2px 0; }
+.cs-line b { color: var(--gold-bright); }
+
+#item-tooltip {
+  position: fixed; z-index: 400; pointer-events: none;
+  background: #0a0a0a; border: 1px solid var(--gold); border-radius: 6px;
+  padding: 8px 10px; width: 200px; font-size: 12px; color: var(--parch);
+  box-shadow: 0 4px 16px rgba(0,0,0,.7);
+}
+.tt-name { font-weight: bold; font-size: 14px; }
+.tt-sub { color: #8a7a55; font-size: 11px; margin-bottom: 5px; }
+.tt-stat { color: #6fdc6f; }
+
+#loot-toasts {
+  position: absolute; right: 16px; bottom: 110px; width: 240px;
+  display: flex; flex-direction: column-reverse; gap: 4px; pointer-events: none;
+}
+.loot-toast {
+  background: rgba(0,0,0,.6); border: 1px solid #4a3c1c; border-left: 3px solid var(--gold);
+  border-radius: 5px; padding: 5px 9px; font-size: 13px; transition: opacity .5s;
+  display: flex; align-items: center; gap: 6px;
+}
+.loot-toast.fade { opacity: 0; }
+.lt-icon { font-size: 16px; }
+
+#fade-overlay {
+  position: fixed; inset: 0; background: #000; opacity: 0; z-index: 700;
+  pointer-events: none;
+}
 
 /* floating combat text */
 #dmg-layer { position: fixed; inset: 0; pointer-events: none; z-index: 200; overflow: hidden; }

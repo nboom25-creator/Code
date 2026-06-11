@@ -22,8 +22,8 @@ python3 -m http.server 8080
 
 Then open **http://localhost:8080** in a modern browser (Chrome/Edge/Firefox).
 
-> Requires an internet connection on first load — Three.js is pulled from a CDN
-> via the import map in `index.html`.
+> **Runs fully offline.** Three.js is vendored locally in `vendor/` — no CDN or
+> internet connection required.
 
 ## Factions & Races
 
@@ -55,32 +55,60 @@ its own resource (rage / mana / energy) and a 4-ability action bar.
 | **Tab** | Cycle to nearest enemy |
 | **1 – 6** | Use action-bar abilities |
 | **Space** | Jump |
+| **B** | Toggle bags / inventory |
+| **C** | Toggle character & stats panel |
 | **Esc** | Game menu |
+
+## Zones & the dungeon
+
+Step into a glowing **portal** to travel between areas:
+
+1. **Northshire Vale** — the green starter zone (levels 1–12) with a hamlet.
+2. **Emberfall Wastes** — a harsh red wasteland (levels 8–18), dead trees & ogres.
+3. **Shadowfang Crypt** — an instanced dungeon: a torch-lit hall of skeletons and
+   wraiths leading to the boss, **Lord Mortis**, who drops guaranteed epic loot.
+
+## Loot & gear
+
+- Enemies drop **procedurally generated items** across 6 rarities
+  (poor → legendary), each with random stats scaled to the mob's level.
+- Open your **bags (B)** and click an item to equip it; open the
+  **character panel (C)** to see equipped gear and your totals.
+- Gear actually matters: **Stamina** boosts health, **Intellect** boosts mana,
+  **Attack/Spell Power** boost damage, **Crit** boosts crit chance, and **Armor**
+  reduces incoming damage. Hover any item for a full tooltip.
 
 ## Features
 
-- Procedurally generated rolling-hills zone with trees, rocks, water, a hamlet
-  and a central plaza.
+- Three hand-built zones (two open-world + one instanced dungeon) with portal
+  travel and smooth fade transitions.
+- Procedurally generated terrain, scenery, a hamlet, and a torch-lit crypt.
 - Procedural stylized humanoid models — each race built from its own proportions.
-- Enemy AI: idle wandering, aggro, chase, melee attacks, leashing & respawns.
+- Enemy AI: idle wandering, aggro, chase, melee attacks, leashing & respawns;
+  flying wraiths and a high-health boss.
 - Combat: cast bars, cooldowns, global cooldown, crits, slows, AoE, charges,
-  projectiles with lighting, floating combat text.
+  projectiles with lighting, floating combat text, armor mitigation.
+- Full loot & equipment system with rarities, tooltips and live stat updates.
 - Progression: XP, leveling, scaling stats, a kill quest with a bonus objective.
-- HUD: player/target unit frames, action bar, XP bar, live minimap, combat log.
+- HUD: player/target unit frames, action bar, XP bar, live minimap, combat log,
+  inventory and character panels.
 
 ## Project layout
 
 ```
 index.html            # shell + screens + import map
 styles.css            # all UI / HUD styling
+vendor/three.module.js# bundled Three.js (offline)
 src/
   data.js             # factions, races, classes, abilities
+  items.js            # item rarities, procedural loot, drop tables
+  zones.js            # zone definitions (vale, wastes, crypt)
   characterModel.js   # procedural humanoid builder + animation
-  world.js            # terrain, scenery, lighting, collision
-  player.js           # stats, leveling, movement, resources
-  enemies.js          # mob models, AI, spawning
-  ui.js               # HUD, minimap, combat text, quests
-  main.js             # bootstrap, char creation, game loop, combat
+  world.js            # Zone builder: terrain/dungeon, scenery, portals
+  player.js           # stats, leveling, movement, inventory & gear
+  enemies.js          # mob models, AI, spawning, boss
+  ui.js               # HUD, minimap, panels, combat text, quests
+  main.js             # bootstrap, char creation, loop, combat, zones
 ```
 
 Built with Three.js. Original world, names, and lore.

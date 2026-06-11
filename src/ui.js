@@ -4,7 +4,7 @@
 // ===========================================================
 import * as THREE from "three";
 import { ABILITIES, CLASS_KIT } from "./data.js";
-import { WORLD_SIZE } from "./world.js";
+import { SLOTS, SLOT_LABEL, SLOT_ICON, RARITY, STAT_LABEL } from "./items.js";
 
 const $ = id => document.getElementById(id);
 
@@ -23,6 +23,131 @@ export class UI {
     $("player-portrait").textContent = player.race.emblem;
     this._buildActionBar();
     this._buildQuest();
+    this._buildPanels();
+  }
+
+  // ---------- inventory / character panels ----------
+  _buildPanels() {
+    // micro buttons
+    const btnRow = document.createElement("div");
+    btnRow.className = "ui-buttons";
+    btnRow.innerHTML = `<button id="btn-char" title="Character (C)">🧍</button>
+                        <button id="btn-bags" title="Bags (B)">🎒</button>`;
+    document.getElementById("game-ui").appendChild(btnRow);
+    btnRow.querySelector("#btn-bags").onclick = () => this.toggleBags();
+    btnRow.querySelector("#btn-char").onclick = () => this.toggleChar();
+
+    const bag = document.createElement("div");
+    bag.id = "bag-panel"; bag.className = "panel hidden";
+    bag.innerHTML = `<div class="panel-head"><h3>Bags</h3><button class="panel-close">✕</button></div>
+                     <div class="bag-grid" id="bag-grid"></div>
+                     <div class="panel-hint">Click an item to equip it.</div>`;
+    document.getElementById("game-ui").appendChild(bag);
+    bag.querySelector(".panel-close").onclick = () => this.toggleBags();
+    this.bagPanel = bag; this.bagOpen = false;
+
+    const ch = document.createElement("div");
+    ch.id = "char-panel"; ch.className = "panel hidden";
+    ch.innerHTML = `<div class="panel-head"><h3>Character</h3><button class="panel-close">✕</button></div>
+                    <div class="char-body"><div class="equip-slots" id="equip-slots"></div>
+                    <div class="char-stats" id="char-stats"></div></div>
+                    <div class="panel-hint">Click an equipped item to remove it.</div>`;
+    document.getElementById("game-ui").appendChild(ch);
+    ch.querySelector(".panel-close").onclick = () => this.toggleChar();
+    this.charPanel = ch; this.charOpen = false;
+
+    // shared tooltip
+    this.tip = document.createElement("div");
+    this.tip.id = "item-tooltip"; this.tip.className = "hidden";
+    document.body.appendChild(this.tip);
+  }
+
+  toggleBags() { this.bagOpen = !this.bagOpen; this.bagPanel.classList.toggle("hidden", !this.bagOpen); if (this.bagOpen) this.renderBags(); }
+  toggleChar() { this.charOpen = !this.charOpen; this.charPanel.classList.toggle("hidden", !this.charOpen); if (this.charOpen) this.renderChar(); }
+
+  _rarityColor(it) { return RARITY[it.rarity].color; }
+
+  _itemTooltipHtml(it) {
+    const r = RARITY[it.rarity];
+    const lines = Object.entries(it.stats).map(([k, v]) => `<div class="tt-stat">+${v} ${STAT_LABEL[k]}</div>`).join("");
+    return `<div class="tt-name" style="color:${r.color}">${it.name}</div>
+            <div class="tt-sub">${r.name} ${SLOT_LABEL[it.slot]} · iLvl ${it.ilvl}</div>${lines}`;
+  }
+  _showTip(e, it) {
+    this.tip.innerHTML = this._itemTooltipHtml(it);
+    this.tip.classList.remove("hidden");
+    this.tip.style.left = Math.min(e.clientX + 16, innerWidth - 230) + "px";
+    this.tip.style.top = (e.clientY + 16) + "px";
+  }
+  _hideTip() { this.tip.classList.add("hidden"); }
+
+  renderBags() {
+    const grid = $("bag-grid");
+    grid.innerHTML = "";
+    const p = this.player;
+    for (let i = 0; i < p.bagSize; i++) {
+      const cell = document.createElement("div");
+      cell.className = "bag-cell";
+      const it = p.bags[i];
+      if (it) {
+        cell.style.borderColor = this._rarityColor(it);
+        cell.innerHTML = `<span class="bi">${it.icon}</span>`;
+        cell.onmousemove = e => this._showTip(e, it);
+        cell.onmouseleave = () => this._hideTip();
+        cell.onclick = () => { p.equip(it); this._hideTip(); this.renderBags(); if (this.charOpen) this.renderChar(); this.log(`Equipped ${it.name}.`, "log-info"); };
+      }
+      grid.appendChild(cell);
+    }
+  }
+
+  renderChar() {
+    const p = this.player;
+    const slotsEl = $("equip-slots");
+    slotsEl.innerHTML = "";
+    for (const s of SLOTS) {
+      const it = p.equipped[s];
+      const cell = document.createElement("div");
+      cell.className = "equip-cell";
+      cell.innerHTML = `<span class="es-label">${SLOT_LABEL[s]}</span>
+                        <span class="es-icon">${it ? it.icon : SLOT_ICON[s]}</span>`;
+      if (it) {
+        cell.classList.add("filled");
+        cell.style.borderColor = this._rarityColor(it);
+        cell.onmousemove = e => this._showTip(e, it);
+        cell.onmouseleave = () => this._hideTip();
+        cell.onclick = () => { p.unequip(s); this._hideTip(); this.renderChar(); if (this.bagOpen) this.renderBags(); };
+      } else cell.style.opacity = 0.5;
+      slotsEl.appendChild(cell);
+    }
+    const g = p.gear;
+    $("char-stats").innerHTML = `
+      <h4>${p.name}</h4>
+      <div class="cs-sub">Level ${p.level} ${p.race.name} ${p.cls.name}</div>
+      <div class="cs-sub">Item Level: ${p.itemLevel()}</div>
+      <div class="cs-line"><span>Health</span><b>${p.maxHp}</b></div>
+      <div class="cs-line"><span>${p.resourceType[0].toUpperCase() + p.resourceType.slice(1)}</span><b>${p.maxResource}</b></div>
+      <div class="cs-line"><span>Attack Power</span><b>${p.getAttackPower()}</b></div>
+      <div class="cs-line"><span>Spell Power</span><b>${p.getSpellPower()}</b></div>
+      <div class="cs-line"><span>Crit Chance</span><b>${(p.getCritChance() * 100).toFixed(1)}%</b></div>
+      <div class="cs-line"><span>Armor</span><b>${g.armor} (${(p.getArmorDR() * 100).toFixed(0)}% dmg reduced)</b></div>
+      <div class="cs-line"><span>Stamina</span><b>${g.stamina}</b></div>
+      <div class="cs-line"><span>Intellect</span><b>${g.intellect}</b></div>`;
+  }
+
+  lootToast(it) {
+    if (!this._toastWrap) {
+      this._toastWrap = document.createElement("div");
+      this._toastWrap.id = "loot-toasts";
+      document.getElementById("game-ui").appendChild(this._toastWrap);
+    }
+    const r = RARITY[it.rarity];
+    const el = document.createElement("div");
+    el.className = "loot-toast";
+    el.innerHTML = `<span class="lt-icon">${it.icon}</span> <span style="color:${r.color}">${it.name}</span>`;
+    this._toastWrap.appendChild(el);
+    this.log(`You receive loot: ${it.name}.`, "log-xp");
+    setTimeout(() => el.classList.add("fade"), 2600);
+    setTimeout(() => el.remove(), 3200);
   }
 
   // ---------- action bar ----------
