@@ -5,7 +5,7 @@
  */
 
 import type { EntitySnapshot, PowerType } from "@wow/shared";
-import { powerLabel } from "@wow/shared";
+import { getStance, powerLabel } from "@wow/shared";
 import type { ClientState } from "../state/ClientState.js";
 
 class UnitFrame {
@@ -17,6 +17,7 @@ class UnitFrame {
   private readonly powerBar: HTMLElement;
   private readonly powerFill: HTMLElement;
   private readonly powerLabelEl: HTMLElement;
+  private readonly buffRow = document.createElement("div");
 
   constructor(private readonly placeholder: string) {
     this.root.className = "unit-frame empty";
@@ -34,7 +35,9 @@ class UnitFrame {
     this.powerFill = power.fill;
     this.powerLabelEl = power.label;
 
-    this.root.append(nameRow, hp.bar, power.bar);
+    this.buffRow.className = "buff-row";
+
+    this.root.append(nameRow, hp.bar, power.bar, this.buffRow);
     this.update(undefined);
   }
 
@@ -56,6 +59,7 @@ class UnitFrame {
       this.combatEl.textContent = "";
       this.setBar(this.hpFill, this.hpLabel, 0, 0);
       this.powerBar.style.display = "none";
+      this.buffRow.replaceChildren();
       return;
     }
     this.root.className = "unit-frame has-unit";
@@ -72,6 +76,21 @@ class UnitFrame {
       this.setPowerColor(unit.powerType);
       this.setBar(this.powerFill, this.powerLabelEl, unit.power, unit.maxPower, powerLabel(unit.powerType));
     }
+
+    this.updateBuffs(unit);
+  }
+
+  /** Show a badge for the active stance (non-neutral stances only). */
+  private updateBuffs(unit: EntitySnapshot): void {
+    this.buffRow.replaceChildren();
+    if (!unit.classId || unit.stanceId === "neutral") return;
+    const stance = getStance(unit.classId, unit.stanceId);
+    const badge = document.createElement("span");
+    badge.className = "buff-badge";
+    badge.style.setProperty("--badge", stance.color);
+    badge.textContent = stance.badge;
+    badge.title = stance.name;
+    this.buffRow.append(badge);
   }
 
   private setPowerColor(type: PowerType): void {

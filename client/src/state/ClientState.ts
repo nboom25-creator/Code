@@ -4,24 +4,30 @@
  * combat-log buffer for the UI to read each frame.
  */
 
-import type { CombatLogEvent, EntitySnapshot } from "@wow/shared";
+import type { CombatLogEvent, EntitySnapshot, SnapshotMessage, TalentState } from "@wow/shared";
 
 const MAX_LOG = 50;
+
+const EMPTY_TALENTS: TalentState = { ranks: {}, pointsTotal: 0, pointsSpent: 0 };
 
 export class ClientState {
   playerId: number | null = null;
   entities = new Map<number, EntitySnapshot>();
   gcdRemaining = 0;
+  stanceCdRemaining = 0;
+  /** The controlling player's talent allocation (authoritative, server-sent). */
+  talents: TalentState = EMPTY_TALENTS;
   /** Server time of the latest snapshot (ms). */
   serverTime = 0;
-  /** Local clock offset estimate vs. server, for smooth cast bars. */
   log: CombatLogEvent[] = [];
 
-  applySnapshot(entities: EntitySnapshot[], gcdRemaining: number, serverTime: number): void {
+  applySnapshot(msg: SnapshotMessage): void {
     this.entities.clear();
-    for (const e of entities) this.entities.set(e.id, e);
-    this.gcdRemaining = gcdRemaining;
-    this.serverTime = serverTime;
+    for (const e of msg.entities) this.entities.set(e.id, e);
+    this.gcdRemaining = msg.gcdRemaining;
+    this.stanceCdRemaining = msg.stanceCdRemaining;
+    this.talents = msg.talents;
+    this.serverTime = msg.serverTime;
   }
 
   appendLog(events: CombatLogEvent[]): void {

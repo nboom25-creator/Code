@@ -9,7 +9,8 @@ import { Renderer } from "./render/Renderer.js";
 import { UnitFrames } from "./render/UnitFrames.js";
 import { CastBar } from "./render/CastBar.js";
 import { ActionBar } from "./render/ActionBar.js";
-import { ProfileBar } from "./render/ProfileBar.js";
+import { ClassBar } from "./render/ClassBar.js";
+import { TalentPanel } from "./render/TalentPanel.js";
 import { CombatLog } from "./render/CombatLog.js";
 import { Input } from "./input/Input.js";
 
@@ -28,10 +29,11 @@ const renderer = new Renderer(canvas, state);
 const unitFrames = new UnitFrames(el("unit-frames"));
 const castBar = new CastBar(el("cast-bar-container"));
 const combatLog = new CombatLog(el("combat-log"));
-const actionBar = new ActionBar(el("action-bar"), state, ActionBar.defaultSlots(connection));
-const profileBar = new ProfileBar(el("profile-bar"), state, connection);
+const actionBar = new ActionBar(el("action-bar"), state, ActionBar.defaultSlots(connection), connection);
+const classBar = new ClassBar(el("class-bar"), state, connection);
+const talentPanel = new TalentPanel(el("talent-root"), state, connection);
 
-const input = new Input(connection, state, renderer, actionBar, profileBar, canvas);
+const input = new Input(connection, state, renderer, actionBar, classBar, talentPanel, canvas);
 input.attach();
 
 connection.connect();
@@ -41,7 +43,8 @@ function frame(): void {
   unitFrames.update(state);
   castBar.update(state);
   actionBar.update();
-  profileBar.update();
+  classBar.update();
+  talentPanel.update();
   combatLog.update(state);
   requestAnimationFrame(frame);
 }

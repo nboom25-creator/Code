@@ -1,11 +1,18 @@
 /**
  * Bottom action bar. Each slot binds a hotkey to an action and shows live
  * state: the auto-attack toggle highlights while active, spell slots show the
- * Global Cooldown sweep, and slots whose resource the player can't currently
- * pay are dimmed as "unusable".
+ * Global Cooldown sweep and are dimmed when their resource can't be paid, and a
+ * dedicated stance toggle (Warriors only) flips Battle/Defensive stance with
+ * its own short cooldown sweep.
  */
 
-import { GCD_MS, SPELLS } from "@wow/shared";
+import {
+  GCD_MS,
+  SPELLS,
+  STANCE_COOLDOWN_MS,
+  getClass,
+  getStance,
+} from "@wow/shared";
 import type { ClientState } from "../state/ClientState.js";
 import type { Connection } from "../net/Connection.js";
 
@@ -21,81 +28,108 @@ export interface ActionSlot {
 class SlotButton {
   readonly root = document.createElement("div");
   private readonly cdOverlay = document.createElement("div");
+  private readonly nameEl = document.createElement("div");
 
-  constructor(readonly slot: ActionSlot) {
+  constructor(key: string, name: string, icon: string, tooltip: string, onClick: () => void) {
     this.root.className = "action-button";
 
-    const key = document.createElement("div");
-    key.className = "key";
-    key.textContent = slot.key;
+    const keyEl = document.createElement("div");
+    keyEl.className = "key";
+    keyEl.textContent = key;
 
-    const icon = document.createElement("div");
-    icon.className = "icon";
-    icon.textContent = slot.icon;
+    const iconEl = document.createElement("div");
+    iconEl.className = "icon";
+    iconEl.textContent = icon;
 
-    const name = document.createElement("div");
-    name.className = "name";
-    name.textContent = slot.name;
+    this.nameEl.className = "name";
+    this.nameEl.textContent = name;
 
     this.cdOverlay.className = "cd-overlay";
 
-    this.root.append(this.cdOverlay, key, icon, name);
-    this.root.title = SPELLS[slot.action]?.description ?? slot.name;
-    this.root.addEventListener("click", () => slot.onActivate());
+    this.root.append(this.cdOverlay, keyEl, iconEl, this.nameEl);
+    this.root.title = tooltip;
+    this.root.addEventListener("click", onClick);
   }
 
+  setName(name: string): void {
+    this.nameEl.textContent = name;
+  }
   setActive(active: boolean): void {
     this.root.classList.toggle("active", active);
   }
-
   setUnusable(unusable: boolean): void {
     this.root.classList.toggle("unusable", unusable);
   }
-
+  setHidden(hidden: boolean): void {
+    this.root.style.display = hidden ? "none" : "";
+  }
+  setAccent(color: string | null): void {
+    this.root.style.borderColor = color ?? "";
+  }
   setGcd(fraction: number): void {
     this.cdOverlay.style.transform = `scaleY(${fraction})`;
   }
 }
 
 export class ActionBar {
-  private readonly buttons: SlotButton[] = [];
+  private readonly buttons = new Map<string, { slot: ActionSlot; btn: SlotButton }>();
+  private readonly stanceButton: SlotButton;
 
   constructor(
     root: HTMLElement,
     private readonly state: ClientState,
     slots: ActionSlot[],
+    private readonly connection: Connection,
   ) {
     for (const slot of slots) {
-      const button = new SlotButton(slot);
-      this.buttons.push(button);
-      root.append(button.root);
+      const btn = new SlotButton(
+        slot.key,
+        slot.name,
+        slot.icon,
+        SPELLS[slot.action]?.description ?? slot.name,
+        slot.onActivate,
+      );
+      this.buttons.set(slot.key, { slot, btn });
+      root.append(btn.root);
     }
+
+    this.stanceButton = new SlotButton("R", "Stance", "🛡", "Toggle stance (Warrior)", () =>
+      this.toggleStance(),
+    );
+    root.append(this.stanceButton.root);
   }
 
-  /** Activate by hotkey (called from the input layer). */
+  /** Activate a slot by hotkey (called from the input layer). */
   activateKey(key: string): void {
-    this.buttons.find((b) => b.slot.key === key)?.slot.onActivate();
+    this.buttons.get(key)?.slot?.onActivate();
+  }
+
+  /** Flip to the player's other stance (Warriors only). */
+  toggleStance(): void {
+    const player = this.state.player;
+    if (!player?.classId) return;
+    const stances = getClass(player.classId).stances;
+    if (stances.length < 2) return;
+    const next = stances.find((s) => s.id !== player.stanceId) ?? stances[0];
+    this.connection.setStance(next.id);
   }
 
   update(): void {
-    const gcdFraction = Math.max(0, Math.min(1, this.state.gcdRemaining / GCD_MS));
+    const gcdFraction = clamp01(this.state.gcdRemaining / GCD_MS);
     const player = this.state.player;
     const autoOn = player?.autoAttacking ?? false;
 
-    for (const button of this.buttons) {
-      const action = button.slot.action;
-      if (action === "autoattack") {
-        button.setActive(autoOn);
-        button.setGcd(0);
-        button.setUnusable(false);
+    for (const { slot, btn } of this.buttons.values()) {
+      if (slot.action === "autoattack") {
+        btn.setActive(autoOn);
+        btn.setGcd(0);
+        btn.setUnusable(false);
         continue;
       }
-
-      // Spell slot: GCD sweep + resource availability.
-      button.setGcd(gcdFraction);
-      const spell = SPELLS[action];
+      btn.setGcd(gcdFraction);
+      const spell = SPELLS[slot.action];
       if (!spell || !player) {
-        button.setUnusable(true);
+        btn.setUnusable(true);
         continue;
       }
       const cost = spell.cost;
@@ -103,40 +137,36 @@ export class ActionBar {
         cost.type === "health"
           ? player.hp > cost.amount
           : player.powerType === cost.type && player.power >= cost.amount;
-      button.setUnusable(!usable);
+      btn.setUnusable(!usable);
     }
+
+    this.updateStanceButton();
+  }
+
+  private updateStanceButton(): void {
+    const player = this.state.player;
+    const stances = player?.classId ? getClass(player.classId).stances : [];
+    if (!player?.classId || stances.length < 2) {
+      this.stanceButton.setHidden(true);
+      return;
+    }
+    const stance = getStance(player.classId, player.stanceId);
+    this.stanceButton.setHidden(false);
+    this.stanceButton.setName(stance.badge);
+    this.stanceButton.setAccent(stance.color);
+    this.stanceButton.setGcd(clamp01(this.state.stanceCdRemaining / STANCE_COOLDOWN_MS));
   }
 
   static defaultSlots(connection: Connection): ActionSlot[] {
     return [
-      {
-        key: "1",
-        name: "Auto-Attack",
-        icon: "⚔",
-        action: "autoattack",
-        onActivate: () => connection.toggleAutoAttack(),
-      },
-      {
-        key: "2",
-        name: "Mortal Strike",
-        icon: "🪓",
-        action: "mortalstrike",
-        onActivate: () => connection.castSpell("mortalstrike"),
-      },
-      {
-        key: "3",
-        name: "Sinister Strike",
-        icon: "🗡️",
-        action: "sinisterstrike",
-        onActivate: () => connection.castSpell("sinisterstrike"),
-      },
-      {
-        key: "4",
-        name: "Fireball",
-        icon: "🔥",
-        action: "fireball",
-        onActivate: () => connection.castSpell("fireball"),
-      },
+      { key: "1", name: "Auto-Attack", icon: "⚔", action: "autoattack", onActivate: () => connection.toggleAutoAttack() },
+      { key: "2", name: "Mortal Strike", icon: "🪓", action: "mortalstrike", onActivate: () => connection.castSpell("mortalstrike") },
+      { key: "3", name: "Sinister Strike", icon: "🗡️", action: "sinisterstrike", onActivate: () => connection.castSpell("sinisterstrike") },
+      { key: "4", name: "Fireball", icon: "🔥", action: "fireball", onActivate: () => connection.castSpell("fireball") },
     ];
   }
+}
+
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
 }

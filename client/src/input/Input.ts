@@ -3,14 +3,15 @@
  * movement vectors, action-bar hotkeys, Tab/click targeting.
  */
 
-import type { ClassProfile } from "@wow/shared";
+import type { ClassId } from "@wow/shared";
 import type { Connection } from "../net/Connection.js";
 import type { ClientState } from "../state/ClientState.js";
 import type { Renderer } from "../render/Renderer.js";
 import type { ActionBar } from "../render/ActionBar.js";
-import type { ProfileBar } from "../render/ProfileBar.js";
+import type { ClassBar } from "../render/ClassBar.js";
+import type { TalentPanel } from "../render/TalentPanel.js";
 
-const PROFILE_KEYS: Record<string, ClassProfile> = {
+const CLASS_KEYS: Record<string, ClassId> = {
   KeyZ: "warrior",
   KeyX: "rogue",
   KeyC: "mage",
@@ -36,7 +37,8 @@ export class Input {
     private readonly state: ClientState,
     private readonly renderer: Renderer,
     private readonly actionBar: ActionBar,
-    private readonly profileBar: ProfileBar,
+    private readonly classBar: ClassBar,
+    private readonly talentPanel: TalentPanel,
     private readonly canvas: HTMLCanvasElement,
   ) {}
 
@@ -54,9 +56,19 @@ export class Input {
       this.actionBar.activateKey(e.key);
       return;
     }
-    // Profile / resource swap hotkeys.
-    if (PROFILE_KEYS[e.code]) {
-      this.profileBar.activateKey(PROFILE_KEYS[e.code]);
+    // Stance toggle (Warriors).
+    if (e.code === "KeyR") {
+      this.actionBar.toggleStance();
+      return;
+    }
+    // Talent panel.
+    if (e.code === "KeyN") {
+      this.talentPanel.toggle();
+      return;
+    }
+    // Class swap hotkeys.
+    if (CLASS_KEYS[e.code]) {
+      this.classBar.activateKey(CLASS_KEYS[e.code]);
       return;
     }
     // Targeting.

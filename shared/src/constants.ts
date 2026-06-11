@@ -9,6 +9,9 @@
 /** Global Cooldown duration in milliseconds (Classic WoW baseline = 1.5s). */
 export const GCD_MS = 1500;
 
+/** Stance/form swaps are gated by a short cooldown, separate from the GCD. */
+export const STANCE_COOLDOWN_MS = 1000;
+
 /** Default weapon swing timer in milliseconds (auto-attack cadence). */
 export const SWING_TIMER_MS = 2000;
 

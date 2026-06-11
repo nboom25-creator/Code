@@ -29,6 +29,13 @@ import {
 import type { EntityId } from "../ecs/World.js";
 import type { GameContext } from "./context.js";
 import { distance } from "./util.js";
+import {
+  effectiveArmor,
+  effectiveCastTime,
+  physicalCritChance,
+  spellCritChance,
+  stanceMultipliers,
+} from "./derive.js";
 
 type AttackOutcome = "miss" | "dodge" | "crit" | "hit";
 
@@ -99,7 +106,8 @@ export function armorReduction(armor: number): number {
 
 /** Roll the unified melee attack table in priority order. */
 function rollAttackTable(ctx: GameContext, attacker: EntityId): AttackOutcome {
-  const crit = ctx.world.get(attacker, Stats)?.critChance ?? 0;
+  // Physical crit includes the Cruelty talent bonus.
+  const crit = physicalCritChance(ctx.world, attacker);
   const roll = Math.random() * 100;
   let cursor = BASE_MISS_CHANCE;
   if (roll < cursor) return "miss";
@@ -121,6 +129,7 @@ function inflict(
   target: EntityId,
   amount: number,
   _school: DamageSchool,
+  threatMult: number,
 ): number {
   const stats = ctx.world.get(target, Stats);
   if (!stats || stats.dead) return 0;
@@ -128,7 +137,8 @@ function inflict(
   const dealt = Math.max(0, Math.min(amount, stats.hp));
   stats.hp -= dealt;
 
-  ctx.world.get(target, ThreatTable)?.add(source, dealt);
+  // Threat is scaled by the attacker's stance (e.g. Defensive +30%).
+  ctx.world.get(target, ThreatTable)?.add(source, Math.round(dealt * threatMult));
   generateRage(ctx, source, dealt); // dealing damage builds rage
   generateRage(ctx, target, dealt); // taking damage builds rage
 
@@ -212,13 +222,19 @@ export function spellStrike(
   if (!srcStats || !tgtStats || tgtStats.dead) return;
 
   let raw = randInt(opts.min, opts.max);
-  const crit = Math.random() * 100 < srcStats.critChance;
+  const critChance = spellCritChance(ctx.world, source, opts.school === "physical");
+  const crit = Math.random() * 100 < critChance;
   if (crit) raw *= opts.critMultiplier;
 
   applyResolvedDamage(ctx, source, target, raw, opts.school, crit, opts.label);
 }
 
-/** Shared tail of melee/spell strikes: armor mitigation, inflict, logging. */
+/**
+ * Shared tail of melee/spell strikes. Stance modifiers are applied here, right
+ * before mitigation and threat: the attacker's stance scales outgoing damage
+ * and threat; the defender's stance scales incoming damage; armor (talent
+ * scaled) then mitigates physical damage.
+ */
 function applyResolvedDamage(
   ctx: GameContext,
   source: EntityId,
@@ -228,13 +244,21 @@ function applyResolvedDamage(
   crit: boolean,
   label: string,
 ): void {
-  const tgtStats = ctx.world.require(target, Stats);
-  const reduction = school === "physical" ? armorReduction(tgtStats.armor) : 0;
-  const preMitigation = Math.round(raw);
-  const final = Math.max(0, Math.round(raw * (1 - reduction)));
-  const blocked = preMitigation - final;
+  const attackerStance = stanceMultipliers(ctx.world, source);
+  const defenderStance = stanceMultipliers(ctx.world, target);
 
-  const dealt = inflict(ctx, source, target, final, school);
+  // Attacker stance scales outgoing damage before any mitigation.
+  const outgoing = raw * attackerStance.damageDealt;
+
+  // Armor mitigation (physical only), using talent-scaled armor.
+  const reduction = school === "physical" ? armorReduction(effectiveArmor(ctx.world, target)) : 0;
+  const blocked = Math.round(outgoing * reduction);
+  const afterArmor = outgoing - blocked;
+
+  // Defender stance reduces what actually lands (e.g. Defensive -10%).
+  const final = Math.max(0, Math.round(afterArmor * defenderStance.damageTaken));
+
+  const dealt = inflict(ctx, source, target, final, school, attackerStance.threat);
   ctx.log.push(
     crit ? "crit" : "damage",
     logHit(ctx, source, target, label, dealt, school, crit, blocked),
@@ -332,10 +356,12 @@ export function tryStartCast(
 
   if (spell.triggersGcd) combat.gcdEndsAt = ctx.now + GCD_MS;
 
-  if (spell.castTime <= 0) {
+  // Talents (e.g. Improved Fireball) can shorten the cast before it starts.
+  const castTime = effectiveCastTime(ctx.world, caster, spellId);
+  if (castTime <= 0) {
     resolveSpell(ctx, caster, spellId);
   } else {
-    combat.cast = new ActiveCast(spell.id, spell.name, spell.castTime);
+    combat.cast = new ActiveCast(spell.id, spell.name, castTime);
     ctx.log.push("cast", `${nameOf(ctx, caster)} begins to cast ${spell.name}.`);
   }
   return null;

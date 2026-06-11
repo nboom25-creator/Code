@@ -5,7 +5,7 @@
  * not here — this keeps the data model easy to serialize and reason about.
  */
 
-import type { EntityKind, PowerType } from "@wow/shared";
+import type { ClassId, EntityKind, PowerType, TalentRanks } from "@wow/shared";
 import { Component, type EntityId } from "./World.js";
 
 /** Human-readable identity used for nameplates and the kind discriminator. */
@@ -67,6 +67,28 @@ export class Power extends Component {
     public max: number,
     /** Continuous mana regen per second (mana only). */
     public manaRegen = 0,
+  ) {
+    super();
+  }
+}
+
+/** Class identity plus the active stance/form and its swap cooldown. */
+export class ClassState extends Component {
+  constructor(
+    public classId: ClassId,
+    public stanceId: string,
+    /** Absolute server timestamp (ms) at which the stance cooldown ends. */
+    public stanceCdEndsAt = 0,
+  ) {
+    super();
+  }
+}
+
+/** Allocated talent ranks and the point budget. */
+export class Talents extends Component {
+  constructor(
+    public ranks: TalentRanks = {},
+    public pointsTotal = 0,
   ) {
     super();
   }

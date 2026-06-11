@@ -7,7 +7,9 @@
  */
 
 import type { DamageSchool } from "./spells.js";
-import type { ClassProfile, PowerType } from "./resources.js";
+import type { PowerType } from "./resources.js";
+import type { ClassId } from "./classes.js";
+import type { TalentState } from "./talents.js";
 
 export type EntityKind = "player" | "monster";
 
@@ -24,6 +26,9 @@ export interface EntitySnapshot {
   power: number;
   maxPower: number;
   powerType: PowerType;
+  /** Class identity and current stance/form, for nameplates and buff badges. */
+  classId: ClassId | null;
+  stanceId: string;
   inCombat: boolean;
   targetId: number | null;
   /** Active spell cast, or null when not casting. */
@@ -57,6 +62,10 @@ export interface SnapshotMessage {
   entities: EntitySnapshot[];
   /** Remaining Global Cooldown in ms for the receiving player. */
   gcdRemaining: number;
+  /** Remaining stance-swap cooldown in ms for the receiving player. */
+  stanceCdRemaining: number;
+  /** The receiving player's allocated talents. */
+  talents: TalentState;
 }
 
 export interface CombatLogMessage {
@@ -112,10 +121,27 @@ export interface MoveMessage {
   dy: number;
 }
 
-/** Swap the player's class profile, changing the active resource type. */
-export interface SetProfileMessage {
-  type: "setProfile";
-  profile: ClassProfile;
+/** Instantiate the player as a class, locking in its resource type. */
+export interface SetClassMessage {
+  type: "setClass";
+  classId: ClassId;
+}
+
+/** Switch the active stance/form (subject to the stance cooldown). */
+export interface SetStanceMessage {
+  type: "setStance";
+  stanceId: string;
+}
+
+/** Spend one talent point in the named talent. */
+export interface SpendTalentMessage {
+  type: "spendTalent";
+  talentId: string;
+}
+
+/** Refund all spent talent points. */
+export interface ResetTalentsMessage {
+  type: "resetTalents";
 }
 
 export type ClientMessage =
@@ -123,4 +149,7 @@ export type ClientMessage =
   | CastSpellMessage
   | ToggleAutoAttackMessage
   | MoveMessage
-  | SetProfileMessage;
+  | SetClassMessage
+  | SetStanceMessage
+  | SpendTalentMessage
+  | ResetTalentsMessage;

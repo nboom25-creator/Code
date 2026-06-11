@@ -51,13 +51,33 @@ zones) can be layered in cleanly.
   - **Sinister Strike** (Energy) — instant, 40 Energy, weapon damage + 15, GCD.
   - **Fireball** (Mana) — 2.0s cast, 30 Mana, 30–45 Fire damage, can crit (150%).
 
-### 5. Frontend visualization
+### 5. Classes, stances & talents (Phase 2)
+- **Data-driven classes** (`shared/classes.ts`): each class locks a resource
+  type, base stats and a stance list. Instantiating a class seeds the entity —
+  there are no class-specific code paths in the engine.
+- **Warrior stances** with their own **1.0s stance cooldown** (separate from
+  the GCD):
+  - **Battle Stance** — normal damage / threat.
+  - **Defensive Stance** — −10% damage taken, −10% damage dealt, **+30% threat**.
+  - Stance multipliers are applied server-side right before mitigation and
+    before threat is added to the monster's `ThreatTable`.
+- **Modular 3-node talent tree** (`shared/talents.ts`), 5 points to spend:
+  - **Cruelty** (3) — +1/2/3% physical crit.
+  - **Improved Fireball** (2) — −0.25/0.5s Fireball cast time.
+  - **Armored To The Teeth** (3) — +4/8/12% armor.
+  - Talents are pure **data objects of typed modifiers**; the engine reads
+    aggregated effects via `computeTalentEffects()` and `server/.../derive.ts`,
+    so new talents reusing existing modifier kinds need no engine change.
+
+### 6. Frontend visualization
 - Canvas world with player/monster circles, nameplates and a selection ring.
-- WoW-style **unit frames** whose resource bar **recolors by power type**
-  (blue mana / yellow energy / red rage).
-- Center **cast bar** with smooth interpolation.
-- **Profile selector** + **action bar** with hotkeys, GCD sweep and
-  resource-aware dimming.
+- WoW-style **unit frames**: resource bar **recolors by power type**
+  (blue mana / yellow energy / red rage) and a **stance/buff badge**.
+- Center **cast bar** with smooth interpolation (reflects talent-reduced casts).
+- **Class selector** + **action bar** (hotkeys, GCD sweep, resource dimming,
+  **stance toggle** with cooldown sweep).
+- **Talent panel** overlay (toggle **N**) with +/Reset, syncing every change to
+  the server immediately (no client-side rank mutation).
 - Scrolling **combat log** with school colors, **crit highlighting**, and
   mitigated/avoided strings (misses, dodges, "blocked by Armor").
 
@@ -71,8 +91,10 @@ zones) can be layered in cleanly.
 │   └── src/
 │       ├── protocol.ts     #   client<->server message types & snapshots
 │       ├── spells.ts       #   spell / ability definitions (data-driven)
-│       ├── resources.ts    #   power types & class profiles
-│       └── constants.ts    #   GCD, attack table, armor, regen tuning
+│       ├── resources.ts    #   power types & colors
+│       ├── classes.ts      #   class defs, base stats & stances (data-driven)
+│       ├── talents.ts      #   talent defs, modifiers & effect aggregator
+│       └── constants.ts    #   GCD, stance CD, attack table, armor, regen
 │
 ├── server/                 # Authoritative Node.js + Express + ws backend
 │   └── src/
@@ -80,6 +102,7 @@ zones) can be layered in cleanly.
 │       ├── game/
 │       │   ├── Game.ts     #   world ownership, spawns, snapshots, commands
 │       │   ├── combat.ts   #   damage / threat / casting rules
+│       │   ├── derive.ts   #   effective stats from class + stance + talents
 │       │   ├── context.ts  #   per-tick context + combat-log sink
 │       │   └── systems/    #   Movement, MonsterAI, Casting, AutoAttack, Resource
 │       ├── net/            #   WebSocket transport
@@ -133,7 +156,9 @@ npm run typecheck
 | `2`                | Mortal Strike (Rage)                  |
 | `3`                | Sinister Strike (Energy)              |
 | `4`                | Fireball (Mana, 2.0s cast)            |
-| `Z` / `X` / `C`    | Swap profile: Warrior / Rogue / Mage  |
+| `R`                | Toggle stance (Warrior)               |
+| `N`                | Open/close the Talent panel           |
+| `Z` / `X` / `C`    | Become: Warrior / Rogue / Mage        |
 
 ---
 
@@ -146,3 +171,9 @@ npm run typecheck
   and a system in `server/src/game/systems/`, then register it in `Game.ts`.
 - **New message types:** extend `ClientMessage` / `ServerMessage` in
   `shared/src/protocol.ts` — both sides share the definitions.
+- **New talents:** append a `TalentDef` to `shared/src/talents.ts`. If it reuses
+  an existing modifier kind (`physicalCrit`, `armorPct`, `spellCastReductionMs`)
+  no engine change is needed; a brand-new kind extends the aggregator +
+  `server/src/game/derive.ts`.
+- **New stances / classes:** append to `shared/src/classes.ts` — the engine
+  reads stance multipliers and class base stats purely as data.

@@ -71,8 +71,17 @@ export class NetworkServer {
       case "move":
         this.game.setMoveIntent(playerId, msg.dx, msg.dy);
         break;
-      case "setProfile":
-        this.game.setResourceProfile(playerId, msg.profile);
+      case "setClass":
+        this.game.setClass(playerId, msg.classId);
+        break;
+      case "setStance":
+        this.game.setStance(playerId, msg.stanceId);
+        break;
+      case "spendTalent":
+        this.game.spendTalent(playerId, msg.talentId);
+        break;
+      case "resetTalents":
+        this.game.resetTalents(playerId);
         break;
     }
   }
@@ -89,6 +98,8 @@ export class NetworkServer {
         serverTime: now,
         entities,
         gcdRemaining: this.game.gcdRemaining(playerId, now),
+        stanceCdRemaining: this.game.stanceCdRemaining(playerId, now),
+        talents: this.game.talentState(playerId),
       });
       if (logEvents.length > 0) {
         this.send(socket, { type: "combatLog", events: logEvents });

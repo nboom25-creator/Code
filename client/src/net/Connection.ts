@@ -3,7 +3,7 @@
  * and exposes typed senders for the input layer to drive.
  */
 
-import type { ClassProfile, ClientMessage, ServerMessage } from "@wow/shared";
+import type { ClassId, ClientMessage, ServerMessage } from "@wow/shared";
 import type { ClientState } from "../state/ClientState.js";
 
 const WS_URL =
@@ -38,7 +38,7 @@ export class Connection {
         this.state.playerId = msg.playerId;
         break;
       case "snapshot":
-        this.state.applySnapshot(msg.entities, msg.gcdRemaining, msg.serverTime);
+        this.state.applySnapshot(msg);
         break;
       case "combatLog":
         this.state.appendLog(msg.events);
@@ -64,8 +64,20 @@ export class Connection {
     this.send({ type: "toggleAutoAttack" });
   }
 
-  setProfile(profile: ClassProfile): void {
-    this.send({ type: "setProfile", profile });
+  setClass(classId: ClassId): void {
+    this.send({ type: "setClass", classId });
+  }
+
+  setStance(stanceId: string): void {
+    this.send({ type: "setStance", stanceId });
+  }
+
+  spendTalent(talentId: string): void {
+    this.send({ type: "spendTalent", talentId });
+  }
+
+  resetTalents(): void {
+    this.send({ type: "resetTalents" });
   }
 
   /** Send a movement vector only when it changes, to avoid socket spam. */
