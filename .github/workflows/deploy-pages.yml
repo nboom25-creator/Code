@@ -1,16 +1,11 @@
 name: Deploy to GitHub Pages
 
-# Publishes the game (a fully static site) to GitHub Pages.
-# One-time setup: in the repo, go to Settings → Pages → Build and
-# deployment → Source: "GitHub Actions". After that, every push to the
-# branch below redeploys automatically and the URL appears in this
-# workflow's summary (and under Settings → Pages).
+# OPTIONAL. The simplest way to host this game is Pages' "Deploy from a
+# branch" mode (no workflow needed) — see README. This workflow is only for
+# the "GitHub Actions" Pages source, and is manual-only so it never fails
+# in the background. Run it from the Actions tab if you use that mode.
 
 on:
-  push:
-    branches:
-      - claude/wow-style-game-build-u792fs
-      - main
   workflow_dispatch:
 
 permissions:

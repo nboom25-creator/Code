@@ -27,11 +27,20 @@ Then open **http://localhost:8080** in a modern browser (Chrome/Edge/Firefox).
 
 ## Play on your phone 📱
 
-**Option A — GitHub Pages (a public URL).** This repo includes a workflow
-(`.github/workflows/deploy-pages.yml`) that deploys the game automatically.
-One-time setup: in the repo go to **Settings → Pages → Build and deployment →
-Source: "GitHub Actions"**. After the next push, your game is live at
-`https://<your-user>.github.io/<repo>/` — open that on your phone.
+**Option A — GitHub Pages (a public URL).** The game is fully static, so the
+simplest host is Pages' *branch* mode:
+
+1. In the repo, go to **Settings → Pages**.
+2. Under **Build and deployment → Source**, choose **"Deploy from a branch"**
+   (this is the one with a **Save** button — "GitHub Actions" mode has no Save).
+3. Pick branch **`claude/wow-style-game-build-u792fs`** and folder **`/ (root)`**,
+   then click **Save**.
+4. Wait ~1 minute; your game is live at
+   `https://nboom25-creator.github.io/<repo>/` — open that on your phone.
+
+(A `.nojekyll` file is included so Pages serves the files as-is. There's also an
+optional Actions workflow if you prefer the "GitHub Actions" source — run it
+manually from the Actions tab.)
 
 **Option B — same Wi-Fi.** Run `npm start` on your computer, find its local IP
 (e.g. `192.168.1.42`), and open `http://192.168.1.42:8080` on your phone while
