@@ -14,6 +14,9 @@ import type { EquipSlot } from "./items.js";
 
 export type EntityKind = "player" | "monster";
 
+/** Monster AI states (see the server MonsterAISystem). */
+export type AIState = "idle" | "patrol" | "chase" | "evade";
+
 /** A single entity as serialized in a world snapshot. */
 export interface EntitySnapshot {
   id: number;
@@ -38,6 +41,10 @@ export interface EntitySnapshot {
   autoAttacking: boolean;
   /** Lootable item ids on this entity's corpse (empty unless dead with loot). */
   loot: string[];
+  /** Monster AI state (null for players). */
+  aiState: AIState | null;
+  /** Proximity aggro radius in world units (0 for players). */
+  aggroRadius: number;
 }
 
 /** Player-owned containers, sent only to the controlling client. */

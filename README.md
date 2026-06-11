@@ -86,7 +86,21 @@ zones) can be layered in cleanly.
 - All moves are **server-authoritative** — the client only sends requests and
   re-renders from the next snapshot.
 
-### 7. Frontend visualization
+### 7. Monster AI: aggro, pulls & leashing (Phase 4)
+- **State machine** (`MonsterAISystem`): `IDLE` / `PATROL` / `CHASE` / `EVADE`,
+  all driven on the server heartbeat so monsters cannot be kited forever.
+- **Patrol & speeds**: monsters walk a server-defined line, **run 50% faster**
+  in CHASE and **200% faster (CC-immune)** in EVADE, via a `Locomotion` speed
+  component the AI sets per state.
+- **Proximity aggro**: a player inside the **aggro radius (120px)** gains 1
+  threat, the monster yells, and it enters CHASE.
+- **Social pulls**: entering combat (by proximity *or* being attacked) alerts
+  friendly monsters within **60px**, pulling the pack ("sounds the alarm!").
+- **Leash & evade**: straying past **400px** from its tracked `HomePosition`
+  makes the monster instantly wipe threat, become **immune to damage**, sprint
+  home, **heal to 100%**, and resume patrolling.
+
+### 8. Frontend visualization
 - Canvas world with player/monster circles, nameplates and a selection ring.
 - WoW-style **unit frames**: resource bar **recolors by power type**
   (blue mana / yellow energy / red rage) and a **stance/buff badge**.
@@ -98,8 +112,10 @@ zones) can be layered in cleanly.
 - **Character & Bag panel** (toggle **B**): paper-doll of 5 equipment slots +
   16-slot backpack, click-to-equip/unequip, item tooltips with rarity colors.
 - **Loot window** anchored over slain monsters; click to take items.
-- Scrolling **combat log** with school colors, **crit highlighting**, and
-  mitigated/avoided strings (misses, dodges, "blocked by Armor").
+- **AI visuals**: a red 💀 over monsters in CHASE, 💨 while evading, and a
+  toggleable **aggro-radius debug overlay** (`G`).
+- Scrolling **combat log** with school colors, **crit highlighting**,
+  mitigated/avoided strings, and AI events (yells, pulls, evades).
 
 ---
 
@@ -126,7 +142,7 @@ zones) can be layered in cleanly.
 │       │   ├── derive.ts   #   dynamic effects: crit, cast time, stance mults
 │       │   ├── stats.ts    #   recalculateStats(): Base + Talents + Gear
 │       │   ├── context.ts  #   per-tick context + combat-log sink
-│       │   └── systems/    #   Movement, MonsterAI, Casting, AutoAttack, Resource, Corpse
+│       │   └── systems/    #   Movement, MonsterAI (FSM), Casting, AutoAttack, Resource, Corpse
 │       ├── net/            #   WebSocket transport
 │       └── index.ts        #   entry point + demo sandbox
 │
@@ -181,6 +197,7 @@ npm run typecheck
 | `R`                | Toggle stance (Warrior)               |
 | `N`                | Open/close the Talent panel           |
 | `B`                | Open/close the Character & Bag panel  |
+| `G`                | Toggle monster aggro-radius overlay   |
 | `Z` / `X` / `C`    | Become: Warrior / Rogue / Mage        |
 
 ---

@@ -25,6 +25,7 @@ import {
   Corpse,
   Identity,
   LootTable,
+  MonsterAI,
   Power,
   Stats,
   ThreatTable,
@@ -85,6 +86,11 @@ export function interruptCast(
   const spellName = combat.cast.spellName;
   combat.cast = null;
   ctx.log.push("cast", `${possCap(ctx, caster)} ${spellName} was ${reason}.`);
+}
+
+/** An evading monster is immune to all incoming damage. */
+function isEvading(ctx: GameContext, id: EntityId): boolean {
+  return ctx.world.get(id, MonsterAI)?.state === "evade";
 }
 
 /** Generate rage for an entity (if it uses rage) from a damage event. */
@@ -176,6 +182,7 @@ export function meleeStrike(
   const srcStats = ctx.world.get(source, Stats);
   const tgtStats = ctx.world.get(target, Stats);
   if (!srcStats || !tgtStats || tgtStats.dead) return;
+  if (isEvading(ctx, target)) return; // immune while leashing home
 
   enterCombat(ctx, source);
   enterCombat(ctx, target);
@@ -222,6 +229,7 @@ export function spellStrike(
   const srcStats = ctx.world.get(source, Stats);
   const tgtStats = ctx.world.get(target, Stats);
   if (!srcStats || !tgtStats || tgtStats.dead) return;
+  if (isEvading(ctx, target)) return; // immune while leashing home
 
   let raw = randInt(opts.min, opts.max);
   const critChance = spellCritChance(ctx.world, source, opts.school === "physical");

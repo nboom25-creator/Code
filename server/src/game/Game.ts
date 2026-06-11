@@ -4,6 +4,9 @@
  */
 
 import {
+  AGGRO_RADIUS,
+  MONSTER_WALK_SPEED,
+  MOVE_SPEED,
   STANCE_COOLDOWN_MS,
   STARTING_TALENT_POINTS,
   getClass,
@@ -25,6 +28,7 @@ import {
   Equipment,
   Identity,
   Inventory,
+  Locomotion,
   LootTable,
   MonsterAI,
   MoveIntent,
@@ -100,6 +104,7 @@ export class Game {
     this.world.add(id, new Talents({}, STARTING_TALENT_POINTS));
     this.world.add(id, new Combat());
     this.world.add(id, new MoveIntent());
+    this.world.add(id, new Locomotion(MOVE_SPEED));
 
     // Containers: seed the backpack with the test items so equipping can be
     // tried immediately (loot drops add more on top).
@@ -114,10 +119,20 @@ export class Game {
     return id;
   }
 
-  spawnTargetDummy(name: string, x: number, y: number): EntityId {
+  /**
+   * Spawn a patrolling monster. It walks the line between (patrolAx,patrolAy)
+   * and (patrolBx,patrolBy), aggroes players nearby and leashes back to its
+   * HomePosition at (homeX,homeY).
+   */
+  spawnMonster(
+    name: string,
+    homeX: number,
+    homeY: number,
+    patrol: { ax: number; ay: number; bx: number; by: number },
+  ): EntityId {
     const id = this.world.createEntity();
     this.world.add(id, new Identity(name, "monster"));
-    this.world.add(id, new Position(x, y));
+    this.world.add(id, new Position(homeX, homeY));
     this.world.add(
       id,
       new Stats(
@@ -133,8 +148,9 @@ export class Game {
     );
     this.world.add(id, new Combat());
     this.world.add(id, new ThreatTable());
-    // Non-passive: swings back lightly so cast interrupts can be demonstrated.
-    this.world.add(id, new MonsterAI(/*passive*/ false));
+    this.world.add(id, new MoveIntent());
+    this.world.add(id, new Locomotion(MONSTER_WALK_SPEED));
+    this.world.add(id, new MonsterAI(homeX, homeY, patrol.ax, patrol.ay, patrol.bx, patrol.by));
     // Loot table: each entry rolls independently when the monster dies.
     this.world.add(
       id,
@@ -379,6 +395,7 @@ export class Game {
       const power = this.world.get(id, Power);
       const cls = this.world.get(id, ClassState);
       const corpse = this.world.get(id, Corpse);
+      const ai = this.world.get(id, MonsterAI);
       out.push({
         id,
         kind: ident.kind,
@@ -396,6 +413,8 @@ export class Game {
         targetId: combat.targetId,
         autoAttacking: combat.autoAttacking,
         loot: corpse ? [...corpse.loot] : [],
+        aiState: ai ? ai.state : null,
+        aggroRadius: ai ? AGGRO_RADIUS : 0,
         cast: combat.cast
           ? {
               spellId: combat.cast.spellId,

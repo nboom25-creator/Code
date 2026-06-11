@@ -5,7 +5,7 @@
  * not here — this keeps the data model easy to serialize and reason about.
  */
 
-import type { ClassId, EntityKind, EquipSlot, PowerType, TalentRanks } from "@wow/shared";
+import type { AIState, ClassId, EntityKind, EquipSlot, PowerType, TalentRanks } from "@wow/shared";
 import { EQUIP_SLOTS, INVENTORY_SIZE } from "@wow/shared";
 import { Component, type EntityId } from "./World.js";
 
@@ -184,16 +184,38 @@ export class ThreatTable extends Component {
   }
 }
 
-/** Current movement intent (normalized direction) set from client input. */
+/** Current movement intent (a direction vector) set by input or AI. */
 export class MoveIntent extends Component {
   dx = 0;
   dy = 0;
 }
 
-/** Tags an entity as monster AI-controlled (vs. a network-controlled player). */
+/** Movement speed (world units / second). Set per-state for monsters. */
+export class Locomotion extends Component {
+  constructor(public speed: number) {
+    super();
+  }
+}
+
+/**
+ * Monster AI brain: the current state plus its home territory and patrol path.
+ * Behaviour lives in MonsterAISystem; this component is pure data.
+ */
 export class MonsterAI extends Component {
-  /** A passive target dummy reacts to threat but never swings back. */
-  constructor(public passive = false) {
+  state: AIState = "patrol";
+  /** Currently heading toward patrol point B (false = toward A). */
+  patrolToB = true;
+
+  constructor(
+    /** Spawn / leash anchor (HomePosition). */
+    public readonly homeX: number,
+    public readonly homeY: number,
+    /** Two ends of the patrol line. */
+    public readonly patrolAx: number,
+    public readonly patrolAy: number,
+    public readonly patrolBx: number,
+    public readonly patrolBy: number,
+  ) {
     super();
   }
 }

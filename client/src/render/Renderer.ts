@@ -19,6 +19,12 @@ export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private width = 0;
   private height = 0;
+  /** Developer toggle: draw monster aggro radii. */
+  showAggroRadius = false;
+
+  toggleAggroRadius(): void {
+    this.showAggroRadius = !this.showAggroRadius;
+  }
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly state: ClientState) {
     const ctx = canvas.getContext("2d");
@@ -64,9 +70,31 @@ export class Renderer {
     ctx.clearRect(0, 0, this.width, this.height);
     this.drawGrid();
 
+    // Aggro radii (debug) drawn under the entities.
+    if (this.showAggroRadius) {
+      for (const entity of this.state.entities.values()) {
+        if (entity.aggroRadius > 0 && entity.hp > 0) this.drawAggroRadius(entity);
+      }
+    }
+
     for (const entity of this.state.entities.values()) {
       this.drawEntity(entity);
     }
+  }
+
+  private drawAggroRadius(entity: EntitySnapshot): void {
+    const ctx = this.ctx;
+    const { x, y } = this.worldToScreen(entity.x, entity.y);
+    const engaged = entity.aiState === "chase";
+    ctx.beginPath();
+    ctx.arc(x, y, entity.aggroRadius, 0, Math.PI * 2);
+    ctx.fillStyle = engaged ? "rgba(210,75,75,0.07)" : "rgba(210,75,75,0.04)";
+    ctx.fill();
+    ctx.strokeStyle = engaged ? "rgba(255,90,77,0.5)" : "rgba(210,75,75,0.25)";
+    ctx.setLineDash([6, 6]);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   private drawGrid(): void {
@@ -120,6 +148,17 @@ export class Renderer {
       ctx.strokeStyle = "#ffd34d";
       ctx.lineWidth = 1.5;
       ctx.stroke();
+    }
+
+    // Chase indicator: a red skull over the head of an aggressive monster.
+    if (entity.aiState === "chase") {
+      ctx.font = "16px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("💀", x, y - radius - 22);
+    } else if (entity.aiState === "evade") {
+      ctx.font = "14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("💨", x, y - radius - 22);
     }
 
     this.drawNameplate(entity, x, y - radius - 10);

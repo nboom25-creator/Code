@@ -72,3 +72,26 @@ export const HP_PER_STAMINA = 10;
 
 /** Delay before a slain monster respawns (ms). */
 export const MONSTER_RESPAWN_MS = 6000;
+
+// ---------------------------------------------------------------------------
+// Monster AI: navigation, aggro, social pulls and leashing
+// ---------------------------------------------------------------------------
+
+/** Base monster walk speed during PATROL (world units / second). */
+export const MONSTER_WALK_SPEED = 70;
+/** CHASE runs 50% faster than the walk speed. */
+export const CHASE_SPEED_MULT = 1.5;
+/** EVADE runs 200% faster (3x) than the walk speed, with CC immunity. */
+export const EVADE_SPEED_MULT = 3.0;
+
+/** Proximity aggro radius: a player inside this circle pulls the monster. */
+export const AGGRO_RADIUS = 120;
+/** Social aggro radius: nearby friendly monsters joined into the fight. */
+export const SOCIAL_RADIUS = 60;
+/** Max distance from HomePosition before the monster leashes and evades. */
+export const LEASH_RANGE = 400;
+/** Distance from home considered "arrived" when returning from EVADE. */
+export const HOME_ARRIVE_EPSILON = 8;
+/** Fraction of max HP regenerated per second while evading. */
+export const EVADE_HEAL_PER_SEC = 1.0;
+

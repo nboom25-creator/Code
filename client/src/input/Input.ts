@@ -73,6 +73,11 @@ export class Input {
       this.characterPanel.toggle();
       return;
     }
+    // Developer toggle: show monster aggro radii.
+    if (e.code === "KeyG") {
+      this.renderer.toggleAggroRadius();
+      return;
+    }
     // Class swap hotkeys.
     if (CLASS_KEYS[e.code]) {
       this.classBar.activateKey(CLASS_KEYS[e.code]);

@@ -19,9 +19,11 @@ const httpServer = createServer(app);
 // -- Game world -------------------------------------------------------------
 const game = new Game();
 
-// Demo sandbox: one player is created per WebSocket connection; here we spawn
-// the persistent Target Dummy the player can practice on.
-game.spawnTargetDummy("Target Dummy", 0, 50);
+// Demo sandbox: one player is created per WebSocket connection. Here we spawn a
+// small pack of Defias monsters that patrol south of the player's spawn — close
+// enough to walk into their aggro radius, packed close enough to social-aggro.
+game.spawnMonster("Defias Bandit", 0, 180, { ax: -40, ay: 180, bx: 40, by: 180 });
+game.spawnMonster("Defias Highwayman", 45, 180, { ax: 45, ay: 165, bx: 45, by: 195 });
 
 // Fixed-step simulation loop.
 setInterval(() => game.tick(), TICK_MS);
