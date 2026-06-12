@@ -15,6 +15,8 @@ import { CharacterPanel } from "./render/CharacterPanel.js";
 import { LootWindow } from "./render/LootWindow.js";
 import { ItemTooltip } from "./render/ItemTooltip.js";
 import { CombatLog } from "./render/CombatLog.js";
+import { LoginScreen } from "./render/LoginScreen.js";
+import { DevConsole } from "./render/DevConsole.js";
 import { Input } from "./input/Input.js";
 
 function el<T extends HTMLElement>(id: string): T {
@@ -42,7 +44,16 @@ const lootWindow = new LootWindow(el("loot-root"), state, connection, renderer, 
 const input = new Input(connection, state, renderer, actionBar, classBar, talentPanel, characterPanel, canvas);
 input.attach();
 
-connection.connect();
+// -- Session: login screen + dev console ------------------------------------
+const loginScreen = new LoginScreen(el("login-root"), (username) => connection.login(username));
+new DevConsole(el("dev-console"), connection);
+
+connection.onLogin = () => loginScreen.hide();
+connection.onLoginError = (message) => loginScreen.showError(message);
+connection.onLogout = () => loginScreen.show();
+
+// Closing the tab disconnects, which triggers the server-side save.
+window.addEventListener("beforeunload", () => connection.logout());
 
 function frame(): void {
   renderer.render();

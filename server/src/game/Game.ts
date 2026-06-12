@@ -5,6 +5,7 @@
 
 import {
   AGGRO_RADIUS,
+  INVENTORY_SIZE,
   MONSTER_WALK_SPEED,
   MOVE_SPEED,
   STANCE_COOLDOWN_MS,
@@ -22,6 +23,7 @@ import {
 } from "@wow/shared";
 import { World, type EntityId } from "../ecs/World.js";
 import {
+  Account,
   ClassState,
   Combat,
   Corpse,
@@ -38,6 +40,7 @@ import {
   Talents,
   ThreatTable,
 } from "../ecs/components.js";
+import type { LightState, PersistedPlayer } from "../db/types.js";
 import { CombatLog, type GameContext, type System } from "./context.js";
 import { tryStartCast } from "./combat.js";
 import { recalculateStats } from "./stats.js";
@@ -96,27 +99,93 @@ export class Game {
     this.world.add(id, new ClassState(def.id, def.stances[0].id));
   }
 
-  spawnPlayer(name: string): EntityId {
+  /**
+   * Spawn a player from a persisted account record, restoring class, position,
+   * gear, inventory, talents and the exact saved HP / resource values.
+   */
+  spawnPlayerFromRecord(record: PersistedPlayer): EntityId {
     const id = this.world.createEntity();
-    this.world.add(id, new Identity(name, "player"));
-    this.world.add(id, new Position(0, 0));
-    this.instantiateClass(id, DEFAULT_CLASS);
-    this.world.add(id, new Talents({}, STARTING_TALENT_POINTS));
+    this.world.add(id, new Identity(record.username, "player"));
+    this.world.add(id, new Account(record.id, record.username));
+    this.world.add(id, new Position(record.x, record.y));
+    this.instantiateClass(id, getClass(record.classType) ? record.classType : DEFAULT_CLASS);
+    this.world.add(id, new Talents({ ...record.talents }, STARTING_TALENT_POINTS));
     this.world.add(id, new Combat());
     this.world.add(id, new MoveIntent());
     this.world.add(id, new Locomotion(MOVE_SPEED));
 
-    // Containers: seed the backpack with the test items so equipping can be
-    // tried immediately (loot drops add more on top).
+    // Restore containers (already validated by the store, re-checked here).
     const inventory = this.world.add(id, new Inventory());
-    this.world.add(id, new Equipment());
-    inventory.add("whirlwind_axe");
-    inventory.add("robes_archmage");
-    inventory.add("tattered_gloves");
-    recalculateStats(this.world, id);
+    for (let i = 0; i < INVENTORY_SIZE; i++) {
+      const itemId = record.inventory[i];
+      inventory.slots[i] = itemId && getItem(itemId) ? itemId : null;
+    }
+    const equipment = this.world.add(id, new Equipment());
+    for (const slot of Object.keys(equipment.slots) as EquipSlot[]) {
+      const itemId = record.gear[slot];
+      equipment.slots[slot] = itemId && getItem(itemId) ? itemId : null;
+    }
 
-    this.log.push("info", `${name} has entered the world as a ${getClass(DEFAULT_CLASS).name}.`);
+    // Recalculate from base + talents + gear, then restore the exact saved
+    // HP / resource (recalc only sets maxima and the stamina-driven delta).
+    recalculateStats(this.world, id);
+    const stats = this.world.get(id, Stats)!;
+    const power = this.world.get(id, Power)!;
+    stats.hp = Math.max(1, Math.min(stats.maxHp, record.currentHp));
+    power.current = Math.max(0, Math.min(power.max, record.currentResource));
+
+    this.log.push("info", `${record.username} enters Azeroth as a ${getClass(record.classType)?.name ?? "Mage"}.`);
     return id;
+  }
+
+  // -- Persistence serialization --------------------------------------------
+
+  /** All logged-in player entities (those linked to a DB account). */
+  playersWithAccount(): EntityId[] {
+    return this.world.query(Account);
+  }
+
+  /** Build a full persisted record for a player entity. */
+  buildPersisted(player: EntityId): PersistedPlayer | null {
+    const account = this.world.get(player, Account);
+    const pos = this.world.get(player, Position);
+    const stats = this.world.get(player, Stats);
+    const power = this.world.get(player, Power);
+    const cls = this.world.get(player, ClassState);
+    const equip = this.world.get(player, Equipment);
+    const inv = this.world.get(player, Inventory);
+    const talents = this.world.get(player, Talents);
+    if (!account || !pos || !stats || !power || !cls || !equip || !inv || !talents) return null;
+
+    return {
+      id: account.dbId,
+      username: account.username,
+      classType: cls.classId,
+      level: 1,
+      x: pos.x,
+      y: pos.y,
+      currentHp: Math.round(stats.hp),
+      currentResource: Math.floor(power.current),
+      gear: { ...equip.slots },
+      inventory: [...inv.slots],
+      talents: { ...talents.ranks },
+    };
+  }
+
+  /** Lightweight state for the auto-save heartbeat. */
+  lightState(player: EntityId): LightState | null {
+    const account = this.world.get(player, Account);
+    const pos = this.world.get(player, Position);
+    const stats = this.world.get(player, Stats);
+    const power = this.world.get(player, Power);
+    if (!account || !pos || !stats || !power) return null;
+    return {
+      id: account.dbId,
+      x: pos.x,
+      y: pos.y,
+      currentHp: Math.round(stats.hp),
+      currentResource: Math.floor(power.current),
+    };
   }
 
   /**
@@ -317,6 +386,47 @@ export class Game {
       intent.dx = dx;
       intent.dy = dy;
     }
+  }
+
+  // -- Developer commands ---------------------------------------------------
+
+  /** `/item [id]` — insert a validated item into the player's backpack. */
+  devGiveItem(player: EntityId, itemId: string): void {
+    const item = getItem(itemId);
+    if (!item) {
+      this.log.push("info", `No such item: "${itemId}".`);
+      return;
+    }
+    const inv = this.world.get(player, Inventory);
+    if (!inv) return;
+    if (!inv.add(itemId)) {
+      this.log.push("info", "Your backpack is full.");
+      return;
+    }
+    this.log.push("info", `Created item: ${item.name}.`);
+  }
+
+  /** `/spawn` — teleport the player back to the world origin. */
+  devTeleportOrigin(player: EntityId): void {
+    const pos = this.world.get(player, Position);
+    if (!pos) return;
+    pos.x = 0;
+    pos.y = 0;
+    this.setMoveIntent(player, 0, 0);
+    this.log.push("info", "Teleported to origin (0, 0).");
+  }
+
+  /** Push an informational line into the combat log. */
+  pushLog(text: string): void {
+    this.log.push("info", text);
+  }
+
+  /** Find a logged-in player entity by account username. */
+  findByUsername(username: string): EntityId | null {
+    for (const id of this.world.query(Account)) {
+      if (this.world.get(id, Account)!.username === username) return id;
+    }
+    return null;
   }
 
   removePlayer(player: EntityId): void {

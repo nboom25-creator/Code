@@ -72,6 +72,14 @@ export interface WelcomeMessage {
   type: "welcome";
   /** The entity id the connecting client controls. */
   playerId: number;
+  /** The account name that was logged in. */
+  username: string;
+}
+
+/** Sent when a login attempt is rejected (e.g. already online). */
+export interface LoginErrorMessage {
+  type: "loginError";
+  message: string;
 }
 
 export interface SnapshotMessage {
@@ -113,6 +121,7 @@ export interface CombatLogEvent {
 
 export type ServerMessage =
   | WelcomeMessage
+  | LoginErrorMessage
   | SnapshotMessage
   | CombatLogMessage;
 
@@ -183,7 +192,23 @@ export interface LootItemMessage {
   lootIndex: number;
 }
 
+/** First message a client sends: log into (or create) an account. */
+export interface LoginMessage {
+  type: "login";
+  username: string;
+}
+
+export type DevCommandName = "save" | "item" | "spawn";
+
+/** GM/developer slash command from the dev console. */
+export interface DevCommandMessage {
+  type: "devCommand";
+  command: DevCommandName;
+  arg?: string;
+}
+
 export type ClientMessage =
+  | LoginMessage
   | SetTargetMessage
   | CastSpellMessage
   | ToggleAutoAttackMessage
@@ -194,4 +219,5 @@ export type ClientMessage =
   | ResetTalentsMessage
   | EquipItemMessage
   | UnequipItemMessage
-  | LootItemMessage;
+  | LootItemMessage
+  | DevCommandMessage;

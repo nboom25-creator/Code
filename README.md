@@ -100,7 +100,22 @@ zones) can be layered in cleanly.
   makes the monster instantly wipe threat, become **immune to damage**, sprint
   home, **heal to 100%**, and resume patrolling.
 
-### 8. Frontend visualization
+### 8. Persistence & sessions (Phase 5)
+- **Embedded SQLite** (`better-sqlite3`) via `server/src/db/PlayerStore.ts`, with
+  four tables: `players`, `player_gear`, `player_inventory`, `player_talents`.
+- **Login / character-select screen**: enter a username to log in. Existing
+  accounts are loaded (class, coordinates, gear, inventory, talents) and
+  re-spawned exactly where they left off via `recalculateStats()`; new accounts
+  are created at (0,0) with default gear and 5 unspent talent points.
+- **Auto-save heartbeat** (every 10s) batches position + resources to disk;
+  **save-on-logout/disconnect** runs a single **atomic transaction** so gear,
+  inventory and talents can't be duplicated or rolled back.
+- **All writes are validated** against the item/talent/class catalogs before
+  hitting disk — an unknown item id, slot or talent is never persisted.
+- **Dev console** (under the canvas): `/save`, `/item [id]`, `/spawn`, plus a
+  Logout button.
+
+### 9. Frontend visualization
 - Canvas world with player/monster circles, nameplates and a selection ring.
 - WoW-style **unit frames**: resource bar **recolors by power type**
   (blue mana / yellow energy / red rage) and a **stance/buff badge**.
@@ -136,6 +151,7 @@ zones) can be layered in cleanly.
 ├── server/                 # Authoritative Node.js + Express + ws backend
 │   └── src/
 │       ├── ecs/            #   World + components (data only)
+│       ├── db/             #   SQLite PlayerStore + persisted-state types
 │       ├── game/
 │       │   ├── Game.ts     #   world ownership, spawns, snapshots, commands
 │       │   ├── combat.ts   #   damage / threat / casting / loot-on-death rules
@@ -168,7 +184,10 @@ npm install        # installs all three workspaces
 npm run dev        # runs server (:3001) and client (:5173) together
 ```
 
-Then open **http://localhost:5173**.
+Then open **http://localhost:5173**, enter a character name on the login screen,
+and click **Enter Azeroth**. Your character (position, gear, inventory, talents)
+is saved to a local SQLite file (`server/game.db` by default, override with
+`DB_PATH`) and restored on your next login — even across server restarts.
 
 Run them separately if you prefer:
 

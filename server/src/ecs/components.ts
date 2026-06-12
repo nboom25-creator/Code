@@ -19,6 +19,16 @@ export class Identity extends Component {
   }
 }
 
+/** Links a player entity to its persisted database account. */
+export class Account extends Component {
+  constructor(
+    public readonly dbId: number,
+    public readonly username: string,
+  ) {
+    super();
+  }
+}
+
 /** World-space position in logical units. */
 export class Position extends Component {
   constructor(

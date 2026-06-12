@@ -3,7 +3,13 @@
  * and exposes typed senders for the input layer to drive.
  */
 
-import type { ClassId, ClientMessage, EquipSlot, ServerMessage } from "@wow/shared";
+import type {
+  ClassId,
+  ClientMessage,
+  DevCommandName,
+  EquipSlot,
+  ServerMessage,
+} from "@wow/shared";
 import type { ClientState } from "../state/ClientState.js";
 
 const WS_URL =
@@ -12,15 +18,48 @@ const WS_URL =
 export class Connection {
   private socket?: WebSocket;
   private lastMove = { dx: 0, dy: 0 };
+  /** Account name to (re)send on connect; null when logged out. */
+  private username: string | null = null;
+  private intentionalClose = false;
+
+  // UI hooks set by the bootstrap.
+  onLogin?: (username: string) => void;
+  onLoginError?: (message: string) => void;
+  onLogout?: () => void;
 
   constructor(private readonly state: ClientState) {}
 
-  connect(): void {
+  /** Log in (or create) an account; (re)connects the socket as needed. */
+  login(username: string): void {
+    this.username = username;
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.send({ type: "login", username });
+    } else {
+      this.connect();
+    }
+  }
+
+  /** Disconnect intentionally; the server saves on socket close. */
+  logout(): void {
+    this.intentionalClose = true;
+    this.username = null;
+    this.state.reset();
+    this.socket?.close();
+  }
+
+  private connect(): void {
+    this.intentionalClose = false;
     const socket = new WebSocket(WS_URL);
     this.socket = socket;
-    socket.onopen = () => console.log("[net] connected to", WS_URL);
+    socket.onopen = () => {
+      if (this.username) this.send({ type: "login", username: this.username });
+    };
     socket.onclose = () => {
-      console.warn("[net] disconnected — retrying in 1s");
+      if (this.intentionalClose) {
+        this.onLogout?.();
+        return;
+      }
+      // Unexpected drop: reconnect and (via onopen) re-login automatically.
       setTimeout(() => this.connect(), 1000);
     };
     socket.onmessage = (ev) => this.onMessage(ev.data);
@@ -36,6 +75,10 @@ export class Connection {
     switch (msg.type) {
       case "welcome":
         this.state.playerId = msg.playerId;
+        this.onLogin?.(msg.username);
+        break;
+      case "loginError":
+        this.onLoginError?.(msg.message);
         break;
       case "snapshot":
         this.state.applySnapshot(msg);
@@ -90,6 +133,10 @@ export class Connection {
 
   lootItem(sourceId: number, lootIndex: number): void {
     this.send({ type: "lootItem", sourceId, lootIndex });
+  }
+
+  devCommand(command: DevCommandName, arg?: string): void {
+    this.send({ type: "devCommand", command, arg });
   }
 
   /** Send a movement vector only when it changes, to avoid socket spam. */

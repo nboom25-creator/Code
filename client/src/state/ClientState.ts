@@ -43,6 +43,17 @@ export class ClientState {
     this.serverTime = msg.serverTime;
   }
 
+  /** Clear all per-session state (on logout). */
+  reset(): void {
+    this.playerId = null;
+    this.entities.clear();
+    this.gcdRemaining = 0;
+    this.stanceCdRemaining = 0;
+    this.talents = EMPTY_TALENTS;
+    this.containers = EMPTY_CONTAINERS;
+    this.log = [];
+  }
+
   appendLog(events: CombatLogEvent[]): void {
     this.log.push(...events);
     if (this.log.length > MAX_LOG) this.log.splice(0, this.log.length - MAX_LOG);
