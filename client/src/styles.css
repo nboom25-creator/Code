@@ -759,6 +759,89 @@ body {
   background: #7a2a2a;
 }
 
+/* ----- Touch controls (hidden unless body.touch) ----- */
+#joystick-root,
+#mobile-menu {
+  display: none;
+}
+
+#game {
+  touch-action: none; /* prevent browser pan/zoom while playing */
+}
+
+.joystick-base {
+  position: absolute;
+  bottom: 100px;
+  left: 28px;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: rgba(20, 26, 38, 0.45);
+  border: 2px solid rgba(200, 164, 90, 0.5);
+  z-index: 9;
+  touch-action: none;
+}
+.joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffe08a, #c8860a);
+  border: 2px solid rgba(0, 0, 0, 0.4);
+  will-change: transform;
+}
+
+.mobile-button {
+  width: 60px;
+  height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--panel);
+  border: 2px solid var(--border-dim);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+.mb-icon {
+  font-size: 20px;
+}
+.mb-label {
+  font-size: 9px;
+  color: var(--gold);
+}
+
+body.touch #joystick-root {
+  display: block;
+}
+body.touch #mobile-menu {
+  display: flex;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  gap: 8px;
+  z-index: 9;
+}
+/* Make room on small touch screens: hide dev tools, shrink/reposition log. */
+body.touch #dev-console,
+body.touch #hint {
+  display: none;
+}
+body.touch #combat-log {
+  left: 8px;
+  top: 8px;
+  bottom: auto;
+  width: 240px;
+  height: 110px;
+  font-size: 11px;
+}
+
 #hint {
   position: absolute;
   top: 8px;

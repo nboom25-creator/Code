@@ -219,6 +219,10 @@ npm run typecheck
 | `G`                | Toggle monster aggro-radius overlay   |
 | `Z` / `X` / `C`    | Become: Warrior / Rogue / Mage        |
 
+**Touch devices:** an on-screen **virtual joystick** (bottom-left) handles
+movement, tapping a monster targets it, and the action bar, class buttons and a
+Bags/Talents menu are all tappable — so the game is playable in a phone browser.
+
 ---
 
 ## Extending it

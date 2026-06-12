@@ -17,7 +17,9 @@ import { ItemTooltip } from "./render/ItemTooltip.js";
 import { CombatLog } from "./render/CombatLog.js";
 import { LoginScreen } from "./render/LoginScreen.js";
 import { DevConsole } from "./render/DevConsole.js";
+import { MobileMenu } from "./render/MobileMenu.js";
 import { Input } from "./input/Input.js";
+import { VirtualJoystick } from "./input/VirtualJoystick.js";
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -43,6 +45,12 @@ const lootWindow = new LootWindow(el("loot-root"), state, connection, renderer, 
 
 const input = new Input(connection, state, renderer, actionBar, classBar, talentPanel, characterPanel, canvas);
 input.attach();
+
+// -- Touch controls (shown only on touch devices via the body.touch class) ---
+const isTouch = window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
+document.body.classList.toggle("touch", isTouch);
+new VirtualJoystick(el("joystick-root"), connection);
+new MobileMenu(el("mobile-menu"), characterPanel, talentPanel);
 
 // -- Session: login screen + dev console ------------------------------------
 const loginScreen = new LoginScreen(el("login-root"), (username) => connection.login(username));

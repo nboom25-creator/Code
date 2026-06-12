@@ -47,7 +47,8 @@ export class Input {
   attach(): void {
     window.addEventListener("keydown", (e) => this.onKeyDown(e));
     window.addEventListener("keyup", (e) => this.onKeyUp(e));
-    this.canvas.addEventListener("mousedown", (e) => this.onClick(e));
+    // pointerdown covers both mouse clicks and touch taps for targeting.
+    this.canvas.addEventListener("pointerdown", (e) => this.onTapTarget(e.clientX, e.clientY));
   }
 
   private onKeyDown(e: KeyboardEvent): void {
@@ -125,9 +126,10 @@ export class Input {
     this.connection.setTarget(targets[this.tabIndex].id);
   }
 
-  private onClick(e: MouseEvent): void {
+  /** Tap/click on the canvas to target the nearest entity under the point. */
+  private onTapTarget(clientX: number, clientY: number): void {
     const rect = this.canvas.getBoundingClientRect();
-    const world = this.renderer.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    const world = this.renderer.screenToWorld(clientX - rect.left, clientY - rect.top);
 
     let picked: number | null = null;
     let bestDist = Infinity;
@@ -135,7 +137,8 @@ export class Input {
       if (entity.id === this.state.playerId) continue;
       const d = Math.hypot(entity.x - world.x, entity.y - world.y);
       const radius = entity.kind === "player" ? 16 : 20;
-      if (d <= radius + 8 && d < bestDist) {
+      // Touch needs a more forgiving hit area than a mouse.
+      if (d <= radius + 16 && d < bestDist) {
         bestDist = d;
         picked = entity.id;
       }
