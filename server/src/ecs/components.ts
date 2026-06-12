@@ -1,0 +1,231 @@
+/**
+ * Core gameplay components.
+ *
+ * Each component is a small bag of mutable data. Behaviour lives in systems,
+ * not here — this keeps the data model easy to serialize and reason about.
+ */
+
+import type { AIState, ClassId, EntityKind, EquipSlot, PowerType, TalentRanks } from "@wow/shared";
+import { EQUIP_SLOTS, INVENTORY_SIZE } from "@wow/shared";
+import { Component, type EntityId } from "./World.js";
+
+/** Human-readable identity used for nameplates and the kind discriminator. */
+export class Identity extends Component {
+  constructor(
+    public name: string,
+    public kind: EntityKind,
+  ) {
+    super();
+  }
+}
+
+/** Links a player entity to its persisted database account. */
+export class Account extends Component {
+  constructor(
+    public readonly dbId: number,
+    public readonly username: string,
+  ) {
+    super();
+  }
+}
+
+/** World-space position in logical units. */
+export class Position extends Component {
+  constructor(
+    public x: number,
+    public y: number,
+  ) {
+    super();
+  }
+}
+
+/** Primary attributes from which combat values are derived. */
+export interface Attributes {
+  strength: number;
+  agility: number;
+  intellect: number;
+  stamina: number;
+}
+
+/** Health, attributes, weapon and defensive stats. Resources live in Power. */
+export class Stats extends Component {
+  constructor(
+    public hp: number,
+    public maxHp: number,
+    public attributes: Attributes,
+    public armor: number,
+    public weaponMinDamage: number,
+    public weaponMaxDamage: number,
+    /** Critical strike chance as a percentage (0-100). */
+    public critChance: number,
+    /** Out-of-combat health regen per second. */
+    public hpRegen = 0,
+  ) {
+    super();
+  }
+  get dead(): boolean {
+    return this.hp <= 0;
+  }
+}
+
+/** The unit's single active resource pool (mana, energy or rage). */
+export class Power extends Component {
+  /** Accumulator for discrete energy ticks (ms). */
+  tickAccumulator = 0;
+  constructor(
+    public type: PowerType,
+    public current: number,
+    public max: number,
+    /** Continuous mana regen per second (mana only). */
+    public manaRegen = 0,
+  ) {
+    super();
+  }
+}
+
+/** Class identity plus the active stance/form and its swap cooldown. */
+export class ClassState extends Component {
+  constructor(
+    public classId: ClassId,
+    public stanceId: string,
+    /** Absolute server timestamp (ms) at which the stance cooldown ends. */
+    public stanceCdEndsAt = 0,
+  ) {
+    super();
+  }
+}
+
+/** Allocated talent ranks and the point budget. */
+export class Talents extends Component {
+  constructor(
+    public ranks: TalentRanks = {},
+    public pointsTotal = 0,
+  ) {
+    super();
+  }
+}
+
+/** Fixed-size backpack of item ids (null = empty slot). */
+export class Inventory extends Component {
+  readonly slots: (string | null)[] = new Array(INVENTORY_SIZE).fill(null);
+
+  /** Index of the first empty slot, or -1 if full. */
+  firstFree(): number {
+    return this.slots.indexOf(null);
+  }
+  add(itemId: string): boolean {
+    const i = this.firstFree();
+    if (i < 0) return false;
+    this.slots[i] = itemId;
+    return true;
+  }
+}
+
+/** Equipped items keyed by slot. */
+export class Equipment extends Component {
+  readonly slots: Record<EquipSlot, string | null> = Object.fromEntries(
+    EQUIP_SLOTS.map((s) => [s, null]),
+  ) as Record<EquipSlot, string | null>;
+}
+
+/** A monster's drop table: each entry rolls independently on death. */
+export class LootTable extends Component {
+  constructor(public readonly entries: { itemId: string; chance: number }[]) {
+    super();
+  }
+}
+
+/** State of a slain monster: the rolled loot and when it respawns. */
+export class Corpse extends Component {
+  constructor(
+    public loot: string[],
+    public respawnAt: number,
+  ) {
+    super();
+  }
+}
+
+/** An in-progress spell cast. */
+export class ActiveCast {
+  elapsed = 0;
+  constructor(
+    public spellId: string,
+    public spellName: string,
+    public castTime: number,
+  ) {}
+}
+
+/** Combat state: target, auto-attack, swing timer, GCD and active cast. */
+export class Combat extends Component {
+  targetId: EntityId | null = null;
+  inCombat = false;
+  autoAttacking = false;
+  /** ms until the next weapon swing is ready. */
+  swingTimer = 0;
+  /** Absolute server timestamp (ms) at which the GCD ends. */
+  gcdEndsAt = 0;
+  /** Active cast, or null. */
+  cast: ActiveCast | null = null;
+}
+
+/** Threat accumulated per attacker; monsters target the highest entry. */
+export class ThreatTable extends Component {
+  readonly threat = new Map<EntityId, number>();
+
+  add(source: EntityId, amount: number): void {
+    this.threat.set(source, (this.threat.get(source) ?? 0) + amount);
+  }
+
+  remove(source: EntityId): void {
+    this.threat.delete(source);
+  }
+
+  /** Entity with the most threat, or null if the table is empty. */
+  highest(): EntityId | null {
+    let best: EntityId | null = null;
+    let bestVal = -Infinity;
+    for (const [id, val] of this.threat) {
+      if (val > bestVal) {
+        bestVal = val;
+        best = id;
+      }
+    }
+    return best;
+  }
+}
+
+/** Current movement intent (a direction vector) set by input or AI. */
+export class MoveIntent extends Component {
+  dx = 0;
+  dy = 0;
+}
+
+/** Movement speed (world units / second). Set per-state for monsters. */
+export class Locomotion extends Component {
+  constructor(public speed: number) {
+    super();
+  }
+}
+
+/**
+ * Monster AI brain: the current state plus its home territory and patrol path.
+ * Behaviour lives in MonsterAISystem; this component is pure data.
+ */
+export class MonsterAI extends Component {
+  state: AIState = "patrol";
+  /** Currently heading toward patrol point B (false = toward A). */
+  patrolToB = true;
+
+  constructor(
+    /** Spawn / leash anchor (HomePosition). */
+    public readonly homeX: number,
+    public readonly homeY: number,
+    /** Two ends of the patrol line. */
+    public readonly patrolAx: number,
+    public readonly patrolAy: number,
+    public readonly patrolBx: number,
+    public readonly patrolBy: number,
+  ) {
+    super();
+  }
+}
