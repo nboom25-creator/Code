@@ -13,7 +13,7 @@ import { NetworkServer } from "./net/NetworkServer.js";
 import { PlayerStore } from "./db/PlayerStore.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
-const DB_PATH = process.env.DB_PATH ?? path.join(process.cwd(), "game.db");
+const DB_PATH = process.env.DB_PATH ?? path.join(process.cwd(), "game.json");
 /** Auto-save heartbeat interval (ms). */
 const AUTOSAVE_MS = 10_000;
 

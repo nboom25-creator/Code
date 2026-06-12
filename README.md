@@ -101,8 +101,10 @@ zones) can be layered in cleanly.
   home, **heal to 100%**, and resume patrolling.
 
 ### 8. Persistence & sessions (Phase 5)
-- **Embedded SQLite** (`better-sqlite3`) via `server/src/db/PlayerStore.ts`, with
-  four tables: `players`, `player_gear`, `player_inventory`, `player_talents`.
+- **Dependency-free persistence** via `server/src/db/PlayerStore.ts` — an atomic
+  JSON file store (no native build, runs anywhere Node does, including phones).
+  It records the same per-player state (class, coordinates, gear, inventory,
+  talents) the four-table schema described.
 - **Login / character-select screen**: enter a username to log in. Existing
   accounts are loaded (class, coordinates, gear, inventory, talents) and
   re-spawned exactly where they left off via `recalculateStats()`; new accounts
@@ -151,7 +153,7 @@ zones) can be layered in cleanly.
 ├── server/                 # Authoritative Node.js + Express + ws backend
 │   └── src/
 │       ├── ecs/            #   World + components (data only)
-│       ├── db/             #   SQLite PlayerStore + persisted-state types
+│       ├── db/             #   JSON-file PlayerStore + persisted-state types
 │       ├── game/
 │       │   ├── Game.ts     #   world ownership, spawns, snapshots, commands
 │       │   ├── combat.ts   #   damage / threat / casting / loot-on-death rules
@@ -186,7 +188,7 @@ npm run dev        # runs server (:3001) and client (:5173) together
 
 Then open **http://localhost:5173**, enter a character name on the login screen,
 and click **Enter Azeroth**. Your character (position, gear, inventory, talents)
-is saved to a local SQLite file (`server/game.db` by default, override with
+is saved to a local JSON file (`server/game.json` by default, override with
 `DB_PATH`) and restored on your next login — even across server restarts.
 
 Run them separately if you prefer:

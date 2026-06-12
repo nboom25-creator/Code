@@ -7,3 +7,5 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+game.json
+game.json.tmp
