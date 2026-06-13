@@ -494,6 +494,74 @@
   .menu-panel .tool{width:100%; text-align:left; background:transparent; border:1px solid transparent; padding:9px 12px; border-radius:9px; transform:none}
   .menu-panel .tool:hover{background:rgba(51,225,255,.12); border-color:transparent; transform:none}
   .menu-sep{height:1px; background:var(--line); margin:5px 6px}
+
+  /* ===================== cyber-naval HUD instrumentation ===================== */
+  :root{ --mono:ui-monospace,'SF Mono','JetBrains Mono','Roboto Mono',Menlo,Consolas,monospace; }
+  :root, :root[data-theme="ocean"]{
+    --bg1:#03080f; --bg2:#06141f; --bg3:#03070e;
+    --card1:rgba(11,27,42,.50); --card2:rgba(6,16,27,.52);
+  }
+  /* instrumentation glass panels: grid texture + strong blur + neon glow + bracket corners */
+  .card{
+    border-radius:14px;
+    background:
+      linear-gradient(160deg,var(--card1),var(--card2)),
+      repeating-linear-gradient(0deg, rgba(120,205,235,.030) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(90deg, rgba(120,205,235,.030) 0 1px, transparent 1px 26px);
+    backdrop-filter:blur(18px) saturate(1.25); -webkit-backdrop-filter:blur(18px) saturate(1.25);
+    box-shadow:0 26px 60px -28px rgba(0,0,0,.92), inset 0 1px 0 rgba(120,225,255,.06),
+      0 0 26px -12px rgba(51,225,255,.18);
+  }
+  .card::after{ content:''; position:absolute; inset:7px; pointer-events:none; opacity:.55; --bl:15px; --bc:rgba(51,225,255,.65);
+    background:
+      linear-gradient(var(--bc),var(--bc)) top left/var(--bl) 1.5px no-repeat,
+      linear-gradient(var(--bc),var(--bc)) top left/1.5px var(--bl) no-repeat,
+      linear-gradient(var(--bc),var(--bc)) top right/var(--bl) 1.5px no-repeat,
+      linear-gradient(var(--bc),var(--bc)) top right/1.5px var(--bl) no-repeat,
+      linear-gradient(var(--bc),var(--bc)) bottom left/var(--bl) 1.5px no-repeat,
+      linear-gradient(var(--bc),var(--bc)) bottom left/1.5px var(--bl) no-repeat,
+      linear-gradient(var(--bc),var(--bc)) bottom right/var(--bl) 1.5px no-repeat,
+      linear-gradient(var(--bc),var(--bc)) bottom right/1.5px var(--bl) no-repeat; }
+  .card:hover::after{opacity:.9}
+  .warnbar .card{box-shadow:0 26px 60px -28px rgba(0,0,0,.92), inset 0 1px 0 rgba(255,220,150,.06), 0 0 34px -10px rgba(255,194,77,.3)}
+  .warnbar .card::after{--bc:rgba(255,194,77,.75)}
+  .recbar .card{box-shadow:0 26px 60px -28px rgba(0,0,0,.92), inset 0 1px 0 rgba(150,255,210,.06), 0 0 34px -10px rgba(77,255,176,.28)}
+  .recbar .card::after{--bc:rgba(77,255,176,.75)}
+
+  /* critical data points — crisp telemetry monospace */
+  .kv .v{font-family:var(--mono); letter-spacing:.2px; font-weight:700; color:#eafdff; font-variant-numeric:tabular-nums}
+  #req_out .v, #asm_stab .v, #miss_out .v{font-family:var(--mono); color:#eafdff}
+  .card h2{text-shadow:0 0 18px rgba(51,225,255,.25)}
+
+  /* HUD telemetry badges (TUNE / GOOD / FIX) */
+  .reclist .tag{font-family:var(--mono); text-transform:uppercase; letter-spacing:.8px; border-radius:4px;
+    padding:3px 8px 3px 12px; position:relative; font-size:9.5px}
+  .reclist .tag::before{content:''; position:absolute; left:3px; top:4px; bottom:4px; width:2.5px; border-radius:2px;
+    background:currentColor; box-shadow:0 0 7px currentColor}
+  .badge{font-family:var(--mono); text-transform:uppercase; letter-spacing:.5px; border-radius:5px; font-size:11px}
+  .chip{font-family:var(--mono); text-transform:uppercase; letter-spacing:.5px; border-radius:6px}
+
+  /* navigation pills as illuminated tactical toggles */
+  .pills{gap:10px}
+  .pills span{position:relative; font-family:var(--mono); text-transform:uppercase; letter-spacing:.7px; font-size:10.5px;
+    padding:8px 15px 10px; border-radius:8px; overflow:hidden; transition:.18s; cursor:default;
+    background:linear-gradient(180deg,rgba(51,225,255,.07),rgba(51,225,255,.015));
+    border:1px solid rgba(51,225,255,.22); color:#bfe9f5}
+  .pills span::after{content:''; position:absolute; left:14px; right:14px; bottom:4px; height:2px; border-radius:2px;
+    background:var(--accent); box-shadow:0 0 9px var(--accent); opacity:.25; transition:.18s}
+  .pills span:hover{transform:translateY(-1px); color:#eafdff; border-color:rgba(51,225,255,.55);
+    background:linear-gradient(180deg,rgba(51,225,255,.18),rgba(51,225,255,.04));
+    box-shadow:inset 0 0 16px rgba(51,225,255,.22), 0 6px 18px -7px rgba(51,225,255,.55)}
+  .pills span:hover::after{opacity:1}
+
+  /* execution-switch CTAs */
+  @keyframes ctaPulse{0%,100%{box-shadow:0 8px 20px -8px rgba(51,225,255,.55)} 50%{box-shadow:0 10px 30px -6px rgba(51,225,255,1)}}
+  button.apply{border-radius:8px; letter-spacing:.3px; box-shadow:0 8px 20px -8px rgba(51,225,255,.6)}
+  :root[data-mode="fun"] button.apply{animation:ctaPulse 2.2s ease-in-out infinite}
+  button.calc{position:relative; letter-spacing:.5px; text-transform:uppercase; font-size:13px}
+
+  @media (prefers-reduced-motion:reduce){ button.apply{animation:none !important} }
+  @media print{ .card{backdrop-filter:none; background:#fff} .card::after{display:none} }
 </style>
 </head>
 <body>
@@ -1453,7 +1521,7 @@ function renderRecs(recs){
   const tagText={0:'FIX',1:'TUNE',2:'GOOD'};
   bar.innerHTML='<div class="card"><h2><span class="ic">💡</span> Recommendations</h2><ul class="reclist">'+
     recs.map((r,i)=>'<li><span class="tag '+tagName[r.lvl]+'">'+tagText[r.lvl]+'</span><span>'+r.text+
-      (r.apply?' <button class="apply" data-i="'+i+'">Apply ↦</button>':'')+'</span></li>').join('')+
+      (r.apply?' <button class="apply" data-i="'+i+'">Apply ≫</button>':'')+'</span></li>').join('')+
     '</ul></div>';
 }
 // set fields from an apply action: [{id,value}] or [{id,check:true}]
