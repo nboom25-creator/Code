@@ -844,6 +844,30 @@
       <div class="hint">Kinematic playback of the steady-glide sawtooth from the current design (descend → pump → ascend → pump). Not a full 6-DOF dynamics model.</div>
     </section>
 
+    <!-- 6-DOF FLIGHT (IN-BROWSER) -->
+    <section class="card span2" id="card-g6">
+      <h2><span class="ic">🛩️</span> 6-DOF flight — full dynamics (in-browser)</h2>
+      <canvas id="g6Canvas" width="1100" height="340"></canvas>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+        <button class="tool" id="g6Play">▶ Play</button>
+        <button class="tool" id="g6Pause">⏸ Pause</button>
+        <button class="tool" id="g6Reset">⟲ Reset</button>
+        <label style="margin:0">Speed ×</label><input type="number" id="g6Speed" value="20" step="5" style="width:80px">
+        <label style="margin:0">Heading cmd °</label><input type="number" id="g6Hdg" value="25" step="5" style="width:80px">
+      </div>
+      <div class="out" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:2px 16px">
+        <div class="kv"><span class="k">Phase</span><span class="v" id="o_g6Phase">–</span></div>
+        <div class="kv"><span class="k">Elapsed</span><span class="v" id="o_g6Time">–</span></div>
+        <div class="kv"><span class="k">Depth</span><span class="v" id="o_g6Depth">–</span></div>
+        <div class="kv"><span class="k">Roll</span><span class="v" id="o_g6Roll">–</span></div>
+        <div class="kv"><span class="k">Pitch</span><span class="v" id="o_g6Pitch">–</span></div>
+        <div class="kv"><span class="k">Yaw</span><span class="v" id="o_g6Yaw">–</span></div>
+        <div class="kv"><span class="k">Speed</span><span class="v" id="o_g6Spd">–</span></div>
+        <div class="kv"><span class="k">Travel</span><span class="v" id="o_g6Dist">–</span></div>
+      </div>
+      <div class="hint">Full 12-state rigid-body dynamics (added mass, Coriolis/Munk, lift/drag/side force, buoyancy restoring, ballast + movable-mass trim, rudder, lateral current) integrated with RK4 — the same model as the Python simulator, running live from the current design. Left = side view, right = top-down.</div>
+    </section>
+
     <!-- POLAR CHART -->
     <section class="card span2" id="card-polar">
       <h2><span class="ic">📈</span> Glide polar — efficiency vs. speed across lift coefficient</h2>
@@ -1599,6 +1623,136 @@ function drawMission(){
   c.addEventListener('pointerup',()=>{ drag=false; });
 })();
 ['missCur','missDir'].forEach(id=>$(id).addEventListener('input', drawMission));
+
+// ===== in-browser 6-DOF flight model (port of simulation/glider_6dof.py) =====
+function g6skew(a){return [[0,-a[2],a[1]],[a[2],0,-a[0]],[-a[1],a[0],0]];}
+function g6cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function g6m3v(M,v){return [M[0][0]*v[0]+M[0][1]*v[1]+M[0][2]*v[2],M[1][0]*v[0]+M[1][1]*v[1]+M[1][2]*v[2],M[2][0]*v[0]+M[2][1]*v[1]+M[2][2]*v[2]];}
+function g6R(phi,theta,psi){const cf=Math.cos(phi),sf=Math.sin(phi),ct=Math.cos(theta),st=Math.sin(theta),cp=Math.cos(psi),sp=Math.sin(psi);
+  return [[cp*ct,cp*st*sf-sp*cf,cp*st*cf+sp*sf],[sp*ct,sp*st*sf+cp*cf,sp*st*cf-cp*sf],[-st,ct*sf,ct*cf]];}
+function g6Rt(R){return [[R[0][0],R[1][0],R[2][0]],[R[0][1],R[1][1],R[2][1]],[R[0][2],R[1][2],R[2][2]]];}
+function g6Te(phi,theta){let ct=Math.cos(theta);ct=Math.sign(ct)*Math.max(Math.abs(ct),1e-4);const tt=Math.tan(theta),sf=Math.sin(phi),cf=Math.cos(phi);
+  return [[1,sf*tt,cf*tt],[0,cf,-sf],[0,sf/ct,cf/ct]];}
+function g6solve(M,b){const n=b.length,A=M.map((r,i)=>r.slice().concat([b[i]]));
+  for(let col=0;col<n;col++){let p=col;for(let r=col+1;r<n;r++)if(Math.abs(A[r][col])>Math.abs(A[p][col]))p=r;
+    [A[col],A[p]]=[A[p],A[col]];const d=A[col][col]||1e-12;
+    for(let r=0;r<n;r++){if(r===col)continue;const f=A[r][col]/d;for(let cc=col;cc<=n;cc++)A[r][cc]-=f*A[col][cc];}}
+  return A.map((r,i)=>r[n]/(A[i][i]||1e-12));}
+function g6wrap(a){return (a+Math.PI)%(2*Math.PI)-Math.PI;}
+function g6deriv(s,P){
+  const phi=s[3],theta=s[4],psi=s[5],nu1=[s[6],s[7],s[8]],nu2=[s[9],s[10],s[11]],nu=[s[6],s[7],s[8],s[9],s[10],s[11]];
+  const R=g6R(phi,theta,psi),Rt=g6Rt(R);
+  const m=P.m+P.mb,f=P.mp/(P.m+P.mb),rg=[P.rg[0]+f*P.rp[0],P.rg[1]+f*P.rp[1],P.rg[2]+f*P.rp[2]];
+  const rho=P.rho0+0.005*Math.max(s[2],0),vcb=g6m3v(Rt,P.cur);
+  const nur=[nu1[0]-vcb[0],nu1[1]-vcb[1],nu1[2]-vcb[2]],Vm=Math.hypot(nur[0],nur[1],nur[2])+1e-6;
+  const alpha=Math.atan2(nur[2],nur[0]),beta=Math.asin(Math.max(-1,Math.min(1,nur[1]/Vm))),qd=0.5*rho*Vm*Vm*P.A;
+  const CL=P.CLa*alpha,CD=P.cd0+P.k*CL*CL,CY=P.CYb*beta,Lf=qd*CL,Df=qd*CD,Yf=qd*CY;
+  const ca=Math.cos(alpha),sa=Math.sin(alpha),cb=Math.cos(beta),sb=Math.sin(beta);
+  const Rbw=[[ca*cb,-ca*sb,-sa],[sb,cb,0],[sa*cb,-sa*sb,ca]],Faero=g6m3v(Rbw,[-Df,Yf,-Lf]);
+  const hp=nu2[0]*P.b/(2*Vm),hq=nu2[1]*P.c/(2*Vm),hr=nu2[2]*P.b/(2*Vm);
+  const Maero=[qd*P.b*(P.Clb*beta+P.Clp*hp),qd*P.c*(P.Cma*alpha+P.Cmq*hq),qd*P.b*(P.Cnb*beta+P.Cnr*hr+P.Cndr*P.dr)];
+  const W=m*P.g,B=rho*P.V*P.g,fgb=g6m3v(Rt,[0,0,W]),fbb=g6m3v(Rt,[0,0,-B]);
+  const Frest=[fgb[0]+fbb[0],fgb[1]+fbb[1],fgb[2]+fbb[2]],cr2=g6cross(P.rb,fbb),Mrest=g6cross(rg,fgb).map((x,i)=>x+cr2[i]);
+  const nud=[nur[0],nur[1],nur[2],nu2[0],nu2[1],nu2[2]],Sg=g6skew(rg);
+  const M=[[m+P.Ma[0],0,0,-m*Sg[0][0],-m*Sg[0][1],-m*Sg[0][2]],[0,m+P.Ma[1],0,-m*Sg[1][0],-m*Sg[1][1],-m*Sg[1][2]],
+    [0,0,m+P.Ma[2],-m*Sg[2][0],-m*Sg[2][1],-m*Sg[2][2]],[m*Sg[0][0],m*Sg[0][1],m*Sg[0][2],P.Io[0]+P.Ma[3],0,0],
+    [m*Sg[1][0],m*Sg[1][1],m*Sg[1][2],0,P.Io[1]+P.Ma[4],0],[m*Sg[2][0],m*Sg[2][1],m*Sg[2][2],0,0,P.Io[2]+P.Ma[5]]];
+  const mv=row=>M[row][0]*nu[0]+M[row][1]*nu[1]+M[row][2]*nu[2]+M[row][3]*nu[3]+M[row][4]*nu[4]+M[row][5]*nu[5];
+  const S1=g6skew([mv(0),mv(1),mv(2)]),S2=g6skew([mv(3),mv(4),mv(5)]);
+  const C=[[0,0,0,-S1[0][0],-S1[0][1],-S1[0][2]],[0,0,0,-S1[1][0],-S1[1][1],-S1[1][2]],[0,0,0,-S1[2][0],-S1[2][1],-S1[2][2]],
+    [-S1[0][0],-S1[0][1],-S1[0][2],-S2[0][0],-S2[0][1],-S2[0][2]],[-S1[1][0],-S1[1][1],-S1[1][2],-S2[1][0],-S2[1][1],-S2[1][2]],
+    [-S1[2][0],-S1[2][1],-S1[2][2],-S2[2][0],-S2[2][1],-S2[2][2]]];
+  const tau=[Faero[0]+Frest[0],Faero[1]+Frest[1],Faero[2]+Frest[2],Maero[0]+Mrest[0],Maero[1]+Mrest[1],Maero[2]+Mrest[2]];
+  const rhs=tau.map((t,i)=>t-P.D[i]*nud[i]-(C[i][0]*nu[0]+C[i][1]*nu[1]+C[i][2]*nu[2]+C[i][3]*nu[3]+C[i][4]*nu[4]+C[i][5]*nu[5]));
+  const nd=g6solve(M,rhs),pd=g6m3v(R,nu1),ed=g6m3v(g6Te(phi,theta),nu2);
+  return [pd[0],pd[1],pd[2],ed[0],ed[1],ed[2],nd[0],nd[1],nd[2],nd[3],nd[4],nd[5]];
+}
+function g6rk4(s,dt,P){const a=g6deriv(s,P),s2=s.map((v,i)=>v+0.5*dt*a[i]),b=g6deriv(s2,P),s3=s.map((v,i)=>v+0.5*dt*b[i]),
+  c=g6deriv(s3,P),s4=s.map((v,i)=>v+dt*c[i]),d=g6deriv(s4,P);return s.map((v,i)=>v+(dt/6)*(a[i]+2*b[i]+2*c[i]+d[i]));}
+function g6control(s,P){const z=s[2];if(z<P.zTop)P.phase='dive';else if(z>P.zBot)P.phase='climb';
+  if(P.phase==='dive'){P.mb=P.ballast;P.rp=[P.xpMax,0,0];}else{P.mb=-P.ballast;P.rp=[-P.xpMax,0,0];}
+  P.dr=Math.max(-0.3,Math.min(0.3,1.0*g6wrap(P.psiCmd-s[5])-1.0*s[11]));}
+function g6setup(){
+  const g=9.81, rho0=num('surfaceDensity')||1025;
+  const m=Math.max(num('mass'),0.5), V=Math.max(num('volL')/1000,1e-4);
+  const r=Math.max(num('radius')/1000,0.01), L=Math.max(num('hullLength')/1000,0.1);
+  const A=Math.max(num('wingArea'),0.01), cd0=Math.max(num('cd0'),0.01), k=Math.max(num('k'),0.01);
+  const b=Math.sqrt(A*6), c=A/b, mdisp=rho0*V, Iw=0.10*m*(0.5*b)**2;
+  const Ixx=0.5*m*r*r+Iw, Iyy=(1/12)*m*(3*r*r+L*L), Izz=Iyy+Iw;
+  const a_u=0.04*mdisp,a_v=0.30*mdisp,a_p=0.40*Ixx,a_q=0.50*Iyy,a_r=0.50*Izz;
+  const Vref=0.3, qref=0.5*rho0*Vref*Vref*A, Wn=m*g, rgz=0.04*r;
+  const kR=Math.max(Wn*rgz,1e-9), kP=Math.max(Wn*rgz+qref*c*0.8,1e-9), kY=Math.max(qref*b*0.6,1e-9);
+  const dP=2*1.6*Math.sqrt((Ixx+a_p)*kR), dQ=2*1.0*Math.sqrt((Iyy+a_q)*kP), dR=2*1.8*Math.sqrt((Izz+a_r)*kY);
+  const ballast=Math.max(rho0*(Math.max(num('ballastL'),0)/1000)/2, 0.004);
+  const mp=0.25*m, xpMax=0.7*rgz*m/mp, depth=Math.max(num('hullDepth')||num('depthBand')||10, 1);
+  const cs=num('missCur')||0, cd=(num('missDir')||0)*Math.PI/180;
+  return {g,rho0,m,V,r,L,A,b,c,cd0,k,rg:[0,0,rgz],rb:[0,0,0],Io:[Ixx,Iyy,Izz],Ma:[a_u,a_v,a_v,a_p,a_q,a_r],
+    D:[0.03*m,0.44*m,0.44*m,dP,dQ,dR],CLa:4,CYb:-1.5,Cma:-0.8,Cmq:-4.5,Clb:-0.03,Clp:-0.7,Cnb:0.6,Cnr:-0.8,Cndr:0.55,
+    mp,xpMax,ballast,mb:ballast,rp:[xpMax,0,0],dr:0,phase:'dive',
+    zTop:Math.max(0.15*depth,0.3),zBot:Math.max(0.9*depth,0.15*depth+0.5),
+    psiCmd:(num('g6Hdg')||25)*Math.PI/180,cur:[cs*Math.cos(cd),cs*Math.sin(cd),0],u0:0.3,depth};
+}
+// ---- 6-DOF UI ----
+const G6={s:null,P:null,run:false,raf:0,last:0,speed:20,t:0,trail:[]};
+function drawGlider(ctx,x,y,ang){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(ang);
+  ctx.fillStyle='rgba(63,208,230,.85)';
+  ctx.beginPath(); ctx.moveTo(-2,0); ctx.lineTo(-11,-11); ctx.lineTo(-5,-11); ctx.lineTo(4,0); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-2,0); ctx.lineTo(-11,11); ctx.lineTo(-5,11); ctx.lineTo(4,0); ctx.closePath(); ctx.fill();
+  const bg=ctx.createLinearGradient(0,-4,0,4); bg.addColorStop(0,'#fff'); bg.addColorStop(1,'#bfe9f2');
+  ctx.fillStyle=bg; ctx.beginPath(); ctx.ellipse(0,0,14,4.5,0,0,7); ctx.fill();
+  ctx.fillStyle='#ffd166'; ctx.beginPath(); ctx.arc(12,0,2.4,0,7); ctx.fill(); ctx.restore();
+}
+function g6Init(){ G6.P=g6setup(); G6.s=[0,0,G6.P.zTop+0.1,0,0,0,G6.P.u0,0,0,0,0,0]; G6.t=0; G6.trail=[{x:0,y:0,z:G6.P.zTop+0.1}]; g6Draw(); g6Read(); }
+function g6Step(dt){ const P=G6.P; if(!P)return; let rem=dt;
+  while(rem>1e-9){ const h=Math.min(rem,0.04); g6control(G6.s,P); G6.s=g6rk4(G6.s,h,P); G6.t+=h; rem-=h;
+    if(!G6.s.every(Number.isFinite)){ g6Pause(); return; } }
+  const tr=G6.trail,last=tr[tr.length-1];
+  if(!last||Math.hypot(G6.s[0]-last.x,G6.s[1]-last.y)>0.05||Math.abs(G6.s[2]-last.z)>0.02) tr.push({x:G6.s[0],y:G6.s[1],z:G6.s[2]});
+  if(tr.length>6000) tr.shift();
+}
+function g6Loop(ts){ if(!G6.run)return; const dt=Math.min((ts-G6.last)/1000,0.1); G6.last=ts; g6Step(dt*G6.speed); g6Draw(); g6Read(); G6.raf=requestAnimationFrame(g6Loop); }
+function g6Play(){ if(G6.run)return; if(!G6.P) g6Init(); G6.run=true; G6.last=performance.now(); G6.raf=requestAnimationFrame(g6Loop); }
+function g6Pause(){ G6.run=false; if(G6.raf)cancelAnimationFrame(G6.raf); }
+function g6Reset(){ g6Pause(); g6Init(); }
+function g6Read(){ if(!G6.s)return; const s=G6.s,dg=x=>x*180/Math.PI;
+  if($('o_g6Phase')) $('o_g6Phase').textContent={dive:'Descending ↘',climb:'Ascending ↗'}[G6.P.phase]||'–';
+  $('o_g6Time').textContent=fmtClock(G6.t); $('o_g6Depth').textContent=fmt(s[2],2)+' m';
+  $('o_g6Roll').textContent=fmt(dg(s[3]),1)+'°'; $('o_g6Pitch').textContent=fmt(dg(s[4]),1)+'°'; $('o_g6Yaw').textContent=fmt(dg(s[5]),1)+'°';
+  $('o_g6Spd').textContent=fmt(Math.hypot(s[6],s[7],s[8]),3)+' m/s';
+  const d=Math.hypot(s[0],s[1]); $('o_g6Dist').textContent=(d>=1000?fmt(d/1000,2)+' km':fmt(d,1)+' m');
+}
+function g6Draw(){
+  const c=$('g6Canvas'); if(!c)return; const ctx=c.getContext('2d'),W=c.width,H=c.height; ctx.clearRect(0,0,W,H);
+  if(!G6.s||!G6.P){ ctx.fillStyle='#9fc1cf'; ctx.font='14px system-ui'; ctx.textAlign='center'; ctx.fillText('Press Play to run the 6-DOF dynamics.',W/2,H/2); return; }
+  const s=G6.s,P=G6.P,maxD=P.depth*1.1,hw=W/2;
+  // side panel (left)
+  (function(){ const padL=46,padT=18,padB=22,x0=8,plotW=hw-x0-12, span=Math.max(30,P.zBot*5), xmin=s[0]-0.6*span;
+    const X=x=>x0+padL+(x-xmin)/span*(plotW-padL), Y=d=>padT+(d/maxD)*(H-padT-padB);
+    ctx.font='10px system-ui'; ctx.textAlign='left';
+    for(let i=0;i<=4;i++){ const d=maxD*i/4,y=Y(d); ctx.strokeStyle='rgba(99,164,184,.16)'; ctx.beginPath(); ctx.moveTo(x0+padL,y); ctx.lineTo(x0+padL+plotW-padL,y); ctx.stroke(); ctx.fillStyle='#9fc1cf'; ctx.fillText(d.toFixed(1)+'m',x0+2,y+3); }
+    ctx.strokeStyle='#5be0c0'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x0+padL,Y(0)); ctx.lineTo(x0+plotW,Y(0)); ctx.stroke();
+    ctx.strokeStyle='#3fd0e6'; ctx.lineWidth=2; ctx.beginPath(); G6.trail.forEach((p,i)=>{const sx=X(p.x),sy=Y(p.z); i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy);}); ctx.stroke();
+    drawGlider(ctx,X(s[0]),Y(s[2]),-s[4]);
+    ctx.fillStyle='#9fc1cf'; ctx.textAlign='center'; ctx.fillText('side view (depth)',x0+plotW*0.5,H-7);
+  })();
+  // top panel (right): east → right, north → up
+  (function(){ const bx=hw+8,padL=18,padR=12,padT=18,padB=22, plotW=W-bx-padR-padL, plotH=H-padT-padB;
+    const xs=G6.trail.map(p=>p.x).concat(s[0]), ys=G6.trail.map(p=>p.y).concat(s[1]);
+    let xmn=Math.min(0,...xs),xmx=Math.max(0,...xs),ymn=Math.min(0,...ys),ymx=Math.max(0,...ys);
+    const ex=Math.max(xmx-xmn,ymx-ymn,5)*1.15, xc=(xmn+xmx)/2, yc=(ymn+ymx)/2, sc=Math.min(plotW,plotH)/ex;
+    const X=y=>bx+padL+plotW/2+(y-yc)*sc, Y=x=>padT+plotH/2-(x-xc)*sc;   // east right, north up
+    ctx.strokeStyle='rgba(99,164,184,.18)'; ctx.lineWidth=1; ctx.strokeRect(bx+padL,padT,plotW,plotH);
+    ctx.strokeStyle='#5be0c0'; ctx.lineWidth=2; ctx.beginPath(); G6.trail.forEach((p,i)=>{const sx=X(p.y),sy=Y(p.x); i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy);}); ctx.stroke();
+    drawGlider(ctx,X(s[1]),Y(s[0]),Math.atan2(-Math.cos(s[5]),Math.sin(s[5])));
+    ctx.fillStyle='#9fc1cf'; ctx.font='10px system-ui'; ctx.textAlign='center'; ctx.fillText('top-down (N↑, E→)',bx+padL+plotW/2,H-7);
+  })();
+}
+$('g6Play').addEventListener('click', g6Play);
+$('g6Pause').addEventListener('click', g6Pause);
+$('g6Reset').addEventListener('click', g6Reset);
+$('g6Speed').addEventListener('input', ()=>{ G6.speed=Math.max(num('g6Speed')||1,0.1); });
+$('g6Hdg').addEventListener('input', ()=>{ if(G6.P) G6.P.psiCmd=(num('g6Hdg')||25)*Math.PI/180; });
 
 // ---- persistence & controls ----
 let hullShellMass=NaN, hullExtVolL=NaN, pumpSweptML=NaN, lastDesign=null;
@@ -2614,6 +2768,8 @@ refreshDesigns();
 compute();
 sim.speed=Math.max(num('simSpeed')||30,0.1);
 simReset();
+G6.speed=Math.max(num('g6Speed')||20,0.1);
+g6Reset();
 </script>
 </body>
 </html>
