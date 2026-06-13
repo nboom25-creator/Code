@@ -562,6 +562,106 @@
 
   @media (prefers-reduced-motion:reduce){ button.apply{animation:none !important} }
   @media print{ .card{backdrop-filter:none; background:#fff} .card::after{display:none} }
+
+  /* ===================== engineering console (industry-grade) ===================== */
+  :root, :root[data-theme="ocean"]{
+    --accent:#4a9eff; --accent2:#5fb0d8; --accent-deep:#2f6fb8;
+    --good:#5fa875; --warn:#caa14a; --bad:#cf6b6b;
+    --ink:#e6ecf2; --muted:#8b97a6; --line:#2a3441; --line2:#384252;
+    --bg1:#0c1118; --bg2:#0f151d; --bg3:#0c1118; --panel:#141b25; --inputbg:#0f151d;
+    --glow1:rgba(74,158,255,.05); --glow2:rgba(74,158,255,.03);
+  }
+  body{background:linear-gradient(180deg,#0c1118,#0e141d 50%,#0c1118); font-size:14px}
+  body::before{display:none}
+  .wrap{padding:14px 14px 60px; max-width:1320px}
+  .grid{gap:14px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+
+  /* flat slate panels with thin borders, tight density */
+  .card{background:var(--panel); backdrop-filter:none; -webkit-backdrop-filter:none;
+    border:1px solid var(--line); border-radius:8px; padding:16px; box-shadow:none; overflow:visible}
+  .card::before, .card::after{display:none !important}
+  .card:hover{transform:none; box-shadow:none; border-color:var(--line2)}
+  .card h2{font-size:13.5px; font-weight:700; color:var(--ink); letter-spacing:.3px; text-shadow:none;
+    border-bottom:1px solid var(--line); padding-bottom:11px; margin:0 0 14px; gap:10px}
+  .card h2 .ic{width:28px; height:28px; border-radius:6px; font-size:15px;
+    background:rgba(74,158,255,.10); border:1px solid rgba(74,158,255,.22)}
+  .subhead{font-weight:700; color:var(--ink); border-bottom:1px solid var(--line); padding-bottom:9px}
+  .subhead .ic{background:rgba(74,158,255,.10); border:1px solid rgba(74,158,255,.22)}
+
+  /* typography: clean sans UI, monospace data, muted units */
+  label{font-size:11px; font-weight:500; letter-spacing:.2px; color:var(--muted); text-transform:none; margin:9px 0 3px}
+  .hint{color:#6f7c8c; font-size:11px}
+  .kv{padding:6px 0; border-bottom:1px solid rgba(42,52,65,.6)}
+  .kv .k{color:var(--muted); font-weight:500; font-family:inherit}
+  .kv .v{font-family:var(--mono); font-weight:600; color:#f0f5fa; letter-spacing:0}
+  .kv .v .num,.num{color:#f4f8fc; font-weight:700}
+  .kv .v .u,.u{color:var(--muted); font-weight:400}
+  .out{margin-top:14px; padding-top:12px; border-top:1px solid var(--line)}
+  .row,.row3{gap:10px}
+
+  /* inputs */
+  input[type=number],input[type=text],select{background:var(--inputbg); border:1px solid var(--line);
+    border-radius:5px; padding:8px 10px; color:var(--ink); backdrop-filter:none; -webkit-backdrop-filter:none}
+  input[type=number]:focus,input[type=text]:focus,select:focus{border-color:var(--accent);
+    box-shadow:0 0 0 2px rgba(74,158,255,.22); background:var(--inputbg)}
+
+  /* buttons */
+  button.tool{background:#161e29; border:1px solid var(--line); border-radius:5px; padding:7px 12px;
+    font-size:12.5px; font-weight:500; color:var(--ink); backdrop-filter:none; -webkit-backdrop-filter:none; transition:.12s}
+  button.tool:hover{background:#1b2533; border-color:var(--line2); color:#fff; transform:none}
+  button.calc{background:var(--accent); color:#fff; font-weight:600; border:none; border-radius:5px;
+    text-transform:none; letter-spacing:.2px; box-shadow:none; animation:none}
+  button.calc:hover{background:#5aa8ff; transform:none; box-shadow:none; filter:none}
+  button.calc.done{background:var(--good)}
+  button.apply{background:var(--accent); color:#fff; font-weight:600; border:none; border-radius:4px;
+    padding:4px 11px; letter-spacing:.2px; box-shadow:none; animation:none !important}
+  button.apply:hover{background:#5aa8ff; transform:none; box-shadow:none; filter:none}
+  button.apply:focus-visible,button.calc:focus-visible{outline:2px solid #8cc4ff; outline-offset:1px}
+  button.mini{background:#161e29; border:1px solid var(--line); border-radius:4px}
+  button.mini:hover{border-color:var(--line2); color:#fff}
+
+  /* diagnostic flags (sharp rectangles, disciplined palette) */
+  .badge,.tag,.chip{font-family:var(--mono); text-transform:uppercase; letter-spacing:.4px; font-size:10px;
+    font-weight:600; border-radius:3px; border:1px solid; backdrop-filter:none; padding:2px 7px}
+  .reclist .tag::before{display:none}
+  .badge.good,.tag.good,.chip.good{color:#86cca0; background:rgba(95,168,117,.13); border-color:rgba(95,168,117,.32)}
+  .badge.warn,.tag.tune,.chip.warn{color:#dcb863; background:rgba(202,161,74,.13); border-color:rgba(202,161,74,.32)}
+  .badge.bad,.tag.fix,.chip.bad{color:#e08a8a; background:rgba(207,107,107,.13); border-color:rgba(207,107,107,.32)}
+  .chip.gold{color:#dcb863; background:rgba(202,161,74,.13); border-color:rgba(202,161,74,.32)}
+  .reclist li,.warnlist li{font-weight:500; color:#d6deea; padding:8px 0}
+  .warnlist li{color:#dcb863}
+  .empty{color:#6f7c8c}
+
+  /* segmented module tab bar */
+  .pills{display:inline-flex; gap:0; border:1px solid var(--line); border-radius:6px; overflow:hidden;
+    background:var(--panel); margin-top:14px}
+  .pills span{font-family:inherit; text-transform:none; letter-spacing:.1px; font-size:12px; font-weight:600;
+    padding:8px 15px; border:none; border-right:1px solid var(--line); border-radius:0; background:transparent;
+    color:var(--muted); position:relative; box-shadow:none; transition:.13s; cursor:default}
+  .pills span:last-child{border-right:none}
+  .pills span::after{content:''; position:absolute; left:0; right:0; bottom:0; height:2px; background:var(--accent);
+    box-shadow:none; opacity:0; transition:.13s}
+  .pills span:first-child{color:var(--ink); background:rgba(74,158,255,.08)}
+  .pills span:first-child::after{opacity:1}
+  .pills span:hover{color:var(--ink); background:rgba(74,158,255,.10)}
+  .pills span:hover::after{opacity:1}
+
+  /* thin utility ribbon */
+  .appbar{background:#0e141d; backdrop-filter:none; -webkit-backdrop-filter:none; border-bottom:1px solid var(--line);
+    box-shadow:none; padding:8px 14px}
+  .appbar .tool{background:#161e29; border:1px solid var(--line); border-radius:5px; padding:6px 11px; font-weight:500}
+  .appbar .tool:hover{background:#1b2533; border-color:var(--line2)}
+  .ver{background:rgba(74,158,255,.12); border:1px solid rgba(74,158,255,.3); color:#7db8ff}
+  .wordmark{font-weight:700} .wordmark b{color:var(--accent)}
+  .menu.open .menu-btn{background:rgba(74,158,255,.12); border-color:rgba(74,158,255,.42); color:#7db8ff}
+  .menu-panel{background:#141b25; border:1px solid var(--line); border-radius:6px; backdrop-filter:none;
+    box-shadow:0 14px 30px -10px rgba(0,0,0,.7)}
+  .menu-panel .tool{background:transparent; border:1px solid transparent}
+  .menu-panel .tool:hover{background:rgba(74,158,255,.12)}
+
+  header h1{text-shadow:none}
+  header h1 .wave{filter:none}
+  canvas{border:1px solid var(--line); border-radius:6px; box-shadow:none}
 </style>
 </head>
 <body>
@@ -1472,6 +1572,7 @@ function compute(){
     }
     renderWorksheet(WS);
   }
+  if(typeof styleUnits==='function') styleUnits();
   save();
 }
 
@@ -1479,6 +1580,15 @@ function sfBadge(sf,thresh){
   const cls = sf>=thresh*1.33 ? "good" : sf>=thresh ? "warn" : "bad";
   const txt = isFinite(sf)? fmt(sf,2) : "∞";
   return '<span class="badge '+cls+'">'+txt+'</span>';
+}
+// split "510.09 N" -> high-contrast number + muted unit (engineering readout)
+function styleUnits(root){
+  (root||document).querySelectorAll('.kv .v').forEach(el=>{
+    if(el.children.length) return;            // skip badges/markup
+    const t=el.textContent, m=t.match(/^(\s*[+\-−]?\d[\d.,]*(?:[eE][+\-]?\d+)?)(.*)$/);
+    if(!m || !m[2]) return;
+    el.innerHTML='<span class="num">'+escapeHtml(m[1])+'</span><span class="u">'+escapeHtml(m[2])+'</span>';
+  });
 }
 function renderWorksheet(W){
   const el=$('worksheet'); if(!el) return;
@@ -1521,7 +1631,7 @@ function renderRecs(recs){
   const tagText={0:'FIX',1:'TUNE',2:'GOOD'};
   bar.innerHTML='<div class="card"><h2><span class="ic">💡</span> Recommendations</h2><ul class="reclist">'+
     recs.map((r,i)=>'<li><span class="tag '+tagName[r.lvl]+'">'+tagText[r.lvl]+'</span><span>'+r.text+
-      (r.apply?' <button class="apply" data-i="'+i+'">Apply ≫</button>':'')+'</span></li>').join('')+
+      (r.apply?' <button class="apply" data-i="'+i+'">Apply →</button>':'')+'</span></li>').join('')+
     '</ul></div>';
 }
 // set fields from an apply action: [{id,value}] or [{id,check:true}]
@@ -2161,6 +2271,7 @@ function generateFromRequirements(){
     kv('Reynolds (on chord)', fmt(Re,0))+
     (notes.length? '<div style="margin-top:8px">'+notes.map(n=>'<div style="color:var(--warn);padding:4px 0;font-size:13px">⚠️ '+n+'</div>').join('')+'</div>'
       : '<div class="ok-msg" style="margin-top:8px">Requirements look self-consistent — see the sized sections below.</div>');
+  if(typeof styleUnits==='function') styleUnits($('req_out'));
   const b=$('btnGenerate'); b.textContent='✓ Design generated — see sections below';
   setTimeout(()=>b.textContent='⚙️ Generate design from requirements',2200);
 }
