@@ -856,6 +856,19 @@
       <div class="hint" style="text-align:center;margin-top:6px">C<sub>L</sub> on the horizontal axis. The peak of the blue curve is the most efficient glide; moving right trades efficiency for slower, steeper flight.</div>
     </section>
 
+    <!-- MISSION PLANNER -->
+    <section class="card span2" id="card-mission">
+      <h2><span class="ic">🗺️</span> Mission planner</h2>
+      <div class="row3">
+        <div><label>Current speed (m/s)</label><input type="number" id="missCur" value="0.1" step="0.02"></div>
+        <div><label>Current heading (° from N, toward)</label><input type="number" id="missDir" value="90" step="5"></div>
+        <div class="hint" style="margin-top:24px">Drag the red target to set the destination. Start is the green dot.</div>
+      </div>
+      <canvas id="missCanvas" width="1100" height="380" style="touch-action:none;cursor:crosshair"></canvas>
+      <div class="out" id="miss_out" style="font-size:13px"></div>
+      <div class="hint">Uses the glide speed, total range and endurance from the current design. Transit time accounts for crabbing into the current.</div>
+    </section>
+
     <!-- CALCULATION WORKSHEET -->
     <section class="card span2" id="card-work">
       <h2><span class="ic">📝</span> Calculation worksheet — equation · numbers · result</h2>
@@ -1217,6 +1230,8 @@ function compute(){
     angle:(vh>0&&isFinite(vv))?Math.atan2(vv,vh):0,
     strokeTime:isFinite(strokeTime)?strokeTime:0,
     rangePerCycle:isFinite(rangePerCycle)?rangePerCycle:0 };
+  missionData={vh:vh||0, totalRange:isFinite(totalRange)?totalRange:0, endurance:isFinite(endurance)?endurance:0};
+  if(typeof drawMission==='function') drawMission();
   if(typeof drawTimeline==='function'){ drawTimeline(); if(!sim.running) drawSim(); updateSimReadouts(); }
   if(typeof updateHealth==='function') updateHealth({netg:net/g*1000, bg:bg, ysf:ysf, bsf:bsf, glideRatio:glideRatio});
 
@@ -1400,6 +1415,7 @@ function buildReport(r){
 
 // ---- dive simulation (kinematic sawtooth playback) ----
 let simParams={vh:0,vv:0,depthBand:0,angle:0,strokeTime:0,rangePerCycle:0};
+let missionData={vh:0,totalRange:0,endurance:0}, mission={dx:4000,dy:900};
 const sim={t:0,x:0,depth:0,pitch:0,phase:'descend',ptimer:0,cycles:0,running:false,speed:30,trail:[],raf:0,last:0};
 function fmtClock(s){ if(!isFinite(s))return '–';
   if(s<3600) return Math.floor(s/60)+'m '+Math.round(s%60)+'s';
@@ -1508,6 +1524,81 @@ function drawTimeline(){
     '<div style="display:flex;gap:2px;border-radius:8px;overflow:hidden">'+
     seg('Descend',tDown,'#3fd0e6')+seg('Pump',tPump,'#ffd166')+seg('Ascend',tDown,'#5be0c0')+seg('Pump',tPump,'#ffd166')+'</div>';
 }
+
+// ---- mission planner ----
+function missionSolve(){
+  const vh=missionData.vh, cs=num('missCur'), cd=num('missDir')*Math.PI/180;
+  const cE=cs*Math.sin(cd), cN=cs*Math.cos(cd);              // current east/north
+  const dx=mission.dx, dy=mission.dy, D=Math.hypot(dx,dy);   // dx=east, dy=north
+  const o={D, range:missionData.totalRange, endurance:missionData.endurance, feasible:false};
+  if(D<1 || !(vh>0)) return o;
+  const ux=dx/D, uy=dy/D, cAlong=cE*ux+cN*uy, cPerp=-cE*uy+cN*ux;
+  const sinHC=-cPerp/vh;
+  if(Math.abs(sinHC)>=1){ o.reason='current exceeds glide speed'; return o; }
+  const vg=vh*Math.sqrt(1-sinHC*sinHC)+cAlong;
+  o.bearing=(Math.atan2(dx,dy)*180/Math.PI+360)%360;
+  o.crab=Math.asin(sinHC)*180/Math.PI;
+  o.vg=vg; o.time=vg>0?D/vg:Infinity;
+  o.reachable = o.range>0 ? D<=o.range : true;
+  o.marginPct = o.range>0 ? (1-D/o.range)*100 : NaN;
+  o.timeOK = o.endurance>0 ? o.time<=o.endurance : true;
+  o.feasible = vg>0;
+  return o;
+}
+function _arrow(ctx,x0,y0,x1,y1){ ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+  const a=Math.atan2(y1-y0,x1-x0); ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x1-6*Math.cos(a-0.4),y1-6*Math.sin(a-0.4));
+  ctx.moveTo(x1,y1); ctx.lineTo(x1-6*Math.cos(a+0.4),y1-6*Math.sin(a+0.4)); ctx.stroke(); }
+let _missMap=null;
+function drawMission(){
+  const c=$('missCanvas'); if(!c) return; const ctx=c.getContext('2d'), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H);
+  const o=missionSolve(), range=missionData.totalRange;
+  const ext=Math.max(range, o.D, 1000)*1.25, sx=W/2, sy=H/2, sc=Math.min(W,H)*0.42/ext;
+  const X=e=>sx+e*sc, Y=n=>sy-n*sc;
+  _missMap={sx,sy,sc};
+  // grid
+  ctx.strokeStyle='rgba(99,164,184,.10)'; ctx.lineWidth=1;
+  for(let g=-5;g<=5;g++){ ctx.beginPath(); ctx.moveTo(X(g*ext/5),0); ctx.lineTo(X(g*ext/5),H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,Y(g*ext/5)); ctx.lineTo(W,Y(g*ext/5)); ctx.stroke(); }
+  // current field
+  const cs=num('missCur'), cdr=num('missDir')*Math.PI/180, ce=Math.sin(cdr), cn=Math.cos(cdr);
+  ctx.strokeStyle='rgba(91,224,192,.28)'; ctx.lineWidth=1.2;
+  if(cs>0) for(let gx=46;gx<W;gx+=92)for(let gy=46;gy<H;gy+=92) _arrow(ctx,gx,gy,gx+ce*26,gy-cn*26);
+  // max range ring
+  if(range>0){ ctx.strokeStyle='rgba(63,208,230,.35)'; ctx.setLineDash([6,5]); ctx.beginPath(); ctx.arc(sx,sy,range*sc,0,7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#9fc1cf'; ctx.font='11px system-ui'; ctx.fillText('max range '+fmt(range/1000,1)+' km', sx+6, sy-range*sc-4); }
+  // track
+  ctx.strokeStyle=o.feasible&&o.reachable&&o.timeOK ? '#5be0c0' : '#ff7a7a'; ctx.lineWidth=2.5;
+  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(X(mission.dx),Y(mission.dy)); ctx.stroke();
+  // start & dest
+  ctx.fillStyle='#4fe0a6'; ctx.beginPath(); ctx.arc(sx,sy,6,0,7); ctx.fill();
+  ctx.fillStyle='#9fc1cf'; ctx.font='11px system-ui'; ctx.fillText('start',sx+8,sy-8);
+  ctx.fillStyle='#ff6b6b'; ctx.beginPath(); ctx.arc(X(mission.dx),Y(mission.dy),7,0,7); ctx.fill();
+  ctx.fillStyle='#ffd1d1'; ctx.fillText('target',X(mission.dx)+9,Y(mission.dy)+4);
+  // readout
+  const kv=(k,v,c2)=>'<div class="kv"><span class="k">'+k+'</span><span class="v'+(c2?' '+c2:'')+'">'+v+'</span></div>';
+  let html=kv('Distance', fmt(o.D/1000,2)+' km')+kv('Bearing', fmt(o.bearing||0,0)+'° from N');
+  if(o.feasible){
+    html+=kv('Ground speed', fmt(o.vg,3)+' m/s')+kv('Crab angle', fmt(o.crab,1)+'°')+
+      kv('Transit time', fmtClock(o.time))+
+      kv('Battery margin', isFinite(o.marginPct)? fmt(o.marginPct,0)+'%':'—', o.marginPct>=20?'':'');
+    const w=[];
+    if(!o.reachable) w.push('Destination is beyond the design range ('+fmt(range/1000,1)+' km) — won\'t make it on one charge.');
+    if(!o.timeOK) w.push('Transit time exceeds endurance ('+fmtClock(o.endurance)+').');
+    if(o.reachable&&o.timeOK) html+='<div class="ok-msg" style="margin-top:6px">Reachable with margin to spare.</div>';
+    html+=w.map(x=>'<div style="color:var(--warn);padding:4px 0">⚠️ '+x+'</div>').join('');
+  } else html+='<div style="color:var(--warn);padding:6px 0">⚠️ '+(o.reason||'Need a valid glide — set/Generate a design first.')+'</div>';
+  if($('miss_out')) $('miss_out').innerHTML=html;
+}
+(function(){ const c=$('missCanvas'); if(!c) return; let drag=false;
+  const set=e=>{ if(!_missMap)return; const r=c.getBoundingClientRect();
+    const px=(e.clientX-r.left)*c.width/r.width, py=(e.clientY-r.top)*c.height/r.height;
+    mission.dx=(px-_missMap.sx)/_missMap.sc; mission.dy=(_missMap.sy-py)/_missMap.sc; drawMission(); };
+  c.addEventListener('pointerdown',e=>{ drag=true; c.setPointerCapture(e.pointerId); set(e); });
+  c.addEventListener('pointermove',e=>{ if(drag) set(e); });
+  c.addEventListener('pointerup',()=>{ drag=false; });
+})();
+['missCur','missDir'].forEach(id=>$(id).addEventListener('input', drawMission));
 
 // ---- persistence & controls ----
 let hullShellMass=NaN, hullExtVolL=NaN, pumpSweptML=NaN, lastDesign=null;
