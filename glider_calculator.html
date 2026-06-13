@@ -662,6 +662,8 @@
   header h1{text-shadow:none}
   header h1 .wave{filter:none}
   canvas{border:1px solid var(--line); border-radius:6px; box-shadow:none}
+  #heroGlider{display:block; width:100%; height:72px; border:none !important; border-radius:0; background:transparent; box-shadow:none; margin:2px 0 6px}
+  header{padding-top:14px}
 </style>
 </head>
 <body>
@@ -711,16 +713,7 @@
   </div>
 </div>
 <header>
-  <div class="swimmer" aria-hidden="true">
-    <svg viewBox="0 0 120 48" width="74" height="30">
-      <ellipse cx="58" cy="24" rx="46" ry="11" fill="#bfe9f2"/>
-      <ellipse cx="58" cy="22" rx="46" ry="8" fill="#eafaf3"/>
-      <path d="M52 24 L24 6 L34 24 Z" fill="#3fd0e6"/>
-      <path d="M52 24 L24 42 L34 24 Z" fill="#5be0c0"/>
-      <path d="M100 24 L116 14 L116 34 Z" fill="#3fd0e6"/>
-      <circle cx="98" cy="24" r="3.4" fill="#ffd166"/>
-    </svg>
-  </div>
+  <canvas id="heroGlider" width="1600" height="86" aria-hidden="true"></canvas>
   <h1><span class="wave">🌊</span> Underwater Glider Calculator</h1>
   <p>Live design calculations that update as you type — build from one parts list to buoyancy, glide, stability, hull strength, power &amp; range.</p>
   <div class="pills">
@@ -2928,6 +2921,44 @@ $('btnActions').addEventListener('click', e=>{ e.stopPropagation(); const m=$('a
   m.classList.toggle('open'); $('btnActions').setAttribute('aria-expanded', m.classList.contains('open')?'true':'false'); });
 $('actionsMenu').querySelector('.menu-panel').addEventListener('click', ()=>{ $('actionsMenu').classList.remove('open'); $('btnActions').setAttribute('aria-expanded','false'); });
 document.addEventListener('click', e=>{ const m=$('actionsMenu'); if(m && !m.contains(e.target)) m.classList.remove('open'); });
+
+// ---- 3D glider hero banner (software-rendered, flies across the top) ----
+const HERO_FUS=[206,220,235], HERO_WING=[74,158,255], HERO_TAIL=[120,184,255];
+const HV={n:[1.7,0,0],t:[-1.5,0,0],u:[0.15,0,0.3],d:[0.15,0,-0.3],l:[0.15,-0.3,0],r:[0.15,0.3,0]};
+const HERO_TRIS=[
+  [HV.n,HV.u,HV.r,HERO_FUS],[HV.n,HV.r,HV.d,HERO_FUS],[HV.n,HV.d,HV.l,HERO_FUS],[HV.n,HV.l,HV.u,HERO_FUS],
+  [HV.t,HV.r,HV.u,HERO_FUS],[HV.t,HV.d,HV.r,HERO_FUS],[HV.t,HV.l,HV.d,HERO_FUS],[HV.t,HV.u,HV.l,HERO_FUS],
+  [[0.45,0,0.03],[-0.3,0,0.03],[-0.6,-1.85,0.07],HERO_WING],
+  [[0.45,0,0.03],[-0.6,1.85,0.07],[-0.3,0,0.03],HERO_WING],
+  [[-1.2,0,0.03],[-1.5,0,0.03],[-1.45,0,0.62],HERO_TAIL],
+  [[-1.15,0,0.04],[-1.48,0,0.04],[-1.43,-0.62,0.05],HERO_TAIL],
+  [[-1.15,0,0.04],[-1.43,0.62,0.05],[-1.48,0,0.04],HERO_TAIL]
+];
+function heroRot(p,roll,pitch,yaw){ let x=p[0],y=p[1],z=p[2];
+  let y1=y*Math.cos(roll)-z*Math.sin(roll),z1=y*Math.sin(roll)+z*Math.cos(roll); y=y1; z=z1;
+  let x1=x*Math.cos(pitch)+z*Math.sin(pitch),z2=-x*Math.sin(pitch)+z*Math.cos(pitch); x=x1; z=z2;
+  return [x*Math.cos(yaw)-y*Math.sin(yaw), x*Math.sin(yaw)+y*Math.cos(yaw), z]; }
+function drawHero(t){
+  const c=$('heroGlider'); if(!c) return; const ctx=c.getContext('2d'), W=c.width, H=c.height; ctx.clearRect(0,0,W,H);
+  const period=12, p=(t%period)/period, margin=160, sx0=-margin+p*(W+2*margin);
+  const baseY=H*0.52+Math.sin(t*1.1)*H*0.13;
+  const roll=Math.sin(t*0.8)*0.22, pitch=-0.12+Math.sin(t*0.6)*0.10, yaw=Math.sin(t*0.5)*0.12;
+  const scale=H*0.42, vAz=-0.55, vEl=0.5, cA=Math.cos(vAz),sA=Math.sin(vAz),cE=Math.cos(vEl),sE=Math.sin(vEl);
+  const Lt=[0.35,-0.45,0.82];
+  const r3=pt=>{ const q=heroRot(pt,roll,pitch,yaw); let x=q[0],y=q[1],z=q[2];
+    const x1=x*cA-y*sA, y1=x*sA+y*cA; x=x1; y=y1; return [x, y*cE-z*sE, y*sE+z*cE]; };
+  const faces=HERO_TRIS.map(tr=>{ const A=r3(tr[0]),B=r3(tr[1]),C=r3(tr[2]);
+    const nx=(B[1]-A[1])*(C[2]-A[2])-(B[2]-A[2])*(C[1]-A[1]), ny=(B[2]-A[2])*(C[0]-A[0])-(B[0]-A[0])*(C[2]-A[2]), nz=(B[0]-A[0])*(C[1]-A[1])-(B[1]-A[1])*(C[0]-A[0]);
+    const nl=Math.hypot(nx,ny,nz)||1, sh=0.42+0.58*Math.abs((nx*Lt[0]+ny*Lt[1]+nz*Lt[2])/nl);
+    return {P:[[sx0+A[0]*scale,baseY-A[2]*scale],[sx0+B[0]*scale,baseY-B[2]*scale],[sx0+C[0]*scale,baseY-C[2]*scale]], d:(A[1]+B[1]+C[1])/3, col:tr[3], sh}; });
+  faces.sort((a,b)=>a.d-b.d);
+  for(const f of faces){ ctx.fillStyle='rgb('+(f.col[0]*f.sh|0)+','+(f.col[1]*f.sh|0)+','+(f.col[2]*f.sh|0)+')';
+    ctx.strokeStyle=ctx.fillStyle; ctx.lineWidth=0.8;
+    ctx.beginPath(); ctx.moveTo(f.P[0][0],f.P[0][1]); ctx.lineTo(f.P[1][0],f.P[1][1]); ctx.lineTo(f.P[2][0],f.P[2][1]); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+}
+let heroRAF=0;
+function heroLoop(ts){ drawHero(ts/1000); heroRAF=requestAnimationFrame(heroLoop); }
+if(reduceMotion) drawHero(2.0); else heroRAF=requestAnimationFrame(heroLoop);
 
 // ---- button ripple + haptic on every click ----
 document.addEventListener('click', e=>{
