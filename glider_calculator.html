@@ -784,6 +784,8 @@
       <canvas id="asmCanvas" width="1100" height="280" style="touch-action:none;cursor:grab"></canvas>
       <div class="sub" style="margin:10px 0 4px">Top-down view (fore/aft × lateral)</div>
       <canvas id="asmTop" width="1100" height="240" style="touch-action:none;cursor:grab"></canvas>
+      <div class="sub" style="margin:10px 0 4px">Full-vehicle 3D (drag to orbit)</div>
+      <canvas id="vehCanvas" width="1100" height="320" style="touch-action:none;cursor:grab"></canvas>
       <div class="legend">
         <span><i class="swatch" style="background:#7fd4e6;border-radius:50%;width:10px;height:10px"></i> Part (size ∝ mass)</span>
         <span><i class="swatch" style="background:#ffd166;border-radius:50%;width:10px;height:10px"></i> selected</span>
@@ -1797,6 +1799,7 @@ function updateBudgetTotals(){
   drawLayout(b);
   if($('asmCanvas')) drawLayout(b,'asmCanvas','z');
   if($('asmTop')) drawLayout(b,'asmTop','y');
+  if($('vehCanvas')) drawVehicle(b);
   if($('asm_stab')){
     const bgV=b.cbz-b.cgz, latOff=b.cgy-b.cby;            // mm
     const heel=bgV>0? Math.atan2(latOff,bgV)*180/Math.PI : 0;
@@ -1880,6 +1883,57 @@ function drawLayout(b, canvasId, vAxis){
   ctx.moveTo(cgx,cgz-10); ctx.lineTo(cgx,cgz+10); ctx.stroke();
   ctx.font='bold 11px system-ui'; ctx.fillText('CG',cgx+11,cgz-6);
 }
+// full-vehicle 3D block model (orbit). x=fore, y=lateral, z=vertical (mm)
+const vehView={rx:-0.5, ry:0.7};
+function _sphereAt(ctx,s,col,label){
+  const R=8, g=ctx.createRadialGradient(s[0]-R*0.35,s[1]-R*0.35,1,s[0],s[1],R);
+  g.addColorStop(0,'#fff'); g.addColorStop(.25,col); g.addColorStop(1,'rgba(0,0,0,.55)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(s[0],s[1],R,0,7); ctx.fill();
+  ctx.fillStyle=col; ctx.font='bold 11px system-ui'; ctx.fillText(label,s[0]+R+2,s[1]+4);
+}
+function _box(ctx,proj,xs,ys,zs,col,lw){
+  const idx=(i,j,k)=>i*4+j*2+k, C=[];
+  for(let i=0;i<2;i++)for(let j=0;j<2;j++)for(let k=0;k<2;k++) C[idx(i,j,k)]=proj([xs[i],ys[j],zs[k]]);
+  const E=[];
+  for(let j=0;j<2;j++)for(let k=0;k<2;k++) E.push([idx(0,j,k),idx(1,j,k)]);
+  for(let i=0;i<2;i++)for(let k=0;k<2;k++) E.push([idx(i,0,k),idx(i,1,k)]);
+  for(let i=0;i<2;i++)for(let j=0;j<2;j++) E.push([idx(i,j,0),idx(i,j,1)]);
+  ctx.strokeStyle=col; ctx.lineWidth=lw||1;
+  E.forEach(e=>{ ctx.beginPath(); ctx.moveTo(C[e[0]][0],C[e[0]][1]); ctx.lineTo(C[e[1]][0],C[e[1]][1]); ctx.stroke(); });
+}
+function drawVehicle(b){
+  const c=$('vehCanvas'); if(!c) return; const ctx=c.getContext('2d'), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H); b=b||budgetCentroids();
+  const R=num('radius')||100, L=num('hullLength')||600;
+  const pts=[[-L/2,0,0],[L/2,0,0],[0,R,0],[0,-R,0],[0,0,R],[0,0,-R],[b.cgx,b.cgy,b.cgz],[b.cbx,b.cby,b.cbz]];
+  components.forEach(k=>{ const x=+k.x||0,y=+k.y||0,z=+k.z||0;
+    if(k.geo&&k.geo.dims){ const d=k.geo.dims; pts.push([x-d[0]/2,y-d[1]/2,z-d[2]/2],[x+d[0]/2,y+d[1]/2,z+d[2]/2]); }
+    else pts.push([x,y,z]); });
+  const mn=[1e9,1e9,1e9], mx=[-1e9,-1e9,-1e9];
+  pts.forEach(p=>p.forEach((v,i)=>{ if(v<mn[i])mn[i]=v; if(v>mx[i])mx[i]=v; }));
+  const cx=(mn[0]+mx[0])/2, cy=(mn[1]+mx[1])/2, cz=(mn[2]+mx[2])/2;
+  const span=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2],1);
+  const sc=Math.min(W,H)*0.62/span, ox=W/2, oy=H/2;
+  const ca=Math.cos(vehView.ry),sa=Math.sin(vehView.ry),ce=Math.cos(vehView.rx),se=Math.sin(vehView.rx);
+  const proj=p=>{ let x=p[0]-cx,y=p[1]-cy,z=p[2]-cz;
+    const xr=x*ca+y*sa, yr=-x*sa+y*ca, ze=z*ce-yr*se;
+    return [ox+xr*sc, oy-ze*sc]; };
+  _box(ctx,proj,[-L/2,L/2],[-R,R],[-R,R],'rgba(99,164,184,.35)',1);   // hull envelope
+  const mMax=Math.max(...components.map(k=>+k.mass||0),1);
+  components.forEach((k,i)=>{ const x=+k.x||0,y=+k.y||0,z=+k.z||0, sel=selComp===i;
+    const col= sel?'#ffd166':'rgba(127,212,230,.85)';
+    if(k.geo&&k.geo.dims){ const d=k.geo.dims; _box(ctx,proj,[x-d[0]/2,x+d[0]/2],[y-d[1]/2,y+d[1]/2],[z-d[2]/2,z+d[2]/2],col,sel?2:1.2); }
+    else { const s=proj([x,y,z]); ctx.fillStyle=col; ctx.beginPath(); ctx.arc(s[0],s[1],4+8*Math.sqrt((+k.mass||0)/mMax),0,7); ctx.fill(); }
+    const s=proj([x,y,z]); ctx.fillStyle='#cfe8f0'; ctx.font='10px system-ui'; ctx.fillText(String(k.name).slice(0,12),s[0]+5,s[1]-5);
+  });
+  _sphereAt(ctx,proj([b.cbx,b.cby,b.cbz]),'#4aa3ff','CB');
+  _sphereAt(ctx,proj([b.cgx,b.cgy,b.cgz]),'#ff5a5a','CG');
+}
+(function(){ const c=$('vehCanvas'); if(!c) return; let drag=false,lx=0,ly=0;
+  c.addEventListener('pointerdown',e=>{ drag=true; lx=e.clientX; ly=e.clientY; c.setPointerCapture(e.pointerId); c.style.cursor='grabbing'; });
+  c.addEventListener('pointermove',e=>{ if(!drag)return; vehView.ry+=(e.clientX-lx)*0.01; vehView.rx+=(e.clientY-ly)*0.01; lx=e.clientX; ly=e.clientY; drawVehicle(); });
+  c.addEventListener('pointerup',()=>{ drag=false; c.style.cursor='grab'; });
+})();
 // edit a cell without re-rendering (keeps focus)
 $('budgetBody').addEventListener('input', e=>{
   const el=e.target; if(el.dataset.i===undefined) return;
@@ -2063,7 +2117,8 @@ function computeSTL(){
   stlSI={volL:volM3*1000, mass, lengthMM:sorted[0]*1000, odMM:sorted[1]*1000, radiusMM:sorted[1]*1000/2,
     cgx:offFore, cgz:offVert, absForeMM:absFore*1000, absVertMM:absVert*1000, absLatMM:absLat*1000,
     cgModel:cg, cbModel:comV, name:stlModel.fileName||'imported part', printVolCm3,
-    geo:{V:volM3, A:areaM2}, mat:$('stlMaterial').value, infill:num('stlInfill'), shell:num('stlShell')};
+    geo:{V:volM3, A:areaM2, dims:[dims[aFore]*1000, (aLat>=0&&aLat<=2?dims[aLat]:0)*1000, dims[aVert]*1000]},
+    mat:$('stlMaterial').value, infill:num('stlInfill'), shell:num('stlShell')};
   drawMesh();
   const kv=(k,v)=>'<div class="kv"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>';
   $('stl_out').innerHTML=
