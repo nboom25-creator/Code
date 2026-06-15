@@ -2959,6 +2959,7 @@ function drawHero(t){
 let heroRAF=0;
 function heroLoop(ts){ drawHero(ts/1000); heroRAF=requestAnimationFrame(heroLoop); }
 if(reduceMotion) drawHero(2.0); else heroRAF=requestAnimationFrame(heroLoop);
+window.stopSoftwareHero=function(){ if(heroRAF) cancelAnimationFrame(heroRAF); heroRAF=0; };
 
 // ---- button ripple + haptic on every click ----
 document.addEventListener('click', e=>{
@@ -3089,6 +3090,92 @@ sim.speed=Math.max(num('simSpeed')||30,0.1);
 simReset();
 G6.speed=Math.max(num('g6Speed')||20,0.1);
 g6Reset();
+</script>
+
+<!-- Realistic WebGL glider (Three.js from CDN). Online only; falls back to the
+     dependency-free software glider above when offline / WebGL unavailable. -->
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+(function(){
+  const src = document.getElementById('heroGlider'); if(!src) return;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let renderer, cv;
+  try{
+    cv = document.createElement('canvas');
+    cv.id='heroGL'; cv.setAttribute('aria-hidden','true');
+    cv.style.cssText='display:block;width:100%;height:74px;border:none;background:transparent;margin:2px 0 6px;cursor:grab';
+    renderer = new THREE.WebGLRenderer({canvas:cv, antialias:true, alpha:true});
+  }catch(e){ return; }                    // no WebGL -> keep software glider
+
+  // take over from the software glider
+  src.parentNode.insertBefore(cv, src);
+  src.style.display='none';
+  if(window.stopSoftwareHero) window.stopSoftwareHero();
+
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(30, 8, 0.1, 100);
+  camera.position.set(0.0, 1.15, 6.6); camera.lookAt(0, -0.05, 0);
+
+  // ---- procedurally-built AUG ----
+  const glider = new THREE.Group();
+  const matHull = new THREE.MeshStandardMaterial({color:0xf2c021, metalness:0.35, roughness:0.30});
+  const matDark = new THREE.MeshStandardMaterial({color:0x141c28, metalness:0.55, roughness:0.4});
+  const matMetal= new THREE.MeshStandardMaterial({color:0xb9d4e8, metalness:0.95, roughness:0.22});
+  const matGlow = new THREE.MeshStandardMaterial({color:0x36e3ff, emissive:0x0c4a55, emissiveIntensity:1.4, metalness:0.4, roughness:0.3});
+
+  const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,2.5,28), matHull);
+  hull.rotation.z = Math.PI/2; glider.add(hull);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.34,0.95,28), matHull);
+  nose.rotation.z = -Math.PI/2; nose.position.x = 1.72; glider.add(nose);
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.34,0.75,28), matHull);
+  tail.rotation.z = Math.PI/2; tail.position.x = -1.62; glider.add(tail);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,0.12,28), matDark);
+  collar.rotation.z = Math.PI/2; collar.position.x = 0.5; glider.add(collar);
+
+  const wingGeo = new THREE.BoxGeometry(0.95,0.045,1.55);
+  for(const s of [1,-1]){ const w=new THREE.Mesh(wingGeo, matDark); w.position.set(-0.15,-0.02,s*0.96); w.rotation.y = s*0.52; glider.add(w); }
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.72,0.72,0.05), matHull); fin.position.set(-1.3,0.42,0); fin.rotation.z = 0.22; glider.add(fin);
+
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.95,8), matMetal); mast.position.set(-1.35,0.58,0); glider.add(mast);
+  const tip  = new THREE.Mesh(new THREE.SphereGeometry(0.06,12,12), matGlow); tip.position.set(-1.35,1.06,0); glider.add(tip);
+  const pod  = new THREE.Mesh(new THREE.SphereGeometry(0.13,16,16), matMetal); pod.position.set(1.45,0.20,0); glider.add(pod);
+  const eye  = new THREE.Mesh(new THREE.SphereGeometry(0.05,12,12), matGlow); eye.position.set(1.9,0.0,0); glider.add(eye);
+  scene.add(glider);
+
+  // ---- underwater / lab lighting ----
+  scene.add(new THREE.AmbientLight(0x4f6f96, 0.75));
+  const key = new THREE.DirectionalLight(0xaeeaff, 1.7); key.position.set(3,5,4); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x2f8fff, 0.85); rim.position.set(-4,-2,-3); scene.add(rim);
+
+  // ---- interaction ----
+  let mx=0, my=0;
+  const onMove = e=>{ const r=cv.getBoundingClientRect(); mx=((e.clientX-r.left)/Math.max(r.width,1))*2-1; my=((e.clientY-r.top)/Math.max(r.height,1))*2-1; };
+  cv.addEventListener('pointermove', onMove);
+  const hdr = cv.closest('header'); if(hdr) hdr.addEventListener('pointermove', onMove);
+  const onLeave = ()=>{ mx=0; my=0; };
+  cv.addEventListener('pointerleave', onLeave); if(hdr) hdr.addEventListener('pointerleave', onLeave);
+
+  function resize(){ const w=cv.clientWidth||cv.offsetWidth||600, h=74; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+  resize(); addEventListener('resize', resize);
+
+  const clock = new THREE.Clock(); let tX=0, tY=0;
+  function frame(){
+    if(document.hidden){ requestAnimationFrame(frame); return; }
+    const t = reduce ? 1.5 : clock.getElapsedTime();
+    glider.rotation.set(0,0,0);
+    glider.rotation.z = Math.sin(t*0.6)*0.17;          // pitch: dive / climb
+    glider.rotation.x = Math.sin(t*0.45+1.2)*0.24;     // roll: gentle bank
+    glider.rotation.y = Math.sin(t*0.33)*0.20;         // slow yaw drift
+    glider.position.y = Math.sin(t*0.9)*0.12 - 0.05;   // bob
+    tX += ((-my*0.30) - tX)*0.06; tY += ((mx*0.55) - tY)*0.06;   // mouse parallax
+    glider.rotation.x += tX; glider.rotation.y += tY;
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
 </script>
 </body>
 </html>
