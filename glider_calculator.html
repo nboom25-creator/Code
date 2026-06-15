@@ -1164,6 +1164,83 @@
       <div class="hint">Every quantity above, shown as the symbolic equation, the values substituted in, and the computed result. Updates live as you change inputs.</div>
     </section>
 
+    <!-- PROJECT TIMELINE / GANTT -->
+    <section class="card span2" id="card-gantt">
+      <h2><span class="ic">📅</span> Project timeline — 15-week glider build (Gantt)</h2>
+      <p class="hint" style="margin:-6px 0 10px">Drag a bar to reschedule, drag its left/right edge to change duration, drag the ◇ handle onto another task to link a dependency, or click a bar to edit it. Saved in your browser.</p>
+      <style>
+        #card-gantt .g-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:11px}
+        #card-gantt .g-btn{font-family:inherit;font-size:11.5px;font-weight:600;color:var(--ink);background:var(--inputbg);
+          border:1px solid var(--line2);border-radius:6px;padding:6px 11px;cursor:pointer;letter-spacing:.2px;transition:border-color .15s,color .15s}
+        #card-gantt .g-btn:hover{border-color:var(--accent);color:#fff}
+        #card-gantt .g-btn.primary{background:var(--accent);border-color:var(--accent);color:#06121f}
+        #card-gantt .g-btn.primary:hover{color:#06121f;filter:brightness(1.08)}
+        #card-gantt .g-btn.danger{border-color:var(--bad);color:var(--bad)}
+        #card-gantt .g-btn.danger:hover{background:var(--bad);color:#1a0c0c;border-color:var(--bad)}
+        #card-gantt .g-legend{display:flex;gap:13px;flex-wrap:wrap;margin-left:auto;font-size:10.5px;color:var(--muted);align-items:center}
+        #card-gantt .g-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+        #card-gantt .g-scroll{overflow-x:auto;overflow-y:hidden;border:1px solid var(--line);border-radius:8px;background:var(--inputbg);-webkit-overflow-scrolling:touch}
+        #card-gantt .g-inner{position:relative}
+        #card-gantt .g-head{display:flex;height:30px;position:sticky;top:0;z-index:5}
+        #card-gantt .g-corner{flex:0 0 var(--lw);position:sticky;left:0;z-index:6;background:#0d1420;border-right:1px solid var(--line2);
+          border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 11px;font-size:9.5px;color:var(--muted);
+          text-transform:uppercase;letter-spacing:.6px;font-family:inherit}
+        #card-gantt .g-week{flex:0 0 var(--cw);display:flex;align-items:center;justify-content:center;font-size:10.5px;
+          color:var(--muted);font-family:var(--mono);border-right:1px solid rgba(42,52,65,.45);border-bottom:1px solid var(--line);background:#0d1420}
+        #card-gantt .g-body{position:relative}
+        #card-gantt .g-phase{display:flex;height:30px;align-items:center}
+        #card-gantt .g-plabel{flex:0 0 var(--lw);position:sticky;left:0;z-index:4;background:#111927;height:100%;display:flex;align-items:center;
+          padding:0 11px;font-size:10.5px;font-weight:700;color:var(--accent2);letter-spacing:.3px;font-family:inherit;
+          border-right:1px solid var(--line2);border-bottom:1px solid var(--line);text-transform:uppercase}
+        #card-gantt .g-pstrip{flex:1;height:100%;background:repeating-linear-gradient(90deg,transparent,transparent calc(var(--cw) - 1px),rgba(42,52,65,.45) var(--cw));border-bottom:1px solid var(--line)}
+        #card-gantt .g-row{display:flex;height:34px}
+        #card-gantt .g-row.sel .g-label{color:#fff}
+        #card-gantt .g-label{flex:0 0 var(--lw);position:sticky;left:0;z-index:4;background:var(--inputbg);height:100%;display:flex;align-items:center;
+          gap:7px;padding:0 11px;font-size:11px;color:var(--muted);font-family:inherit;border-right:1px solid var(--line2);
+          border-bottom:1px solid rgba(42,52,65,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+        #card-gantt .g-label:hover{color:var(--ink)}
+        #card-gantt .g-dot{flex:0 0 8px;width:8px;height:8px;border-radius:2px}
+        #card-gantt .g-track{position:relative;flex:1;height:100%;border-bottom:1px solid rgba(42,52,65,.5);
+          background:repeating-linear-gradient(90deg,transparent,transparent calc(var(--cw) - 1px),rgba(42,52,65,.4) var(--cw))}
+        #card-gantt .g-bar{position:absolute;top:5px;height:24px;border-radius:5px;cursor:grab;touch-action:none;overflow:hidden;
+          background:linear-gradient(0deg,rgba(9,13,20,.6),rgba(9,13,20,.6)),var(--bc);border:1px solid var(--bc);
+          box-shadow:0 1px 4px rgba(0,0,0,.35);user-select:none}
+        #card-gantt .g-bar:active{cursor:grabbing}
+        #card-gantt .g-row.sel .g-bar{outline:2px solid #fff;outline-offset:1px;box-shadow:0 0 0 3px rgba(255,255,255,.12),0 2px 8px rgba(0,0,0,.5)}
+        #card-gantt .g-fill{position:absolute;left:0;top:0;bottom:0;background:var(--bc)}
+        #card-gantt .g-bl{position:absolute;left:8px;top:0;bottom:0;display:flex;align-items:center;font-size:10.5px;font-weight:600;
+          color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);font-family:inherit;white-space:nowrap;pointer-events:none;z-index:2;max-width:calc(100% - 40px);overflow:hidden;text-overflow:ellipsis}
+        #card-gantt .g-pct{position:absolute;right:7px;top:0;bottom:0;display:flex;align-items:center;font-size:9.5px;font-weight:700;
+          color:rgba(255,255,255,.92);text-shadow:0 1px 2px rgba(0,0,0,.7);font-family:var(--mono);pointer-events:none;z-index:2}
+        #card-gantt .g-h{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:3}
+        #card-gantt .g-h.l{left:0}#card-gantt .g-h.r{right:0}
+        #card-gantt .g-dep-handle{position:absolute;right:-7px;top:50%;transform:translateY(-50%);width:15px;height:15px;border-radius:50%;
+          display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;color:#cfe6ff;background:#0d1420;
+          border:1px solid var(--line2);cursor:crosshair;z-index:4;opacity:0;transition:opacity .12s}
+        #card-gantt .g-bar:hover .g-dep-handle{opacity:1}
+        #card-gantt .g-deps{position:absolute;top:0;pointer-events:none;z-index:1;overflow:visible}
+        #card-gantt .g-dep{fill:none;stroke:rgba(140,160,190,.8);stroke-width:1.5}
+        #card-gantt .g-dep.tmp{stroke:var(--accent);stroke-width:2;stroke-dasharray:4 3}
+        #card-gantt .g-arr{fill:rgba(140,160,190,.85)}
+        #card-gantt .g-editor{margin-top:12px;border:1px solid var(--line2);border-radius:8px;background:#101826;padding:13px}
+        #card-gantt .g-erow{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:11px}
+        #card-gantt .g-erow:last-child{margin-bottom:0}
+        #card-gantt .g-editor label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:var(--muted);margin:0;text-transform:none;flex:1;min-width:120px}
+        #card-gantt .g-editor input[type=text],#card-gantt .g-editor input[type=number],#card-gantt .g-editor select{
+          font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--inputbg);border:1px solid var(--line2);border-radius:5px;padding:6px 8px}
+        #card-gantt .g-editor input[type=text]:focus,#card-gantt .g-editor input[type=number]:focus,#card-gantt .g-editor select:focus{outline:none;border-color:var(--accent)}
+        #card-gantt .g-editor input[type=range]{accent-color:var(--accent);width:100%}
+        #card-gantt .g-editor .g-pv{color:var(--ink);font-family:var(--mono)}
+        #card-gantt .g-deps-list{flex:2;min-width:200px;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+        #card-gantt .g-elabel{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px}
+        #card-gantt .g-chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--ink);background:var(--inputbg);
+          border:1px solid var(--line2);border-radius:20px;padding:3px 9px;cursor:pointer;font-family:inherit}
+        #card-gantt .g-chip:hover{border-color:var(--bad);color:var(--bad)}
+        #card-gantt .g-none{font-size:10.5px;color:#6f7c8c;font-style:italic}
+      </style>
+      <div id="ganttRoot"></div>
+    </section>
+
   </div>
 
   <footer>
@@ -3094,6 +3171,237 @@ g6Reset();
 
 <!-- Realistic WebGL glider (Three.js from CDN). Online only; falls back to the
      dependency-free software glider above when offline / WebGL unavailable. -->
+<!-- ============ PROJECT TIMELINE / GANTT ============ -->
+<script>
+"use strict";
+(function(){
+  const root = document.getElementById('ganttRoot'); if(!root) return;
+  const KEY = 'gliderGantt_v1';
+  const svgns = 'http://www.w3.org/2000/svg';
+  const CATS = {
+    mech:{name:'Mechanical', c:'#4a9eff'},
+    elec:{name:'Electronics',c:'#46b27a'},
+    soft:{name:'Software',   c:'#9a7fd8'},
+    test:{name:'Testing',    c:'#d2a23f'},
+  };
+  const LW=210, CW=56, ROWH=34, PHH=30, HEADH=30;
+
+  function seed(){
+    return { weeks:15, nextId:12, tasks:[
+      {id:1, name:'Hull Sizing & Volume Calculations',           startWeek:1, durationWeeks:2, progress:100, dependencies:[],     phase:'Conceptual & Hydrodynamic Design',        cat:'mech'},
+      {id:2, name:'Wing & Control Surface Profile Selection',    startWeek:2, durationWeeks:2, progress:70,  dependencies:[1],    phase:'Conceptual & Hydrodynamic Design',        cat:'mech'},
+      {id:3, name:'Buoyancy Engine Fabrication',                 startWeek:3, durationWeeks:3, progress:40,  dependencies:[1],    phase:'Internal Propulsion & Mechanics',         cat:'mech'},
+      {id:4, name:'Attitude Control Mechanism (movable tray)',   startWeek:4, durationWeeks:3, progress:15,  dependencies:[3],    phase:'Internal Propulsion & Mechanics',         cat:'mech'},
+      {id:5, name:'Pressure Vessel & Waterproof End-Caps',       startWeek:5, durationWeeks:3, progress:10,  dependencies:[1],    phase:'Internal Propulsion & Mechanics',         cat:'mech'},
+      {id:6, name:'Power Distribution & Microcontroller Wiring', startWeek:6, durationWeeks:3, progress:0,   dependencies:[4],    phase:'Avionics & Control Software',              cat:'elec'},
+      {id:7, name:'Depth & Pitch Control Loop Coding (PID)',     startWeek:7, durationWeeks:4, progress:0,   dependencies:[6],    phase:'Avionics & Control Software',              cat:'soft'},
+      {id:8, name:'Full Mechanical System Integration',          startWeek:10,durationWeeks:2, progress:0,   dependencies:[5,6],  phase:'Assembly & Bench Testing',                cat:'mech'},
+      {id:9, name:'Dry Bench Testing & Structural Leak Test',    startWeek:11,durationWeeks:2, progress:0,   dependencies:[8],    phase:'Assembly & Bench Testing',                cat:'test'},
+      {id:10,name:'Neutrally Buoyant Trimming',                  startWeek:12,durationWeeks:2, progress:0,   dependencies:[9],    phase:'Hydrodynamic Ballasting & Mission Trials', cat:'test'},
+      {id:11,name:'Dynamic Glide Trials (PID tuning)',           startWeek:13,durationWeeks:3, progress:0,   dependencies:[10,7], phase:'Hydrodynamic Ballasting & Mission Trials', cat:'test'},
+    ]};
+  }
+
+  let state, SEL=null, LAY={CW,LW};
+  function load(){
+    try{ const raw=localStorage.getItem(KEY); if(raw){ const o=JSON.parse(raw);
+      if(o && Array.isArray(o.tasks)){ if(!o.weeks)o.weeks=15; if(!o.nextId)o.nextId=Math.max(0,...o.tasks.map(t=>t.id))+1; return o; } }
+    }catch(e){}
+    return seed();
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+  state = load();
+
+  const clamp=(v,lo,hi)=>v<lo?lo:v>hi?hi:v;
+  const byId=id=>state.tasks.find(t=>t.id===id);
+  function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+  function escAttr(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  // does src (transitively) depend on tgt?  used to block dependency cycles
+  function dependsOn(src, tgt, seen){ seen=seen||new Set(); if(src===tgt) return true; if(seen.has(src))return false; seen.add(src);
+    const t=byId(src); if(!t) return false; return (t.dependencies||[]).some(d=>dependsOn(d,tgt,seen)); }
+
+  function depPath(x1,y1,x2,y2){
+    const c1=x1+Math.max(22,(x2-x1)/2), c2=x2-Math.max(22,(x2-x1)/2);
+    return `<path class="g-dep" d="M${x1} ${y1} C ${c1} ${y1} ${c2} ${y2} ${x2-6} ${y2}"/>`+
+           `<polygon class="g-arr" points="${x2-7},${y2-4} ${x2},${y2} ${x2-7},${y2+4}"/>`;
+  }
+
+  function render(){
+    const W = state.weeks;
+    // group tasks by phase, preserving first-seen order
+    const order=[], byPhase={};
+    state.tasks.forEach(t=>{ if(!byPhase[t.phase]){byPhase[t.phase]=[];order.push(t.phase);} byPhase[t.phase].push(t); });
+
+    let weeksHead=''; for(let w=1; w<=W; w++) weeksHead += `<div class="g-week">W${w}</div>`;
+
+    let rows='', y=0; const taskY={};
+    order.forEach(ph=>{
+      rows += `<div class="g-phase"><div class="g-plabel">${esc(ph)}</div><div class="g-pstrip"></div></div>`;
+      y += PHH;
+      byPhase[ph].forEach(t=>{
+        taskY[t.id] = y + ROWH/2;
+        const cat=CATS[t.cat]||CATS.mech;
+        const left=(t.startWeek-1)*CW, w=t.durationWeeks*CW;
+        rows += `<div class="g-row${t.id===SEL?' sel':''}" data-row="${t.id}">`+
+          `<div class="g-label" title="${escAttr(t.name)}"><span class="g-dot" style="background:${cat.c}"></span>${esc(t.name)}</div>`+
+          `<div class="g-track"><div class="g-bar" data-id="${t.id}" style="left:${left}px;width:${w}px;--bc:${cat.c}">`+
+            `<span class="g-fill" style="width:${t.progress}%"></span>`+
+            `<span class="g-bl">${esc(t.name)}</span><span class="g-pct">${t.progress}%</span>`+
+            `<span class="g-h l" data-h="l"></span><span class="g-h r" data-h="r"></span>`+
+            `<span class="g-dep-handle" data-dep="1" title="Drag onto another task to link">◇</span>`+
+          `</div></div></div>`;
+        y += ROWH;
+      });
+    });
+    const bodyH=y, innerW=LW+W*CW;
+    LAY={CW,LW,ROWH,W,taskY,bodyH};
+
+    // dependency arrows (finish-to-start)
+    let paths='';
+    state.tasks.forEach(t=>(t.dependencies||[]).forEach(d=>{
+      const s=byId(d); if(!s||!(d in taskY)||!(t.id in taskY))return;
+      const x1=(s.startWeek-1+s.durationWeeks)*CW, y1=taskY[d];
+      const x2=(t.startWeek-1)*CW, y2=taskY[t.id];
+      paths += depPath(x1,y1,x2,y2);
+    }));
+
+    root.innerHTML =
+      `<div class="g-toolbar">`+
+        `<button class="g-btn primary" id="g-add">+ Add task</button>`+
+        `<button class="g-btn" id="g-reset">Reset to project plan</button>`+
+        `<div class="g-legend">`+
+          Object.keys(CATS).map(k=>`<span><i style="background:${CATS[k].c}"></i>${CATS[k].name}</span>`).join('')+
+        `</div>`+
+      `</div>`+
+      `<div class="g-scroll"><div class="g-inner" style="--lw:${LW}px;--cw:${CW}px;width:${innerW}px">`+
+        `<div class="g-head"><div class="g-corner">Task</div>${weeksHead}</div>`+
+        `<div class="g-body" style="height:${bodyH}px">${rows}`+
+          `<svg class="g-deps" style="left:${LW}px;width:${W*CW}px;height:${bodyH}px" width="${W*CW}" height="${bodyH}">${paths}</svg>`+
+        `</div>`+
+      `</div></div>`+
+      (SEL!=null ? buildEditor(byId(SEL)) : '');
+
+    wire();
+  }
+
+  function buildEditor(t){
+    if(!t) return '';
+    const opts=Object.keys(CATS).map(k=>`<option value="${k}"${k===t.cat?' selected':''}>${CATS[k].name}</option>`).join('');
+    const deps=(t.dependencies||[]).map(d=>{const s=byId(d);return s?`<span class="g-chip" data-rm="${d}">${esc(s.name)} ✕</span>`:'';}).join('')
+      || '<span class="g-none">none — drag the ◇ handle between bars to add one</span>';
+    return `<div class="g-editor">`+
+      `<div class="g-erow">`+
+        `<label>Task name<input id="ge-name" type="text" value="${escAttr(t.name)}"></label>`+
+        `<label>Category<select id="ge-cat">${opts}</select></label>`+
+        `<label>Phase<input id="ge-phase" type="text" value="${escAttr(t.phase)}"></label>`+
+      `</div>`+
+      `<div class="g-erow">`+
+        `<label>Start week<input id="ge-start" type="number" min="1" max="${state.weeks}" value="${t.startWeek}"></label>`+
+        `<label>Duration (weeks)<input id="ge-dur" type="number" min="1" max="${state.weeks}" value="${t.durationWeeks}"></label>`+
+        `<label>Progress <b class="g-pv" id="ge-pv">${t.progress}%</b><input id="ge-prog" type="range" min="0" max="100" value="${t.progress}"></label>`+
+      `</div>`+
+      `<div class="g-erow">`+
+        `<div class="g-deps-list"><span class="g-elabel">Depends on:</span> ${deps}</div>`+
+        `<button class="g-btn danger" id="ge-del">Delete task</button>`+
+      `</div>`+
+    `</div>`;
+  }
+
+  function select(id){ SEL=id; render(); }
+
+  // ---- pointer interactions ----
+  function startMove(e,id){
+    e.preventDefault(); const t=byId(id); const sx=e.clientX, os=t.startWeek; let moved=false;
+    function mv(ev){ const dpx=ev.clientX-sx; if(Math.abs(dpx)>3) moved=true;
+      const ns=clamp(os+Math.round(dpx/LAY.CW), 1, state.weeks-t.durationWeeks+1);
+      if(ns!==t.startWeek){ t.startWeek=ns; render(); } }
+    function up(){ window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up);
+      if(moved) save(); else select(id); }
+    window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
+  }
+  function startResize(e,id,side){
+    e.preventDefault(); const t=byId(id); const sx=e.clientX, os=t.startWeek, od=t.durationWeeks;
+    function mv(ev){ const dw=Math.round((ev.clientX-sx)/LAY.CW);
+      if(side==='r'){ t.durationWeeks=clamp(od+dw,1,state.weeks-t.startWeek+1); }
+      else{ const ns=clamp(os+dw,1,os+od-1); t.startWeek=ns; t.durationWeeks=od+(os-ns); }
+      render(); }
+    function up(){ window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up); save(); }
+    window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
+  }
+  function startDep(e,srcId){
+    e.preventDefault(); const src=byId(srcId);
+    const svg=root.querySelector('.g-deps'); if(!svg) return;
+    const x1=(src.startWeek-1+src.durationWeeks)*LAY.CW, y1=LAY.taskY[srcId];
+    const tmp=document.createElementNS(svgns,'path'); tmp.setAttribute('class','g-dep tmp'); svg.appendChild(tmp);
+    const r=svg.getBoundingClientRect();
+    function mv(ev){ const x2=ev.clientX-r.left, y2=ev.clientY-r.top;
+      tmp.setAttribute('d',`M${x1} ${y1} C ${x1+26} ${y1} ${x2-26} ${y2} ${x2} ${y2}`); }
+    function up(ev){ window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up);
+      const tid=hitTask(ev.clientX,ev.clientY);
+      if(tid && tid!==srcId) linkDep(srcId,tid);
+      render(); }
+    window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
+  }
+  function hitTask(cx,cy){ let f=null; root.querySelectorAll('.g-bar').forEach(el=>{ const r=el.getBoundingClientRect();
+    if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom) f=+el.dataset.id; }); return f; }
+  function linkDep(src,tgt){ const t=byId(tgt); if(!t) return;
+    if(t.dependencies.includes(src)) return;        // already linked
+    if(dependsOn(src,tgt)) return;                  // would create a cycle
+    t.dependencies.push(src); save(); }
+
+  function wire(){
+    root.querySelectorAll('.g-bar').forEach(el=>{
+      const id=+el.dataset.id;
+      el.addEventListener('pointerdown', e=>{
+        if(e.target.dataset && e.target.dataset.dep) return startDep(e,id);
+        const h=e.target.closest('.g-h'); if(h) return startResize(e,id,h.dataset.h);
+        startMove(e,id);
+      });
+    });
+    root.querySelectorAll('.g-label').forEach(el=>{
+      const id=+el.closest('[data-row]').dataset.row;
+      el.addEventListener('click',()=>select(id));
+      el.addEventListener('dblclick',()=>{ select(id); const n=document.getElementById('ge-name'); if(n){n.focus();n.select();} });
+    });
+    const add=document.getElementById('g-add'); if(add) add.addEventListener('click',()=>{
+      const id=state.nextId++; const last=state.tasks[state.tasks.length-1];
+      state.tasks.push({id,name:'New task',startWeek:1,durationWeeks:2,progress:0,dependencies:[],
+        phase:last?last.phase:'New tasks',cat:'mech'}); save(); select(id);
+    });
+    const rs=document.getElementById('g-reset'); if(rs) rs.addEventListener('click',()=>{
+      if(confirm('Reset the timeline to the original 15-week glider plan? Your edits will be lost.')){ state=seed(); SEL=null; save(); render(); }
+    });
+    if(SEL!=null) wireEditor();
+  }
+
+  function wireEditor(){
+    const t=byId(SEL); if(!t) return;
+    const nm=document.getElementById('ge-name');
+    if(nm) nm.addEventListener('input',()=>{ t.name=nm.value; save();
+      const bar=root.querySelector(`.g-bar[data-id="${t.id}"]`); if(bar){ const bl=bar.querySelector('.g-bl'); if(bl) bl.textContent=t.name; }
+      const lab=root.querySelector(`.g-row[data-row="${t.id}"] .g-label`); if(lab){ const dot=lab.querySelector('.g-dot'); lab.textContent=''; if(dot)lab.appendChild(dot); lab.appendChild(document.createTextNode(t.name)); lab.title=t.name; } });
+    const cat=document.getElementById('ge-cat'); if(cat) cat.addEventListener('change',()=>{ t.cat=cat.value; save(); render(); });
+    const ph=document.getElementById('ge-phase'); if(ph) ph.addEventListener('change',()=>{ t.phase=ph.value||'Unphased'; save(); render(); });
+    const st=document.getElementById('ge-start'); if(st) st.addEventListener('change',()=>{ t.startWeek=clamp(parseInt(st.value)||1,1,state.weeks); if(t.startWeek+t.durationWeeks-1>state.weeks)t.durationWeeks=state.weeks-t.startWeek+1; save(); render(); });
+    const du=document.getElementById('ge-dur'); if(du) du.addEventListener('change',()=>{ t.durationWeeks=clamp(parseInt(du.value)||1,1,state.weeks-t.startWeek+1); save(); render(); });
+    const pr=document.getElementById('ge-prog'), pv=document.getElementById('ge-pv');
+    if(pr){ pr.addEventListener('input',()=>{ t.progress=clamp(parseInt(pr.value)||0,0,100); if(pv)pv.textContent=t.progress+'%';
+        const bar=root.querySelector(`.g-bar[data-id="${t.id}"]`); if(bar){ const f=bar.querySelector('.g-fill'); if(f)f.style.width=t.progress+'%'; const p=bar.querySelector('.g-pct'); if(p)p.textContent=t.progress+'%'; } });
+      pr.addEventListener('change',()=>{ save(); }); }
+    const del=document.getElementById('ge-del'); if(del) del.addEventListener('click',()=>{
+      state.tasks=state.tasks.filter(x=>x.id!==t.id);
+      state.tasks.forEach(x=>{ x.dependencies=(x.dependencies||[]).filter(d=>d!==t.id); });
+      SEL=null; save(); render(); });
+    const list=root.querySelector('.g-deps-list'); if(list) list.addEventListener('click',e=>{
+      const chip=e.target.closest('[data-rm]'); if(!chip) return; const d=+chip.dataset.rm;
+      t.dependencies=t.dependencies.filter(x=>x!==d); save(); render(); });
+  }
+
+  render();
+})();
+</script>
+
 <!-- three.js r160 (MIT, Three.js Authors) inlined so the 3D hero works fully offline -->
 <script type="text/plain" id="threeSrc">/**
  * @license
