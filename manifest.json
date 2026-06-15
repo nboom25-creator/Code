@@ -1,0 +1,18 @@
+{
+  "name": "Pokémon Red — Mobile",
+  "short_name": "PkmnRed",
+  "description": "A fan-made, mobile-friendly recreation of Pokémon Red.",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0a0a0a",
+  "theme_color": "#e3350d",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

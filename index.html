@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#0a0a0a" />
+<title>Pokémon Red — Mobile</title>
+<link rel="stylesheet" href="css/style.css" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon.svg" />
+</head>
+<body>
+  <div id="game">
+    <div id="screen-wrap">
+      <canvas id="screen" width="160" height="144"></canvas>
+      <!-- Text / menu overlay rendered as HTML for crisp text on phones -->
+      <div id="overlay"></div>
+    </div>
+
+    <div id="controls">
+      <div id="dpad">
+        <button class="dbtn" data-dir="up"    aria-label="Up">▲</button>
+        <button class="dbtn" data-dir="left"  aria-label="Left">◀</button>
+        <button class="dbtn center" disabled></button>
+        <button class="dbtn" data-dir="right" aria-label="Right">▶</button>
+        <button class="dbtn" data-dir="down"  aria-label="Down">▼</button>
+      </div>
+      <div id="ab">
+        <button class="abtn" data-btn="b" aria-label="B">B</button>
+        <button class="abtn" data-btn="a" aria-label="A">A</button>
+        <button class="abtn small" data-btn="start" aria-label="Start">≡</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/battle.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
