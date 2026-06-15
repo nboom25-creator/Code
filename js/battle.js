@@ -77,9 +77,10 @@ const Battle = {
     if (input === "left" || input === "right") this.menuIndex ^= 1;
     else if (input === "up" || input === "down") this.menuIndex ^= 2;
     else if (input === "a") {
+      // Gen-1 layout: 0 FIGHT  1 PkMn / 2 ITEM  3 RUN
       if (this.menuIndex === 0) { this.phase = "fight"; this.moveIndex = 0; }
-      else if (this.menuIndex === 1) { this.phase = "bag"; this.bagIndex = 0; }
-      else if (this.menuIndex === 2) { this.openSwitch(); }
+      else if (this.menuIndex === 1) { this.openSwitch(); }
+      else if (this.menuIndex === 2) { this.phase = "bag"; this.bagIndex = 0; }
       else if (this.menuIndex === 3) { this.tryRun(); }
     }
     Game.requestRender();
@@ -371,104 +372,180 @@ const Battle = {
     }
   },
 
-  /* ---- rendering ---- */
+  /* ---- rendering (all on-canvas, native 160x144) ---- */
   render(ctx) {
-    ctx.clearRect(0, 0, VIEW_W, VIEW_H);
-    // background
-    ctx.fillStyle = "#f8f8e8"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.fillStyle = "#d0e8b0"; ctx.fillRect(0, 70, VIEW_W, VIEW_H - 70);
+    Game.setOverlay("");
+    // Backgrounds: white upper, barely-green lower, brick divider between.
+    ctx.fillStyle = "#f8f8f8"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.fillStyle = "#eef2e2"; ctx.fillRect(0, 55, VIEW_W, 43);
+    this.drawBrickDivider(ctx, 53);
 
-    // enemy platform + sprite (top-right)
-    ctx.fillStyle = "#b8d888"; ctx.beginPath();
-    ctx.ellipse(118, 64, 34, 9, 0, 0, Math.PI * 2); ctx.fill();
-    const bob = Math.sin(this.introBounce * 0.08) * 1.5;
-    if (this.phase !== "ballanim") {
-      drawGrid(ctx, monSprite(this.enemy.species), 96, 18 + bob, 2.6);
-    } else {
-      this.drawBall(ctx, 110, 38);
-    }
+    // platform ovals (line-drawn, GB style)
+    this.drawPlatform(ctx, 116, 50, 30, 7);
+    this.drawPlatform(ctx, 40, 90, 33, 8);
 
-    // player sprite (bottom-left, back view approximated by the front sprite, larger)
-    ctx.fillStyle = "#b8d888"; ctx.beginPath();
-    ctx.ellipse(40, 118, 36, 10, 0, 0, Math.PI * 2); ctx.fill();
-    drawGrid(ctx, monSprite(this.player.species), 14, 74, 3);
+    // enemy (top) — front sprite or ball during a throw
+    const bob = Math.round(Math.sin(this.introBounce * 0.08) * 1.5);
+    if (this.phase === "ballanim") this.drawBall(ctx, 108, 28);
+    else drawGrid(ctx, monSprite(this.enemy.species), 92, 6 + bob, 3);
 
-    // HP boxes
-    this.drawHPBox(ctx, this.enemy, this.enemyDispHP, 6, 8, false);
-    this.drawHPBox(ctx, this.player, this.playerDispHP, 84, 78, true);
+    // player (bottom) — rear sprite
+    drawGrid(ctx, monBackSprite(this.player.species), 12, 44, 3);
 
-    // bottom UI handled by overlay
-    Game.setOverlay(this.overlayHTML());
+    // status boxes
+    this.drawStatusBox(ctx, this.enemy, this.enemyDispHP, 6, 10, 86, false);
+    this.drawStatusBox(ctx, this.player, this.playerDispHP, 72, 58, 82, true);
+
+    // bottom message / menu frame
+    this.drawTextbox(ctx);
+  },
+
+  drawBrickDivider(ctx, y) {
+    ctx.fillStyle = "#cdd6bb"; ctx.fillRect(0, y, VIEW_W, 3);
+    ctx.fillStyle = "#a7b290"; ctx.fillRect(0, y, VIEW_W, 1);     // top mortar
+    for (let x = 0; x < VIEW_W; x += 8) ctx.fillRect(x, y, 1, 3); // vertical mortar
+    for (let x = 4; x < VIEW_W; x += 8) ctx.fillRect(x, y + 2, 1, 1);
+  },
+
+  drawPlatform(ctx, cx, cy, rx, ry) {
+    ctx.strokeStyle = "#b7c29a"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(cx + 0.5, cy + 0.5, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = "#d4dcc2";
+    ctx.beginPath(); ctx.ellipse(cx + 0.5, cy + 0.5, rx - 3, ry - 2, 0, 0, Math.PI * 2); ctx.stroke();
   },
 
   drawBall(ctx, x, y) {
-    const wobble = (this.ballShakeCount <= this.ballShakeTarget)
-      ? Math.sin(this.ballTimer * 0.5) * (this.ballTimer < 11 ? 0.5 : 0) : 0;
-    ctx.save();
-    ctx.translate(x + 8, y + 8);
-    ctx.rotate(wobble);
-    ctx.translate(-8, -8);
-    ctx.fillStyle = "#e0392b"; ctx.fillRect(x, y, 16, 8);
-    ctx.fillStyle = "#f8f8f8"; ctx.fillRect(x, y + 8, 16, 8);
-    ctx.fillStyle = "#202020"; ctx.fillRect(x, y + 7, 16, 2);
+    const k = "#181818";
+    ctx.fillStyle = "#e0392b"; ctx.fillRect(x, y, 16, 7);
+    ctx.fillStyle = "#f8f8f8"; ctx.fillRect(x, y + 9, 16, 7);
+    ctx.fillStyle = k; ctx.fillRect(x, y + 7, 16, 2);
     ctx.fillStyle = "#f8f8f8"; ctx.fillRect(x + 6, y + 6, 4, 4);
-    ctx.fillStyle = "#202020"; ctx.fillRect(x + 7, y + 7, 2, 2);
-    ctx.restore();
+    ctx.fillStyle = k; ctx.fillRect(x + 5, y + 5, 6, 1); ctx.fillRect(x + 5, y + 10, 6, 1);
+    ctx.fillRect(x + 7, y + 7, 2, 2);
   },
 
-  drawHPBox(ctx, mon, dispHP, x, y, showHPNum) {
-    const w = 70, h = showHPNum ? 26 : 22;
+  /* HP / name box with the thick-baseline + thin-accent border. */
+  drawStatusBox(ctx, mon, dispHP, x, y, w, showNums) {
+    const k = "#181818";
+    const h = showNums ? 30 : 22;
     ctx.fillStyle = "#f8f8f8"; ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = "#202020"; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
-    ctx.fillStyle = "#202020"; ctx.font = "bold 8px monospace";
-    ctx.fillText(DEX[mon.species].name, x + 4, y + 9);
-    ctx.fillText("L" + mon.level, x + w - 18, y + 9);
+    // border: 1px frame
+    ctx.fillStyle = k;
+    ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y, 1, h);
+    ctx.fillRect(x + w - 1, y, 1, h);
+    ctx.fillRect(x, y + h - 1, w, 1);          // thick baseline
+    ctx.fillRect(x + 2, y + h - 3, w - 4, 1);  // thin accent above baseline
+
+    drawText(ctx, DEX[mon.species].name, x + 5, y + 4, k, 1);
+    const lvl = ":L" + mon.level;
+    drawText(ctx, lvl, x + w - 5 - textWidth(lvl), y + 4, k, 1);
+
     // HP bar
-    const bx = x + 14, by = y + 13, bw = 48, bh = 4;
-    ctx.fillStyle = "#404040"; ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
-    ctx.fillStyle = "#d8d8d8"; ctx.fillRect(bx, by, bw, bh);
-    const ratio = Math.max(0, dispHP / mon.maxhp);
-    ctx.fillStyle = ratio > 0.5 ? "#48d048" : ratio > 0.2 ? "#f8d030" : "#e0392b";
+    const labelX = x + 5, barY = y + 13;
+    drawText(ctx, "HP:", labelX, barY, "#d89000", 1);
+    const bx = labelX + 20, by = barY + 1, bw = w - (bx - x) - 6, bh = 3;
+    ctx.fillStyle = k; ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+    ctx.fillStyle = "#586850"; ctx.fillRect(bx, by, bw, bh);
+    const ratio = Math.max(0, Math.min(1, dispHP / mon.maxhp));
+    ctx.fillStyle = ratio > 0.5 ? "#4fc04f" : ratio > 0.2 ? "#f0b000" : "#e03020";
     ctx.fillRect(bx, by, Math.round(bw * ratio), bh);
-    ctx.fillStyle = "#202020"; ctx.font = "6px monospace";
-    ctx.fillText("HP", x + 3, y + 17);
-    if (showHPNum) {
-      ctx.font = "bold 8px monospace";
-      ctx.fillText(`${Math.ceil(dispHP)}/${mon.maxhp}`, x + w - 34, y + 24);
+
+    if (showNums) {
+      const txt = `${Math.ceil(dispHP)}/${mon.maxhp}`;
+      drawText(ctx, txt, x + w - 5 - textWidth(txt), y + h - 9, k, 1);
     }
   },
 
-  overlayHTML() {
-    const scale = Game.scale;
-    const boxStyle = `left:0;bottom:0;width:${160*scale}px;height:${44*scale}px;font-size:${Math.max(11,7*scale)}px;`;
+  /* The signature dual-line frame with rounded corner nodes. */
+  drawFrame(ctx, x, y, w, h) {
+    const k = "#181818";
+    ctx.fillStyle = "#f8f8f8"; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = k;
+    // outer line
+    ctx.fillRect(x + 1, y, w - 2, 1); ctx.fillRect(x + 1, y + h - 1, w - 2, 1);
+    ctx.fillRect(x, y + 1, 1, h - 2); ctx.fillRect(x + w - 1, y + 1, 1, h - 2);
+    // rounded corner nodes
+    ctx.fillRect(x + 1, y + 1, 1, 1); ctx.fillRect(x + w - 2, y + 1, 1, 1);
+    ctx.fillRect(x + 1, y + h - 2, 1, 1); ctx.fillRect(x + w - 2, y + h - 2, 1, 1);
+    // inner accent line
+    ctx.fillRect(x + 3, y + 2, w - 6, 1); ctx.fillRect(x + 3, y + h - 3, w - 6, 1);
+    ctx.fillRect(x + 2, y + 3, 1, h - 6); ctx.fillRect(x + w - 3, y + 3, 1, h - 6);
+  },
+
+  drawTextbox(ctx) {
+    const x = 2, y = 96, w = 156, h = 46, k = "#181818";
+    this.drawFrame(ctx, x, y, w, h);
+    const tx = x + 8, ty = y + 8;
+
     if (this.phase === "msg" || this.phase === "ballanim") {
-      const t = this.curMsg ? this.curMsg : "";
-      return `<div class="dialogue" style="${boxStyle}padding:${6*scale}px;">${this.esc(t)}</div>`;
+      drawTextLines(ctx, this.curMsg || "", tx, ty, k, 1, 1, 4);
+      if ((Math.floor(Date.now() / 400) % 2))
+        this.drawDownChevron(ctx, x + w - 12, y + h - 11);
+      return;
     }
+
     if (this.phase === "menu") {
-      const items = ["FIGHT","BAG","POKéMON","RUN"];
-      const cells = items.map((it,i)=>`<span class="item ${i===this.menuIndex?'sel':''}">${it}</span>`);
-      return `<div class="dialogue" style="${boxStyle}padding:${6*scale}px;display:grid;grid-template-columns:1fr 1fr;align-content:center;gap:${2*scale}px ${10*scale}px;">${cells.join("")}</div>`;
+      // left prompt
+      drawTextLines(ctx, `What will\n${DEX[this.player.species].name}\ndo?`, tx, ty, k, 1, 1, 4);
+      // inner vertical divider
+      ctx.fillStyle = k; ctx.fillRect(x + 84, y + 5, 1, h - 10);
+      this.drawGridMenu(ctx, ["FIGHT", "PkMn", "ITEM", "RUN"], this.menuIndex,
+        [[94, y + 12], [128, y + 12], [94, y + 28], [128, y + 28]]);
+      return;
     }
+
     if (this.phase === "fight") {
-      const rows = this.player.moves.map((m,i)=>{
-        const info = MOVES[m.id];
-        return `<div class="item ${i===this.moveIndex?'sel':''}">${info.name}<span style="float:right;font-size:0.8em;">${m.pp}/${m.maxpp} ${info.type.slice(0,3).toUpperCase()}</span></div>`;
-      }).join("");
-      return `<div class="dialogue" style="${boxStyle}padding:${5*scale}px;overflow:hidden;">${rows}<div style="font-size:0.75em;opacity:.6;">B: back</div></div>`;
+      // moves on the left
+      const rows = this.player.moves;
+      rows.forEach((m, i) => {
+        const ry = ty + i * 9;
+        if (i === this.moveIndex) drawArrow(ctx, x + 3, ry, k, 1);
+        drawText(ctx, MOVES[m.id].name, tx + 2, ry, k, 1);
+      });
+      // PP / type panel on the right
+      ctx.fillStyle = k; ctx.fillRect(x + 96, y + 5, 1, h - 10);
+      const mv = MOVES[rows[this.moveIndex].id];
+      drawText(ctx, "PP " + rows[this.moveIndex].pp + "/" + rows[this.moveIndex].maxpp, x + 102, y + 12, k, 1);
+      drawText(ctx, "TYPE/", x + 102, y + 26, k, 1);
+      drawText(ctx, mv.type.toUpperCase(), x + 102, y + 35, k, 1);
+      return;
     }
+
     if (this.phase === "bag") {
       const bag = Game.bagList();
-      if (!bag.length) return `<div class="dialogue" style="${boxStyle}padding:${6*scale}px;">No items!<br><span style="font-size:.8em;opacity:.6;">B: back</span></div>`;
-      const rows = bag.map((b,i)=>`<div class="item ${i===this.bagIndex?'sel':''}">${ITEMS[b.id].name}<span style="float:right;">x${b.qty}</span></div>`).join("");
-      return `<div class="dialogue" style="${boxStyle}padding:${5*scale}px;overflow:hidden;">${rows}<div style="font-size:.75em;opacity:.6;">B: back</div></div>`;
+      if (!bag.length) { drawText(ctx, "No items!", tx, ty, k, 1); drawText(ctx, "B: BACK", tx, ty + 22, k, 1); return; }
+      bag.forEach((b, i) => {
+        const ry = ty + i * 9;
+        if (i === this.bagIndex) drawArrow(ctx, x + 3, ry, k, 1);
+        drawText(ctx, ITEMS[b.id].name, tx + 2, ry, k, 1);
+        drawText(ctx, "*" + b.qty, x + w - 26, ry, k, 1);
+      });
+      return;
     }
+
     if (this.phase === "switch") {
-      const rows = Game.party.map((p,i)=>`<div class="item ${i===this.switchIndex?'sel':''}">${DEX[p.species].name} <span style="float:right;">L${p.level} ${p.hp}/${p.maxhp}${p.hp<=0?' FNT':''}</span></div>`).join("");
-      return `<div class="dialogue" style="${boxStyle}padding:${5*scale}px;overflow:hidden;">${rows}<div style="font-size:.75em;opacity:.6;">B: back</div></div>`;
+      Game.party.forEach((p, i) => {
+        const ry = ty + i * 8;
+        if (i === this.switchIndex) drawArrow(ctx, x + 3, ry, k, 1);
+        drawText(ctx, DEX[p.species].name, tx + 2, ry, k, 1);
+        drawText(ctx, ":L" + p.level + " " + (p.hp <= 0 ? "FNT" : p.hp + "/" + p.maxhp),
+          x + 82, ry, k, 1);
+      });
+      return;
     }
-    return "";
   },
 
-  esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/\n/g,"<br>"); },
+  drawGridMenu(ctx, items, sel, positions) {
+    const k = "#181818";
+    items.forEach((it, i) => {
+      const [px, py] = positions[i];
+      if (i === sel) drawArrow(ctx, px - 8, py, k, 1);
+      drawText(ctx, it, px, py, k, 1);
+    });
+  },
+
+  drawDownChevron(ctx, x, y) {
+    ctx.fillStyle = "#181818";
+    ctx.fillRect(x, y, 5, 1); ctx.fillRect(x + 1, y + 1, 3, 1); ctx.fillRect(x + 2, y + 2, 1, 1);
+  },
 };

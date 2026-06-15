@@ -248,14 +248,19 @@ const MON_SPRITES = {
     "......PP........",
   ],
   weedle: [
-    "Y..............",
-    "YY.............",
-    ".NYCCKCN.......",
-    "..NCCCCCNNN....",
-    "...pCCCCpppN...",
-    "...pCCCCpppN...",
-    "....NCCCCN.....",
-    ".....N..N......",
+    "......R.........",
+    ".....RR.........",
+    "....RRn.........",
+    "...NNNNNN.......",
+    "..NCCCCCCN......",
+    "..NCKCCKCN......",
+    "..NCCCCCCN......",
+    "...NnnnnN.......",
+    "..pNCCCCNp......",
+    ".pNNCCCCNNp.....",
+    ".pNCCnnCCNp.....",
+    "..NCCCCCCN......",
+    "...p.NN.p.......",
   ],
   kakuna: [
     "....YYYYY.......",
@@ -385,6 +390,60 @@ function fallbackMon(species) {
 }
 function monSprite(species) {
   return MON_SPRITES[species] || fallbackMon(species);
+}
+
+/* ---- Rear (back) sprites shown for the player's active Pokémon. ----
+   Original 4-shade art; falls back to the front sprite when undefined. */
+const MON_BACK = {
+  charmander: [
+    "....OOOOOO....Y.",
+    "...OOOOOOOO..YRY",
+    "..OOOOOOOOOO.RYR",
+    "..OOCCCCCCOO.YoY",
+    "..OOOOOOOOOO.oOo",
+    "..OOOOOOOOOOOoO.",
+    "...OOOOOOOOOoO..",
+    "...OOOOOOOOoO...",
+    "..OOOOOOOOOO....",
+    "..OOOoooooOOO...",
+    "..OOOOOOOOOO....",
+    "..OOOOOOOOOO....",
+    "...OOO..OOO.....",
+    "...oO....Oo.....",
+    "...oo....oo.....",
+  ],
+  squirtle: [
+    "....BBBBBB......",
+    "...BBBBBBBB.....",
+    "..BBBBBBBBBB....",
+    "..BBLLLLLLBB....",
+    "..BBBBBBBBBB....",
+    "..NBBBBBBBBN....",
+    ".NNCccccccNN....",
+    ".NCcccccccCN....",
+    ".NCccccccccN....",
+    ".NNCccccccNN....",
+    "..NNcccccNN.....",
+    "..BBB..BBB......",
+    "..bB....Bb......",
+  ],
+  bulbasaur: [
+    "...gg.GGGG.gg...",
+    "..ggGGGGGGGGgg..",
+    "..gGGGGGGGGGGg..",
+    "..gGGCCCCCCGGg..",
+    ".gKGGGGGGGGGGKg.",
+    ".gGGGGGGGGGGGGg.",
+    "..GGGgggggGGGG..",
+    "..GGGGGGGGGGGG..",
+    "..GGGGGGGGGGGG..",
+    "...GGG..GGGG....",
+    "...gG....Gg.....",
+    "...gg....gg.....",
+  ],
+};
+function monBackSprite(species) {
+  return MON_BACK[species] || monSprite(species);
 }
 
 /* ---- Overworld player sprite: 14x16, 4 directions, 2 walk frames. ---- */

@@ -282,81 +282,95 @@ const Game = {
 
     // render
     const ctx = this.ctx;
-    if (this.mode === "title") { this.renderTitle(ctx); this.renderTitleOverlay(); }
+    this.setOverlay("");
+    if (this.mode === "title") { this.renderTitle(ctx); }
     else if (this.mode === "starter") { Engine.render(ctx); this.renderStarter(ctx); }
     else if (this.mode === "battle") { Battle.render(ctx); }
-    else { Engine.render(ctx); this.renderUIOverlay(); }
+    else { Engine.render(ctx); this.renderUI(ctx); }
 
     requestAnimationFrame(() => this.loop());
   },
 
-  renderUIOverlay() {
-    const s = this.scale;
-    const bw = 160 * s;
+  renderUI(ctx) {
+    const K = FONT_BLACK;
     if (this.mode === "dialogue") {
-      const box = `left:0;bottom:0;width:${bw}px;height:${44*s}px;padding:${6*s}px;font-size:${Math.max(11,7*s)}px;`;
-      this.setOverlay(`<div class="dialogue" style="${box}">${this.esc(this.dlgPages[this.dlgIndex] || "")}<div style="position:absolute;right:${6*s}px;bottom:${4*s}px;font-size:.8em;">▼</div></div>`);
+      Battle.drawFrame(ctx, 2, 96, 156, 46);
+      drawTextLines(ctx, this.dlgPages[this.dlgIndex] || "", 10, 104, K, 1, 1, 4);
+      if (Math.floor(Date.now() / 400) % 2) Battle.drawDownChevron(ctx, 148, 132);
     } else if (this.mode === "startmenu") {
       const items = ["POKéMON", "BAG", "SAVE", "CLOSE"];
-      const rows = items.map((it,i)=>`<div class="item ${i===this.menuIndex?'sel':''}">${it}</div>`).join("");
-      this.setOverlay(`<div class="menu" style="right:${4*s}px;top:${4*s}px;width:${70*s}px;padding:${6*s}px;font-size:${Math.max(11,7*s)}px;">${rows}</div>`);
+      Battle.drawFrame(ctx, 92, 4, 64, 58);
+      items.forEach((it, i) => {
+        const y = 12 + i * 12;
+        if (i === this.menuIndex) drawArrow(ctx, 96, y, K, 1);
+        drawText(ctx, it, 104, y, K, 1);
+      });
     } else if (this.mode === "partyview") {
-      const rows = this.party.map(p=>{
-        const r = p.hp/p.maxhp; const col = r>0.5?'#2a8a2a':r>0.2?'#b8860b':'#c0301a';
-        return `<div style="margin-bottom:${4*s}px;">${DEX[p.species].name} <span style="float:right;">L${p.level}</span><br><span style="color:${col};">HP ${p.hp}/${p.maxhp}</span></div>`;
-      }).join("");
-      this.setOverlay(`<div class="dialogue" style="left:${4*s}px;top:${4*s}px;width:${152*s}px;padding:${8*s}px;font-size:${Math.max(11,7*s)}px;">${rows}<div style="font-size:.8em;opacity:.6;">B: back</div></div>`);
+      Battle.drawFrame(ctx, 4, 4, 152, 136);
+      this.party.forEach((p, i) => {
+        const y = 12 + i * 22;
+        drawText(ctx, DEX[p.species].name, 12, y, K, 1);
+        drawText(ctx, ":L" + p.level, 120, y, K, 1);
+        const r = p.hp / p.maxhp;
+        const col = r > 0.5 ? "#3a9a3a" : r > 0.2 ? "#c08000" : "#c0301a";
+        drawText(ctx, "HP " + p.hp + "/" + p.maxhp, 16, y + 9, col, 1);
+      });
+      drawText(ctx, "B: BACK", 12, 130, K, 1);
     } else if (this.mode === "bagview") {
+      Battle.drawFrame(ctx, 4, 4, 152, 136);
       const bag = this.bagList();
-      const rows = bag.length ? bag.map(b=>`<div>${ITEMS[b.id].name} <span style="float:right;">x${b.qty}</span><br><span style="font-size:.78em;opacity:.7;">${ITEMS[b.id].desc}</span></div>`).join("") : "Empty!";
-      this.setOverlay(`<div class="dialogue" style="left:${4*s}px;top:${4*s}px;width:${152*s}px;padding:${8*s}px;font-size:${Math.max(11,7*s)}px;">${rows}<div style="font-size:.8em;opacity:.6;margin-top:${4*s}px;">B: back</div></div>`);
-    } else {
-      this.setOverlay("");
+      if (!bag.length) drawText(ctx, "BAG is empty!", 12, 14, K, 1);
+      bag.forEach((b, i) => {
+        const y = 12 + i * 20;
+        drawText(ctx, ITEMS[b.id].name, 12, y, K, 1);
+        drawText(ctx, "*" + b.qty, 130, y, K, 1);
+        drawText(ctx, ITEMS[b.id].desc, 16, y + 9, "#585858", 1);
+      });
+      drawText(ctx, "B: BACK", 12, 130, K, 1);
     }
   },
 
   renderTitle(ctx) {
-    ctx.fillStyle = "#3068c0"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.fillStyle = "#a0d8f0"; ctx.fillRect(0, 0, VIEW_W, 60);
-    // big red title
-    ctx.fillStyle = "#e0392b"; ctx.font = "bold 22px monospace"; ctx.textAlign = "center";
-    ctx.fillText("POKéMON", 80, 34);
-    ctx.fillStyle = "#f8d030"; ctx.fillText("POKéMON", 79, 33);
-    ctx.font = "bold 13px monospace"; ctx.fillStyle = "#fff";
-    ctx.fillText("RED — MOBILE", 80, 50);
-    // a couple of decorative sprites
-    drawGrid(ctx, monSprite("charmander"), 18, 72, 2.4);
-    drawGrid(ctx, monSprite("pikachu"), 108, 74, 2.4);
-    // pokeball
-    ctx.fillStyle = "#f8f8f8"; ctx.beginPath(); ctx.arc(80, 92, 14, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#e0392b"; ctx.beginPath(); ctx.arc(80, 92, 14, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = "#202020"; ctx.fillRect(66, 91, 28, 2);
-    ctx.beginPath(); ctx.arc(80, 92, 4, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(80, 92, 2, 0, Math.PI*2); ctx.fill();
-    ctx.textAlign = "left";
-  },
-  renderTitleOverlay() {
-    const s = this.scale;
-    const blink = (Math.floor(Date.now() / 500) % 2) === 0;
-    const sub = this.hasSave() ? "CONTINUE — press A" : "NEW GAME — press A";
-    this.setOverlay(`<div style="position:absolute;left:0;bottom:${22*s}px;width:${160*s}px;text-align:center;color:#fff;font-weight:bold;font-size:${Math.max(11,7*s)}px;opacity:${blink?1:0.25};">${sub}</div>`);
+    ctx.fillStyle = "#f8f8f8"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.fillStyle = "#d8ecff"; ctx.fillRect(0, 0, VIEW_W, 64);
+    ctx.fillStyle = "#9ed0a0"; ctx.fillRect(0, 110, VIEW_W, 34);
+    // title in the pixel font (red with a black shadow)
+    const title = "POKéMON";
+    const tw = textWidth(title, 3);
+    drawText(ctx, title, (VIEW_W - tw) / 2 + 2, 18, "#181818", 3);
+    drawText(ctx, title, (VIEW_W - tw) / 2, 16, "#e0392b", 3);
+    const sub = "RED";
+    drawText(ctx, sub, (VIEW_W - textWidth(sub, 2)) / 2, 42, "#c02020", 2);
+    const ver = "MOBILE  VERSION";
+    drawText(ctx, ver, (VIEW_W - textWidth(ver, 1)) / 2, 60, "#404858", 1);
+    // decorative sprites + pokeball
+    drawGrid(ctx, monSprite("charmander"), 16, 76, 2);
+    drawGrid(ctx, monSprite("pikachu"), 112, 78, 2);
+    ctx.fillStyle = "#181818"; ctx.beginPath(); ctx.arc(80, 92, 13, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#f8f8f8"; ctx.beginPath(); ctx.arc(80, 93, 11, 0, Math.PI, false); ctx.fill();
+    ctx.fillStyle = "#e0392b"; ctx.beginPath(); ctx.arc(80, 92, 11, Math.PI, 0, false); ctx.fill();
+    ctx.fillStyle = "#181818"; ctx.fillRect(69, 91, 22, 2);
+    ctx.beginPath(); ctx.arc(80, 92, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#f8f8f8"; ctx.beginPath(); ctx.arc(80, 92, 1.5, 0, Math.PI*2); ctx.fill();
+    // blinking prompt
+    if (Math.floor(Date.now() / 500) % 2) {
+      const p = this.hasSave() ? "CONTINUE - PRESS A" : "NEW GAME - PRESS A";
+      drawText(ctx, p, (VIEW_W - textWidth(p, 1)) / 2, 124, "#181818", 1);
+    }
   },
 
   renderStarter(ctx) {
-    ctx.fillStyle = "rgba(20,20,20,0.55)"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.fillStyle = "#f8f8f8"; ctx.fillRect(10, 18, 140, 88);
-    ctx.strokeStyle = "#202020"; ctx.lineWidth = 2; ctx.strokeRect(10, 18, 140, 88);
-    const xs = [28, 68, 108];
+    ctx.fillStyle = "rgba(20,20,20,0.45)"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    Battle.drawFrame(ctx, 8, 16, 144, 96);
+    const xs = [24, 64, 104];
     STARTERS.forEach((sp, i) => {
-      if (i === this.starterIndex) { ctx.fillStyle = "#f8d030"; ctx.fillRect(xs[i]-4, 26, 36, 52); }
-      drawGrid(ctx, monSprite(sp), xs[i] - 4, 26, 2.2);
+      if (i === this.starterIndex) { ctx.fillStyle = "#f8e088"; ctx.fillRect(xs[i] - 2, 26, 38, 52); }
+      drawGrid(ctx, monSprite(sp), xs[i], 30, 2);
     });
-    ctx.fillStyle = "#202020"; ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
-    ctx.fillText(DEX[STARTERS[this.starterIndex]].name, 80, 92);
-    ctx.font = "7px monospace";
-    ctx.fillText("◀  choose  ▶      A: pick", 80, 102);
-    ctx.textAlign = "left";
-    this.setOverlay("");
+    const nm = DEX[STARTERS[this.starterIndex]].name;
+    drawText(ctx, nm, (VIEW_W - textWidth(nm, 1)) / 2, 86, FONT_BLACK, 1);
+    const hint = "< CHOOSE >   A:PICK";
+    drawText(ctx, hint, (VIEW_W - textWidth(hint, 1)) / 2, 100, FONT_BLACK, 1);
   },
 
   esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>"); },
