@@ -778,7 +778,21 @@
     </section>
 
     <!-- SAVED DESIGNS -->
-    <section class="card span2" id="card-designs">
+    <style>
+      .ws-tabs{grid-column:1/-1; display:flex; flex-wrap:wrap; gap:6px; position:sticky; top:0; z-index:30;
+        background:linear-gradient(180deg,#0c1118 0,#0c1118 68%,rgba(12,17,24,0) 100%); padding:9px 0 11px; margin:2px 0 -2px}
+      .ws-tab{font-family:inherit; font-size:12px; font-weight:600; letter-spacing:.2px; color:var(--muted);
+        background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:8px 14px; cursor:pointer;
+        display:flex; align-items:center; gap:7px; transition:color .15s,border-color .15s,background .15s}
+      .ws-tab:hover{color:var(--ink); border-color:var(--line2)}
+      .ws-tab.active{color:#fff; border-color:var(--accent); background:rgba(74,158,255,.14); box-shadow:inset 0 -2px 0 var(--accent)}
+      .ws-tab .ws-ct{font-family:var(--mono); font-size:10px; color:var(--muted); background:var(--inputbg);
+        border:1px solid var(--line); border-radius:10px; padding:0 6px; line-height:16px}
+      .ws-tab.active .ws-ct{color:var(--accent); border-color:rgba(74,158,255,.4)}
+    </style>
+    <div class="ws-tabs" id="wsTabs" role="tablist" aria-label="Workspaces"></div>
+
+    <section class="card span2" id="card-designs" data-ws="design">
       <h2><span class="ic">💾</span> Saved designs</h2>
       <div class="row3">
         <div><label>Name this design</label><input type="text" id="designName" placeholder="e.g. 200 m survey glider"></div>
@@ -1014,7 +1028,7 @@
     </section>
 
     <!-- LAB BALLAST CALIBRATOR (ported from DeepSeaGlide) -->
-    <section class="card" id="card-calib">
+    <section class="card" id="card-calib" data-ws="build">
       <style>
         #card-calib .calib-water{font-size:11px;line-height:1.25;padding:8px 6px}
         #card-calib .calib-water.active{border-color:var(--accent);color:var(--accent);background:rgba(74,158,255,.12)}
@@ -1042,7 +1056,7 @@
     </section>
 
     <!-- FIRMWARE C++ GENERATOR (ported from DeepSeaGlide) -->
-    <section class="card span2" id="card-fw">
+    <section class="card span2" id="card-fw" data-ws="build">
       <h2><span class="ic">🧰</span> Firmware C++ generator (Arduino)</h2>
       <p class="hint" style="margin:-6px 0 8px">Generates a compilable <b>AccelStepper</b> sketch for the syringe buoyancy pump and the movable-mass trim sled, with a sawtooth dive state machine driven by a pressure sensor. Tune the speeds, then copy it into the Arduino IDE.</p>
       <div class="row3">
@@ -1055,7 +1069,7 @@
     </section>
 
     <!-- O-RING SEAL & END-CAP DESIGNER -->
-    <section class="card span2" id="card-seal">
+    <section class="card span2" id="card-seal" data-ws="hydro">
       <style>
         #card-seal .seal-water{font-size:11px;padding:7px 6px}
         #card-seal .seal-water.active{border-color:var(--accent);color:var(--accent);background:rgba(74,158,255,.12)}
@@ -1118,7 +1132,7 @@
     </section>
 
     <!-- DRAG BUILD-UP & C_D0 ESTIMATOR -->
-    <section class="card span2" id="card-drag">
+    <section class="card span2" id="card-drag" data-ws="hydro">
       <h2><span class="ic">🌊</span> Drag build-up &amp; C<sub>D0</sub> estimator</h2>
       <p class="hint" style="margin:-6px 0 8px">Derives a physics-based parasite-drag coefficient from Reynolds number and flat-plate skin friction (ITTC-1957) plus a body-of-revolution form factor and wing wetted area — so C<sub>D0</sub> isn’t a guess. Push the result straight into the glide model.</p>
       <div class="row3">
@@ -1148,7 +1162,7 @@
     </section>
 
     <!-- 3D MODEL IMPORT -->
-    <section class="card span2" id="card-stl">
+    <section class="card span2" id="card-stl" data-ws="geo">
       <h2><span class="ic">📐</span> Import 3D model (STL / OBJ / 3MF)</h2>
       <p class="hint" style="margin:-6px 0 8px">Upload an <b>.stl</b>, <b>.obj</b> or <b>.3mf</b> of your hull/part — it reads the geometry (volume, area, size) in your browser, previews it, then asks for the material to estimate mass. SolidWorks parts &amp; assemblies: use <b>File → Save As → STL</b> first.</p>
       <div class="row3">
@@ -1218,7 +1232,7 @@
     </section>
 
     <!-- BILL OF MATERIALS -->
-    <section class="card span2" id="card-bom">
+    <section class="card span2" id="card-bom" data-ws="geo">
       <h2><span class="ic">🧾</span> Bill of materials &amp; cost</h2>
       <div style="overflow-x:auto">
       <table class="budget" id="bomTable">
@@ -1235,7 +1249,7 @@
     </section>
 
     <!-- DIVE SIMULATION -->
-    <section class="card span2" id="card-sim">
+    <section class="card span2" id="card-sim" data-ws="sim">
       <h2><span class="ic">🌊</span> Dive simulation — glide path</h2>
       <canvas id="simCanvas" width="1100" height="360"></canvas>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
@@ -1257,7 +1271,7 @@
     </section>
 
     <!-- 6-DOF FLIGHT (IN-BROWSER) -->
-    <section class="card span2" id="card-g6">
+    <section class="card span2" id="card-g6" data-ws="sim">
       <h2><span class="ic">🛩️</span> 6-DOF flight — full dynamics (in-browser)</h2>
       <canvas id="g6Canvas" width="1100" height="340"></canvas>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
@@ -1281,7 +1295,7 @@
     </section>
 
     <!-- POLAR CHART -->
-    <section class="card span2" id="card-polar">
+    <section class="card span2" id="card-polar" data-ws="hydro">
       <h2><span class="ic">📈</span> Glide polar — efficiency vs. speed across lift coefficient</h2>
       <canvas id="polar" width="1100" height="300"></canvas>
       <div class="legend">
@@ -1293,7 +1307,7 @@
     </section>
 
     <!-- MISSION PLANNER -->
-    <section class="card span2" id="card-mission">
+    <section class="card span2" id="card-mission" data-ws="sim">
       <h2><span class="ic">🗺️</span> Mission planner</h2>
       <div class="row3">
         <div><label>Current speed (m/s)</label><input type="number" id="missCur" value="0.1" step="0.02"></div>
@@ -1306,14 +1320,14 @@
     </section>
 
     <!-- CALCULATION WORKSHEET -->
-    <section class="card span2" id="card-work">
+    <section class="card span2" id="card-work" data-ws="design">
       <h2><span class="ic">📝</span> Calculation worksheet — equation · numbers · result</h2>
       <div style="overflow-x:auto" id="worksheet"></div>
       <div class="hint">Every quantity above, shown as the symbolic equation, the values substituted in, and the computed result. Updates live as you change inputs.</div>
     </section>
 
     <!-- PROJECT TIMELINE / GANTT -->
-    <section class="card span2" id="card-gantt">
+    <section class="card span2" id="card-gantt" data-ws="build">
       <h2><span class="ic">📅</span> Project timeline — 15-week glider build (Gantt)</h2>
       <p class="hint" style="margin:-6px 0 10px">Drag a bar to reschedule, drag its left/right edge to change duration, drag the ◇ handle onto another task to link a dependency, or click a bar to edit it. Saved in your browser.</p>
       <style>
@@ -3414,6 +3428,43 @@ g6Reset();
 
 <!-- Realistic WebGL glider (Three.js from CDN). Online only; falls back to the
      dependency-free software glider above when offline / WebGL unavailable. -->
+<!-- ============ WORKSPACE TABS (group the cards) ============ -->
+<script>
+"use strict";
+(function(){
+  const bar=document.getElementById('wsTabs'); if(!bar) return;
+  const WS=[
+    {id:'design', label:'Design'},
+    {id:'hydro',  label:'Hydro & Structure'},
+    {id:'geo',    label:'Geometry & BOM'},
+    {id:'build',  label:'Build & Control'},
+    {id:'sim',    label:'Simulation'},
+  ];
+  const cards=Array.prototype.slice.call(document.querySelectorAll('.card[data-ws]'));
+  const counts={}; cards.forEach(c=>{ counts[c.dataset.ws]=(counts[c.dataset.ws]||0)+1; });
+  let active=localStorage.getItem('gliderWS')||'design';
+  if(!WS.some(w=>w.id===active)) active='design';
+
+  function render(){
+    bar.innerHTML=WS.map(w=>'<button class="ws-tab'+(w.id===active?' active':'')+'" role="tab" aria-selected="'+(w.id===active)+'" data-go="'+w.id+'">'+
+      w.label+'<span class="ws-ct">'+(counts[w.id]||0)+'</span></button>').join('');
+  }
+  function apply(){ cards.forEach(c=>{ c.style.display = (c.dataset.ws===active)?'':'none'; }); }
+
+  bar.addEventListener('click', e=>{
+    const b=e.target.closest('[data-go]'); if(!b) return;
+    active=b.dataset.go; try{ localStorage.setItem('gliderWS',active); }catch(_){}
+    render(); apply();
+    // newly revealed canvases need a layout pass + redraw
+    if(typeof compute==='function') compute();
+    if(typeof updateBudgetTotals==='function') updateBudgetTotals();
+    if(typeof drawMission==='function') drawMission();
+    window.dispatchEvent(new Event('resize'));
+  });
+  render(); apply();
+})();
+</script>
+
 <!-- ============ O-RING SEAL/END-CAP DESIGNER + DRAG ESTIMATOR ============ -->
 <script>
 "use strict";
