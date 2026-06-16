@@ -1618,6 +1618,29 @@
   </footer>
 </div>
 
+<style>
+  body{padding-bottom:46px}
+  .statusbar{position:fixed; left:0; right:0; bottom:0; z-index:45; display:flex; align-items:stretch;
+    background:rgba(13,20,32,.96); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    border-top:1px solid var(--line2); font-family:var(--mono); overflow-x:auto; scrollbar-width:none}
+  .statusbar::-webkit-scrollbar{display:none}
+  .statusbar .sb-item{display:flex; flex-direction:column; justify-content:center; gap:2px; padding:5px 16px;
+    border-right:1px solid var(--line); white-space:nowrap; min-width:92px}
+  .statusbar .sb-k{font-size:9px; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); font-weight:700}
+  .statusbar .sb-v{font-size:12.5px; font-weight:700; display:flex; align-items:center; gap:7px; color:var(--ink)}
+  .statusbar .sb-v .dot{width:7px; height:7px; border-radius:50%; flex:0 0 7px; background:var(--muted)}
+  .statusbar .sb-v.sb-good{color:var(--good)} .statusbar .sb-v.sb-warn{color:var(--warn)} .statusbar .sb-v.sb-bad{color:var(--bad)}
+  .statusbar .sb-v.sb-good .dot{background:var(--good)} .statusbar .sb-v.sb-warn .dot{background:var(--warn)} .statusbar .sb-v.sb-bad .dot{background:var(--bad)}
+  @media(max-width:640px){ .statusbar .sb-item{padding:5px 11px; min-width:74px} .statusbar .sb-v{font-size:11.5px} }
+  .chip-nav{cursor:pointer; transition:filter .12s, transform .12s}
+  .chip-nav:hover{filter:brightness(1.18); transform:translateY(-1px)}
+  @keyframes cardflash{0%{box-shadow:0 0 0 0 rgba(74,158,255,.55)} 100%{box-shadow:0 0 0 7px rgba(74,158,255,0)}}
+  .card.flashcard{animation:cardflash .9s ease-out; border-color:var(--accent)}
+  @keyframes vchange{0%{background:rgba(74,158,255,.30)} 100%{background:transparent}}
+  .kv .v.vchanged, .out .v.vchanged{animation:vchange .7s ease-out; border-radius:4px}
+</style>
+<div class="statusbar" id="statusbar" aria-label="Live design status"></div>
+
 <script>
 "use strict";
 const ATM = 101325, BULK = 2.2e9;
@@ -3566,8 +3589,10 @@ function updateHealth(d){
   sc+=glide?Math.min(20,gr/3*20):0;
   sc=Math.max(0,Math.min(100,Math.round(sc)));
   if($('scoreNum')) $('scoreNum').textContent=sc;
+  window.gHealthScore=sc;
   drawScoreRing(sc);
-  const chip=(ok,label)=>'<span class="chip '+(ok?'good':'bad')+'">'+(ok?'✅':'⚠️')+' '+label+'</span>';
+  const chipNav={Buoyancy:['design','card-mc'], Stability:['geo','card-stl'], 'Hull yield':['design','card-compliance'], 'Hull buckling':['design','card-compliance'], Glide:['hydro','card-polar']};
+  const chip=(ok,label)=>{ const t=chipNav[label]||['','']; return '<span class="chip chip-nav '+(ok?'good':'bad')+'" role="button" tabindex="0" data-tab="'+t[0]+'" data-card="'+t[1]+'" title="Jump to where you fix this">'+(ok?'✅':'⚠️')+' '+label+'</span>'; };
   if($('healthChips')) $('healthChips').innerHTML=
     chip(buoy,'Buoyancy')+chip(stable,'Stability')+chip(yOK,'Hull yield')+chip(bOK,'Hull buckling')+chip(glide,'Glide');
   drawGauge('gYield', ysf, 4, 1.5); drawGauge('gBuckle', bsf, 4, 2.0); drawGauge('gGlide', gr, 6, 1.0);
@@ -3813,6 +3838,70 @@ g6Reset();
 })();
 </script>
 
+<!-- ============ STATUS BAR + ANIMATED NUMBERS + CHIP NAV ============ -->
+<script>
+"use strict";
+(function(){
+  const bar=document.getElementById('statusbar'); if(!bar) return;
+
+  // ---- live status bar (reads window.gMetrics on every 'designupdate') ----
+  const METRICS=[
+    {k:'Health',  get:m=>({v:window.gHealthScore, d:0, suf:'',    cls:v=>v>=80?'good':v>=50?'warn':'bad'})},
+    {k:'Buoyancy',get:m=>({v:(isFinite(m.net)&&m.g)?m.net/m.g*1000:NaN, d:0, suf:' g', signed:true, cls:v=>Math.abs(v)<25?'good':Math.abs(v)<60?'warn':'bad'})},
+    {k:'Glide L/D',get:m=>({v:m.glideRatio, d:2, suf:'',  cls:v=>v>=2.5?'good':v>=1.5?'warn':'bad'})},
+    {k:'Yield SF', get:m=>({v:m.ysf, d:2, suf:'×', cls:v=>v>=1.5?'good':v>=1.2?'warn':'bad'})},
+    {k:'Buckle SF',get:m=>({v:m.bsf, d:2, suf:'×', cls:v=>v>=2?'good':v>=1.5?'warn':'bad'})},
+    {k:'Stability',get:m=>({v:isFinite(m.bg)?m.bg*1000:NaN, d:1, suf:' mm', signed:true, cls:v=>v>0?'good':'bad'})},
+  ];
+  bar.innerHTML=METRICS.map((mt,i)=>'<span class="sb-item"><span class="sb-k">'+mt.k+'</span>'+
+    '<span class="sb-v" id="sb-'+i+'"><span class="dot"></span><span class="sb-num">–</span></span></span>').join('');
+  const st=METRICS.map(()=>({cur:NaN, token:0}));
+  const fmtNum=(v,d,signed)=> !isFinite(v)?'–':((signed&&v>0?'+':'')+v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}));
+  function tick(i,target,d,suf,signed,cls){
+    const wrap=document.getElementById('sb-'+i); if(!wrap) return;
+    const numEl=wrap.querySelector('.sb-num'), s=st[i];
+    const klass=isFinite(target)?('sb-'+cls(target)):'';
+    wrap.className='sb-v '+klass;
+    if(!isFinite(target)){ numEl.textContent='–'; s.cur=NaN; return; }
+    const from=isFinite(s.cur)?s.cur:target, my=++s.token, t0=performance.now(), dur=440;
+    (function step(now){ if(s.token!==my) return; const p=Math.min((now-t0)/dur,1);
+      const e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2, val=from+(target-from)*e;
+      numEl.textContent=fmtNum(val,d,signed)+suf;
+      if(p<1) requestAnimationFrame(step); else { numEl.textContent=fmtNum(target,d,signed)+suf; s.cur=target; }
+    })(t0);
+  }
+  function refresh(){ const m=window.gMetrics||{}; METRICS.forEach((mt,i)=>{ const r=mt.get(m); tick(i,r.v,r.d,r.suf,r.signed,r.cls); }); }
+  window.addEventListener('designupdate', refresh);
+  refresh();
+
+  // ---- flash any result value when it changes ----
+  const seen=new WeakMap();
+  const flash=el=>{ el.classList.remove('vchanged'); void el.offsetWidth; el.classList.add('vchanged'); };
+  const mo=new MutationObserver(muts=>{
+    const done=new Set();
+    muts.forEach(mu=>{ let el=mu.target; if(el.nodeType===3) el=el.parentElement;
+      if(!el||!el.classList||!el.classList.contains('v')||el.closest('.statusbar')) return;
+      if(done.has(el)) return; done.add(el);
+      const txt=el.textContent;
+      if(seen.has(el)&&seen.get(el)!==txt) flash(el);
+      seen.set(el,txt);
+    });
+  });
+  document.querySelectorAll('.out .v, .kv .v').forEach(el=>{ seen.set(el,el.textContent); mo.observe(el,{childList:true,characterData:true,subtree:true}); });
+
+  // ---- clickable health chips: jump to the tab/card that fixes the issue ----
+  function goChip(c){
+    const tab=c.dataset.tab, card=c.dataset.card;
+    if(tab && window.gotoWorkspace) window.gotoWorkspace(tab);
+    if(card){ const el=document.getElementById(card); if(el){
+      el.scrollIntoView({behavior:'smooth',block:'center'});
+      el.classList.remove('flashcard'); void el.offsetWidth; el.classList.add('flashcard'); } }
+  }
+  document.addEventListener('click', e=>{ const c=e.target.closest('.chip-nav'); if(c) goChip(c); });
+  document.addEventListener('keydown', e=>{ if(e.key!=='Enter'&&e.key!==' ')return; const c=e.target.closest&&e.target.closest('.chip-nav'); if(c){ e.preventDefault(); goChip(c); } });
+})();
+</script>
+
 <!-- ============ WORKSPACE TABS (group the cards) ============ -->
 <script>
 "use strict";
@@ -3836,16 +3925,18 @@ g6Reset();
   }
   function apply(){ cards.forEach(c=>{ c.style.display = (c.dataset.ws===active)?'':'none'; }); }
 
-  bar.addEventListener('click', e=>{
-    const b=e.target.closest('[data-go]'); if(!b) return;
-    active=b.dataset.go; try{ localStorage.setItem('gliderWS',active); }catch(_){}
+  function go(id){
+    if(!WS.some(w=>w.id===id)) return;
+    active=id; try{ localStorage.setItem('gliderWS',active); }catch(_){}
     render(); apply();
     // newly revealed canvases need a layout pass + redraw
     if(typeof compute==='function') compute();
     if(typeof updateBudgetTotals==='function') updateBudgetTotals();
     if(typeof drawMission==='function') drawMission();
     window.dispatchEvent(new Event('resize'));
-  });
+  }
+  bar.addEventListener('click', e=>{ const b=e.target.closest('[data-go]'); if(b) go(b.dataset.go); });
+  window.gotoWorkspace=go;
   render(); apply();
 })();
 </script>
@@ -4403,12 +4494,25 @@ const t="160",e={LEFT:0,MIDDLE:1,RIGHT:2,ROTATE:0,DOLLY:1,PAN:2},n={ROTATE:0,PAN
   function resize(){ const w=cv.clientWidth||cv.offsetWidth||600, h=74; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
   resize(); addEventListener('resize', resize);
 
+  // ---- reacts to the live design: pitch ∝ glide angle, hull tint ∝ health ----
+  const baseHull = new THREE.Color(0xf2c021);
+  const cGood = new THREE.Color(0x5fcf86), cWarn = new THREE.Color(0xe2b24a), cBad = new THREE.Color(0xe06b6b);
+  let pitchAmp = 0.17;        // smoothed swing amplitude
   const clock = new THREE.Clock(); let tX=0, tY=0;
   function frame(){
     if(document.hidden){ requestAnimationFrame(frame); return; }
     const t = reduce ? 1.5 : clock.getElapsedTime();
+    const m = window.gMetrics || {};
+    // pitch swing follows the design's glide angle (clamped to a nice on-screen range)
+    const gamTarget = isFinite(m.gamma) ? Math.min(Math.abs(m.gamma), 0.7) : 0.17;
+    pitchAmp += ((0.09 + gamTarget*0.55) - pitchAmp) * 0.04;
+    // hull + glow tint follows the health score
+    const sc = (typeof window.gHealthScore==='number') ? window.gHealthScore : 70;
+    const status = sc>=80 ? cGood : sc>=50 ? cWarn : cBad;
+    matHull.color.lerp(baseHull.clone().lerp(status, 0.45), 0.08);
+    matGlow.color.lerp(status, 0.1); matGlow.emissive.copy(matGlow.color).multiplyScalar(0.22);
     glider.rotation.set(0,0,0);
-    glider.rotation.z = Math.sin(t*0.6)*0.17;          // pitch: dive / climb
+    glider.rotation.z = Math.sin(t*0.6)*pitchAmp;      // pitch: dive / climb (∝ glide angle)
     glider.rotation.x = Math.sin(t*0.45+1.2)*0.24;     // roll: gentle bank
     glider.rotation.y = Math.sin(t*0.33)*0.20;         // slow yaw drift
     glider.position.y = Math.sin(t*0.9)*0.12 - 0.05;   // bob
