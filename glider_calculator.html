@@ -1054,6 +1054,99 @@
       <button class="tool" id="fwCopy" style="width:100%;margin-top:8px">⧉ Copy Arduino sketch</button>
     </section>
 
+    <!-- O-RING SEAL & END-CAP DESIGNER -->
+    <section class="card span2" id="card-seal">
+      <style>
+        #card-seal .seal-water{font-size:11px;padding:7px 6px}
+        #card-seal .seal-water.active{border-color:var(--accent);color:var(--accent);background:rgba(74,158,255,.12)}
+      </style>
+      <h2><span class="ic">⭕</span> O-ring seal &amp; end-cap designer</h2>
+      <p class="hint" style="margin:-6px 0 8px">Sizes a static <b>radial (piston) O-ring gland</b> for the hull end-cap and checks the cap won’t blow off at depth. AS568 cross-sections; squeeze/fill targets per the Parker O-ring handbook.</p>
+      <div class="subhead"><span class="ic">⭕</span> Radial gland — squeeze &amp; fill</div>
+      <div class="row3">
+        <div><label>O-ring cross-section W</label>
+          <select id="sealW">
+            <option value="1.78">1/16 in — 0.070 (1.78 mm)</option>
+            <option value="2.62" selected>3/32 in — 0.103 (2.62 mm)</option>
+            <option value="3.53">1/8 in — 0.139 (3.53 mm)</option>
+            <option value="5.33">3/16 in — 0.210 (5.33 mm)</option>
+            <option value="6.99">1/4 in — 0.275 (6.99 mm)</option>
+          </select>
+        </div>
+        <div><label>Gland depth — radial (mm)</label><input type="number" id="sealGland" value="2.05" step="0.05"></div>
+        <div><label>Groove width — axial (mm)</label><input type="number" id="sealGroove" value="3.40" step="0.1"></div>
+      </div>
+      <div class="row3">
+        <div><label>O-ring inside dia (mm)</label><input type="number" id="sealID" value="" placeholder="optional" step="0.1"></div>
+        <div><label>Groove root dia (mm)</label><input type="number" id="sealRoot" value="" placeholder="optional" step="0.1"></div>
+        <div class="hint" style="margin-top:24px">Fill the optional fields to also check O-ring <b>stretch</b> over the cap groove.</div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Squeeze</span><span class="v" id="o_sealSq">–</span></div>
+        <div class="kv"><span class="k">Gland fill</span><span class="v" id="o_sealFill">–</span></div>
+        <div class="kv"><span class="k">Stretch</span><span class="v" id="o_sealStretch">–</span></div>
+        <div class="kv"><span class="k">Recommended gland depth (25% squeeze)</span><span class="v" id="o_sealRecGland">–</span></div>
+        <div class="kv"><span class="k">Recommended groove width (75% fill)</span><span class="v" id="o_sealRecGroove">–</span></div>
+      </div>
+
+      <div class="subhead" style="margin-top:16px"><span class="ic">🔩</span> End-cap blow-off &amp; bolt retention</div>
+      <div class="row3">
+        <div><label>Bore / cap dia (mm)</label><input type="number" id="capBore" value="200" step="1"></div>
+        <div><label>Depth (m)</label><input type="number" id="capDepth" value="50" step="5"></div>
+        <div style="display:flex;gap:6px;align-items:flex-end">
+          <button class="tool seal-water" id="sealFresh" style="flex:1">Fresh<br><span class="hint">998</span></button>
+          <button class="tool seal-water" id="sealSalt" style="flex:1">Salt<br><span class="hint">1025</span></button>
+        </div>
+      </div>
+      <div class="row3">
+        <div><label>Number of bolts</label><input type="number" id="capN" value="6" step="1"></div>
+        <div><label>Bolt size</label>
+          <select id="capBolt"><option value="M3">M3</option><option value="M4">M4</option><option value="M5" selected>M5</option><option value="M6">M6</option><option value="M8">M8</option></select>
+        </div>
+        <div><label>Bolt material</label>
+          <select id="capMat"><option value="a2" selected>SS A2-70 (proof 450)</option><option value="g88">Steel 8.8 (580)</option><option value="g129">Steel 12.9 (970)</option><option value="alu">Aluminum (250)</option><option value="nylon">Nylon 6/6 (40)</option></select>
+        </div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Pressure at depth</span><span class="v" id="o_capP">–</span></div>
+        <div class="kv"><span class="k">End-cap blow-off force</span><span class="v" id="o_capF">–</span></div>
+        <div class="kv"><span class="k">Load per bolt</span><span class="v" id="o_capPer">–</span></div>
+        <div class="kv"><span class="k">Bolt safety factor (vs proof)</span><span class="v" id="o_capSF">–</span></div>
+        <div class="kv"><span class="k">Recommended seating torque (per bolt)</span><span class="v" id="o_capTq">–</span></div>
+      </div>
+      <button class="tool" id="capPull" style="margin-top:8px">↥ Pull bore Ø &amp; depth from design</button>
+    </section>
+
+    <!-- DRAG BUILD-UP & C_D0 ESTIMATOR -->
+    <section class="card span2" id="card-drag">
+      <h2><span class="ic">🌊</span> Drag build-up &amp; C<sub>D0</sub> estimator</h2>
+      <p class="hint" style="margin:-6px 0 8px">Derives a physics-based parasite-drag coefficient from Reynolds number and flat-plate skin friction (ITTC-1957) plus a body-of-revolution form factor and wing wetted area — so C<sub>D0</sub> isn’t a guess. Push the result straight into the glide model.</p>
+      <div class="row3">
+        <div><label>Cruise speed (m/s)</label><input type="number" id="dragV" value="0.30" step="0.05"></div>
+        <div><label>Hull length L (m)</label><input type="number" id="dragL" value="0.60" step="0.05"></div>
+        <div><label>Hull diameter D (m)</label><input type="number" id="dragD" value="0.20" step="0.01"></div>
+      </div>
+      <div class="row3">
+        <div><label>Wing planform area (m²)</label><input type="number" id="dragS" value="0.10" step="0.01"></div>
+        <div><label>Water density (kg/m³)</label><input type="number" id="dragRho" value="1025" step="1"></div>
+        <div><label>Kinematic viscosity ν (m²/s)</label><input type="number" id="dragNu" value="0.00000105" step="0.00000005"></div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Reynolds number (hull)</span><span class="v" id="o_dragRe">–</span></div>
+        <div class="kv"><span class="k">Skin-friction coefficient C_f</span><span class="v" id="o_dragCf">–</span></div>
+        <div class="kv"><span class="k">Form factor (1+k)</span><span class="v" id="o_dragK">–</span></div>
+        <div class="kv"><span class="k">Hull wetted area</span><span class="v" id="o_dragSwet">–</span></div>
+        <div class="kv"><span class="k">Hull drag (friction + form)</span><span class="v" id="o_dragHull">–</span></div>
+        <div class="kv"><span class="k">Wing drag (profile)</span><span class="v" id="o_dragWing">–</span></div>
+        <div class="kv"><span class="k">Total parasite drag</span><span class="v" id="o_dragTot">–</span></div>
+        <div class="kv"><span class="k">Derived C_D0 (ref. wing area)</span><span class="v" id="o_dragCd0">–</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="tool" id="dragPull">↥ Pull L, D &amp; wing area from design</button>
+        <button class="tool" id="dragPush">↧ Use as C<sub>D0</sub> (glide)</button>
+      </div>
+    </section>
+
     <!-- 3D MODEL IMPORT -->
     <section class="card span2" id="card-stl">
       <h2><span class="ic">📐</span> Import 3D model (STL / OBJ / 3MF)</h2>
@@ -3321,6 +3414,120 @@ g6Reset();
 
 <!-- Realistic WebGL glider (Three.js from CDN). Online only; falls back to the
      dependency-free software glider above when offline / WebGL unavailable. -->
+<!-- ============ O-RING SEAL/END-CAP DESIGNER + DRAG ESTIMATOR ============ -->
+<script>
+"use strict";
+(function(){
+  const el = id => document.getElementById(id);
+  if(!el('card-seal')) return;
+  const pf = id => parseFloat(el(id).value);
+  const badge = (txt,cls) => '<span class="badge '+cls+'">'+txt+'</span>';
+
+  // ---------------- O-ring radial gland ----------------
+  function seal(){
+    const W = pf('sealW');               // cross-section, mm
+    const gland = pf('sealGland');       // radial cavity depth, mm
+    const groove = pf('sealGroove');     // axial groove width, mm
+    const sqMM = W - gland, sqPct = sqMM/W*100;
+    const ringCSA = Math.PI/4*W*W;       // mm^2
+    const fillPct = ringCSA/(groove*gland)*100;
+    let sqCls = (sqPct>=15&&sqPct<=28)?'good':(sqPct>=10&&sqPct<=35)?'warn':'bad';
+    let flCls = (fillPct>=60&&fillPct<=85)?'good':(fillPct>=50&&fillPct<=90)?'warn':'bad';
+    el('o_sealSq').innerHTML = isFinite(sqPct)? sqMM.toFixed(3)+' mm — '+sqPct.toFixed(1)+'% '+badge(sqPct.toFixed(0)+'%',sqCls) : '–';
+    el('o_sealFill').innerHTML = isFinite(fillPct)? fillPct.toFixed(1)+'% '+badge(fillPct>90?'overfilled':fillPct<50?'loose':'ok',flCls) : '–';
+    const id = pf('sealID'), root = pf('sealRoot');
+    if(isFinite(id)&&id>0&&isFinite(root)){
+      const stretch=(root-id)/id*100, stCls=(stretch>=0&&stretch<=5)?'good':(stretch<=8)?'warn':'bad';
+      el('o_sealStretch').innerHTML = stretch.toFixed(1)+'% '+badge(stretch>5?'high':'ok',stCls);
+    } else el('o_sealStretch').textContent='— (enter O-ring ID & groove root Ø)';
+    el('o_sealRecGland').textContent = (W*0.75).toFixed(2)+' mm';
+    el('o_sealRecGroove').textContent = (ringCSA/(0.75*(W*0.75))).toFixed(2)+' mm';
+  }
+  ['sealW','sealGland','sealGroove','sealID','sealRoot'].forEach(id=>el(id).addEventListener('input', seal));
+
+  // ---------------- end-cap blow-off & bolts ----------------
+  const BOLT_AT={M3:5.03,M4:8.78,M5:14.2,M6:20.1,M8:36.6};   // tensile stress area, mm^2
+  const BOLT_D ={M3:3,M4:4,M5:5,M6:6,M8:8};                  // nominal dia, mm
+  const PROOF  ={a2:450,g88:580,g129:970,alu:250,nylon:40};  // proof strength, MPa
+  let sealWater='salt';
+  function setSealWater(w){ sealWater=w;
+    el('sealFresh').classList.toggle('active', w==='fresh');
+    el('sealSalt').classList.toggle('active', w==='salt'); cap(); }
+  el('sealFresh').addEventListener('click', ()=>setSealWater('fresh'));
+  el('sealSalt').addEventListener('click', ()=>setSealWater('salt'));
+  function cap(){
+    const g=9.81, rho=sealWater==='salt'?1025:998;
+    const bore=pf('capBore')/1000, depth=pf('capDepth');
+    const P=rho*g*depth;                         // Pa (gauge)
+    const A=Math.PI/4*bore*bore;                 // m^2
+    const F=P*A;                                 // N
+    const N=Math.max(1,Math.round(pf('capN'))||1);
+    const per=F/N;
+    const At=BOLT_AT[el('capBolt').value], d=BOLT_D[el('capBolt').value], proof=PROOF[el('capMat').value];
+    const allowPer=At*proof;                     // N (MPa*mm^2)
+    const SF=allowPer/per;
+    const preload=0.6*proof*At;                  // N at 60% proof
+    const torque=0.2*preload*(d/1000);           // N·m (K=0.2 dry)
+    el('o_capP').textContent = (P/1000).toFixed(1)+' kPa  ('+(P/6894.76).toFixed(1)+' psi)';
+    el('o_capF').textContent = F.toFixed(0)+' N  ('+(F*0.224809).toFixed(1)+' lbf)';
+    el('o_capPer').textContent = per.toFixed(0)+' N / bolt';
+    const sfCls=SF>=2?'good':SF>=1.5?'warn':'bad';
+    el('o_capSF').innerHTML = isFinite(SF)? SF.toFixed(2)+'× '+badge(SF>=2?'ok':SF>=1.5?'marginal':'low',sfCls) : '–';
+    el('o_capTq').textContent = torque.toFixed(2)+' N·m  ('+(torque*8.8507).toFixed(1)+' in·lb)';
+  }
+  ['capBore','capDepth','capN','capBolt','capMat'].forEach(id=>el(id).addEventListener('input', cap));
+  el('capPull').addEventListener('click', ()=>{
+    const r=document.getElementById('radius'), wd=document.getElementById('workingDepth');
+    if(r) el('capBore').value=(2*parseFloat(r.value)).toFixed(0);
+    if(wd) el('capDepth').value=parseFloat(wd.value).toFixed(0);
+    cap(); const b=el('capPull'),t=b.textContent; b.textContent='✓ pulled'; setTimeout(()=>{b.textContent=t;},1100);
+  });
+
+  // ---------------- drag build-up ----------------
+  let lastCd0=NaN;
+  function drag(){
+    const V=pf('dragV'), L=pf('dragL'), D=pf('dragD'), S=pf('dragS'), rho=pf('dragRho'), nu=pf('dragNu');
+    const Re=V*L/nu;
+    const Cf=0.075/Math.pow(Math.log10(Re)-2,2);          // ITTC-1957 line
+    const DL=D/L, formK=1+1.5*Math.pow(DL,1.5)+7*Math.pow(DL,3);  // body of revolution
+    const Swet=Math.PI*D*L + Math.PI*D*D/2;               // cylinder + rounded ends (approx)
+    const q=0.5*rho*V*V;
+    const Dhull=Cf*formK*q*Swet;
+    const Dwing=Cf*1.2*q*(2*S);                           // both surfaces, ×1.2 foil thickness factor
+    const Dtot=Dhull+Dwing;
+    const Cd0=Dtot/(q*S);
+    lastCd0=Cd0;
+    el('o_dragRe').textContent = isFinite(Re)? Re.toExponential(2) : '–';
+    el('o_dragCf').textContent = isFinite(Cf)? Cf.toFixed(4) : '–';
+    el('o_dragK').textContent  = isFinite(formK)? formK.toFixed(3) : '–';
+    el('o_dragSwet').textContent = isFinite(Swet)? (Swet*1e4).toFixed(0)+' cm²  ('+Swet.toFixed(4)+' m²)' : '–';
+    el('o_dragHull').textContent = isFinite(Dhull)? Dhull.toFixed(3)+' N' : '–';
+    el('o_dragWing').textContent = isFinite(Dwing)? Dwing.toFixed(3)+' N' : '–';
+    el('o_dragTot').textContent  = isFinite(Dtot)? Dtot.toFixed(3)+' N' : '–';
+    el('o_dragCd0').innerHTML    = isFinite(Cd0)? '<b>'+Cd0.toFixed(3)+'</b>' : '–';
+  }
+  ['dragV','dragL','dragD','dragS','dragRho','dragNu'].forEach(id=>el(id).addEventListener('input', drag));
+  el('dragPull').addEventListener('click', ()=>{
+    const r=document.getElementById('radius'), hl=document.getElementById('hullLength'),
+          wa=document.getElementById('wingArea'), sd=document.getElementById('surfaceDensity');
+    if(hl) el('dragL').value=(parseFloat(hl.value)/1000).toFixed(3);
+    if(r)  el('dragD').value=(2*parseFloat(r.value)/1000).toFixed(3);
+    if(wa) el('dragS').value=parseFloat(wa.value).toFixed(3);
+    if(sd) el('dragRho').value=parseFloat(sd.value).toFixed(0);
+    drag(); const b=el('dragPull'),t=b.textContent; b.textContent='✓ pulled'; setTimeout(()=>{b.textContent=t;},1100);
+  });
+  el('dragPush').addEventListener('click', ()=>{
+    if(!isFinite(lastCd0)) return;
+    const cd0=document.getElementById('cd0');
+    if(cd0){ cd0.value=lastCd0.toFixed(3); if(typeof compute==='function') compute(); }
+    const b=el('dragPush'),t=b.textContent; b.textContent='✓ applied'; setTimeout(()=>{b.textContent=t;},1100);
+  });
+
+  // initial render
+  setSealWater('salt'); seal(); drag();
+})();
+</script>
+
 <!-- ============ LAB BALLAST CALIBRATOR + FIRMWARE GENERATOR ============ -->
 <script>
 "use strict";
