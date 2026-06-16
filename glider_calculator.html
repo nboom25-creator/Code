@@ -1013,6 +1013,47 @@
       </div>
     </section>
 
+    <!-- LAB BALLAST CALIBRATOR (ported from DeepSeaGlide) -->
+    <section class="card" id="card-calib">
+      <style>
+        #card-calib .calib-water{font-size:11px;line-height:1.25;padding:8px 6px}
+        #card-calib .calib-water.active{border-color:var(--accent);color:var(--accent);background:rgba(74,158,255,.12)}
+      </style>
+      <h2><span class="ic">⚖️</span> Lab ballast calibrator</h2>
+      <p class="hint" style="margin:-6px 0 8px">Weigh your finished build on a lab scale, then this tells you how much trim ballast to add (or shed) and where to put it so it sits neutrally buoyant.</p>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="tool calib-water" id="calibFresh" style="flex:1">Freshwater<br><span class="hint">62.43 lb/ft³</span></button>
+        <button class="tool calib-water" id="calibSalt" style="flex:1">Saltwater<br><span class="hint">64.00 lb/ft³</span></button>
+      </div>
+      <div class="row">
+        <div><label>Displaced volume (in³)</label><input type="number" id="calibVol" value="231.0" step="1"></div>
+        <div><label>Centre of buoyancy from nose (in)</label><input type="number" id="calibCob" value="12.0" step="0.5"></div>
+      </div>
+      <div class="row">
+        <div><label>Measured built weight (lb)</label><input type="number" id="calibMeas" value="" placeholder="e.g. 8.10" step="0.01"></div>
+        <div><label>Trim cushion (lbf)</label><input type="number" id="calibCushion" value="0.02" step="0.01"></div>
+      </div>
+      <div class="out">
+        <div class="kv"><span class="k">Buoyant force (neutral target)</span><span class="v" id="o_calibBuoy">–</span></div>
+        <div class="kv"><span class="k">Trim status</span><span class="v" id="o_calibStatus">–</span></div>
+        <div class="kv"><span class="k">Trim ballast to add / shed</span><span class="v" id="o_calibBallast">–</span></div>
+      </div>
+      <div class="hint" id="o_calibNote" style="margin-top:8px"></div>
+    </section>
+
+    <!-- FIRMWARE C++ GENERATOR (ported from DeepSeaGlide) -->
+    <section class="card span2" id="card-fw">
+      <h2><span class="ic">🧰</span> Firmware C++ generator (Arduino)</h2>
+      <p class="hint" style="margin:-6px 0 8px">Generates a compilable <b>AccelStepper</b> sketch for the syringe buoyancy pump and the movable-mass trim sled, with a sawtooth dive state machine driven by a pressure sensor. Tune the speeds, then copy it into the Arduino IDE.</p>
+      <div class="row3">
+        <div><label>Piston stepper speed (steps/s)</label><input type="number" id="fwPiston" value="150" step="10"></div>
+        <div><label>Sled stepper speed (steps/s)</label><input type="number" id="fwSled" value="200" step="10"></div>
+        <div><label>Target dive depth (m)</label><input type="number" id="fwDepth" value="20" step="1"></div>
+      </div>
+      <pre id="o_fwCode" style="margin-top:10px;padding:12px;background:var(--inputbg);border:1px solid var(--line2);border-radius:8px;font-family:var(--mono);font-size:11px;line-height:1.5;color:#cfe0f2;overflow:auto;max-height:340px;white-space:pre;user-select:text"></pre>
+      <button class="tool" id="fwCopy" style="width:100%;margin-top:8px">⧉ Copy Arduino sketch</button>
+    </section>
+
     <!-- 3D MODEL IMPORT -->
     <section class="card span2" id="card-stl">
       <h2><span class="ic">📐</span> Import 3D model (STL / OBJ / 3MF)</h2>
@@ -3171,6 +3212,136 @@ g6Reset();
 
 <!-- Realistic WebGL glider (Three.js from CDN). Online only; falls back to the
      dependency-free software glider above when offline / WebGL unavailable. -->
+<!-- ============ LAB BALLAST CALIBRATOR + FIRMWARE GENERATOR ============ -->
+<script>
+"use strict";
+(function(){
+  const el = id => document.getElementById(id);
+  if(!el('card-calib')) return;
+  const pf = id => parseFloat(el(id).value);
+
+  // ---------- Lab ballast calibrator ----------
+  let calibWater = 'fresh';
+  function setWater(w){ calibWater=w;
+    el('calibFresh').classList.toggle('active', w==='fresh');
+    el('calibSalt').classList.toggle('active', w==='salt');
+    calc(); }
+  el('calibFresh').addEventListener('click', ()=>setWater('fresh'));
+  el('calibSalt').addEventListener('click', ()=>setWater('salt'));
+
+  function calc(){
+    const density = calibWater==='salt' ? 64.00 : 62.43;     // lb/ft³
+    const volIn3 = pf('calibVol'), cob = pf('calibCob'), cushion = pf('calibCushion')||0;
+    const buoy = (volIn3/1728)*density;                       // lbf
+    el('o_calibBuoy').textContent = isFinite(buoy)? buoy.toFixed(3)+' lbf' : '–';
+    const meas = pf('calibMeas');
+    if(!isFinite(meas) || meas<=0){
+      el('o_calibStatus').innerHTML = '<span class="badge warn">enter measured weight</span>';
+      el('o_calibBallast').textContent = '–'; el('o_calibNote').textContent = '';
+      return;
+    }
+    const target = buoy - cushion;        // sit a hair heavy so it parks just below the surface
+    const delta  = target - meas;         // + => too light (add), - => too heavy (shed)
+    const oz = Math.abs(delta)*16;
+    const cobTxt = isFinite(cob)? cob.toFixed(1)+' in from the nose' : 'the centre of buoyancy';
+    if(Math.abs(delta) < 0.005){
+      el('o_calibStatus').innerHTML = '<span class="badge good">balanced</span>';
+      el('o_calibBallast').textContent = '0.00 oz — within tolerance';
+      el('o_calibNote').textContent = 'Built weight already matches the neutral target. Trim around mid-stroke on the syringe for dive authority both ways.';
+    } else if(delta>0){
+      el('o_calibStatus').innerHTML = '<span class="badge warn">underweight — add ballast</span>';
+      el('o_calibBallast').innerHTML = '<b>+'+oz.toFixed(2)+' oz</b> ('+delta.toFixed(3)+' lb) to add';
+      el('o_calibNote').innerHTML = 'Add '+oz.toFixed(2)+' oz of trim ballast at '+cobTxt+' so it doesn’t induce pitch, then set the syringe to ~mid-stroke.';
+    } else {
+      el('o_calibStatus').innerHTML = '<span class="badge bad">overweight — shed mass</span>';
+      el('o_calibBallast').innerHTML = '<b>−'+oz.toFixed(2)+' oz</b> ('+Math.abs(delta).toFixed(3)+' lb) to remove';
+      el('o_calibNote').innerHTML = 'Remove '+oz.toFixed(2)+' oz of mass (or add '+oz.toFixed(2)+' oz of buoyant foam) near '+cobTxt+' to reach neutral.';
+    }
+  }
+  ['calibVol','calibCob','calibMeas','calibCushion'].forEach(id=>el(id).addEventListener('input', calc));
+  setWater('fresh');
+
+  // ---------- Firmware C++ generator ----------
+  function genCode(){
+    const pv = Math.max(1, Math.round(pf('fwPiston'))||150);
+    const sv = Math.max(1, Math.round(pf('fwSled'))||200);
+    const depth = Math.max(0, pf('fwDepth')||20);
+    return `// ============================================================
+//  Autonomous Underwater Glider - buoyancy + trim controller
+//  Generated by the Underwater Glider Calculator
+//  Board: Arduino / ESP32   Library: AccelStepper
+// ============================================================
+#include <AccelStepper.h>
+
+// ---- pin map (edit to match your wiring) ----
+#define PISTON_STEP   2
+#define PISTON_DIR    3
+#define SLED_STEP     4
+#define SLED_DIR      5
+#define PRESSURE_PIN  A0     // analog pressure sensor
+
+// ---- tuned from the calculator ----
+const float PISTON_MAX_SPS = ${pv}.0;   // piston steps / second
+const float SLED_MAX_SPS   = ${sv}.0;   // sled steps / second
+const float DIVE_DEPTH_M   = ${depth.toFixed(1)};   // target dive depth (m)
+
+// ---- piston (buoyancy) and sled (pitch trim) steppers ----
+AccelStepper piston(AccelStepper::DRIVER, PISTON_STEP, PISTON_DIR);
+AccelStepper sled  (AccelStepper::DRIVER, SLED_STEP,   SLED_DIR);
+
+// stroke limits in steps (set for your lead-screw + microstepping)
+const long PISTON_FULL = 4000;   // fully flooded
+const long SLED_AFT    = 1500;   // mass aft  -> nose-up
+const long SLED_FWD    = -1500;  // mass fwd  -> nose-down
+
+enum Phase { DESCEND, ASCEND };
+Phase phase = DESCEND;
+
+float readDepthMeters() {
+  // TODO: replace with your sensor's transfer function
+  int raw = analogRead(PRESSURE_PIN);
+  float psi = (raw / 1023.0) * 100.0;      // example scaling
+  return psi * 0.7030696;                  // psi -> metres of fresh water
+}
+
+void setup() {
+  Serial.begin(115200);
+  piston.setMaxSpeed(PISTON_MAX_SPS);
+  piston.setAcceleration(PISTON_MAX_SPS * 2.0);
+  sled.setMaxSpeed(SLED_MAX_SPS);
+  sled.setAcceleration(SLED_MAX_SPS * 2.0);
+}
+
+void loop() {
+  float depth = readDepthMeters();
+
+  // ---- sawtooth dive state machine ----
+  if (phase == DESCEND) {
+    piston.moveTo(PISTON_FULL);   // take on water -> sink
+    sled.moveTo(SLED_FWD);        // nose-down glide
+    if (depth >= DIVE_DEPTH_M) phase = ASCEND;
+  } else {                        // ASCEND
+    piston.moveTo(0);             // expel water -> rise
+    sled.moveTo(SLED_AFT);        // nose-up glide
+    if (depth <= 0.5) phase = DESCEND;
+  }
+
+  piston.run();
+  sled.run();
+}
+`;
+  }
+  function renderFw(){ el('o_fwCode').textContent = genCode(); }
+  ['fwPiston','fwSled','fwDepth'].forEach(id=>el(id).addEventListener('input', renderFw));
+  el('fwCopy').addEventListener('click', ()=>{
+    navigator.clipboard.writeText(el('o_fwCode').textContent).then(()=>{
+      const b=el('fwCopy'), t=b.textContent; b.textContent='✓ Copied'; setTimeout(()=>{b.textContent=t;},1400);
+    }).catch(()=>{});
+  });
+  renderFw();
+})();
+</script>
+
 <!-- ============ PROJECT TIMELINE / GANTT ============ -->
 <script>
 "use strict";
