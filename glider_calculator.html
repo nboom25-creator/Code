@@ -833,6 +833,69 @@
       <div class="hint">Designs are stored in this browser. Load one to edit it.</div>
     </section>
 
+    <!-- REQUIREMENTS COMPLIANCE MATRIX -->
+    <section class="card span2" id="card-compliance" data-ws="design">
+      <h2><span class="ic">✅</span> Requirements compliance matrix</h2>
+      <p class="hint" style="margin:-6px 0 8px">Checks the current design against your <b>Requirements</b> targets — green where you meet spec with margin, red where you fall short. Updates live as you change the design.</p>
+      <details class="explain">
+        <summary>New to this? What am I looking at?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">A scorecard: for each thing you said you needed, did the design actually deliver it? <b>“Meets”</b> = you hit the target with room to spare; <b>“Short”</b> = you missed it.</p>
+          <p class="ex-item"><b>Target</b> comes from your Requirements (depth, speed, glide angle) and the safety rules of thumb (yield ≥ 1.5, buckling ≥ 2). <b>Achieved</b> is what the analysis actually produced.</p>
+          <p class="ex-item"><b>Margin</b> — how much breathing room you have. +40% means you beat the target by 40%; a negative number means you fell short.</p>
+          <p class="ex-item"><b>Endurance / range</b> rows only appear if you type a target for them below — leave blank to skip.</p>
+        </div>
+      </details>
+      <div class="row3">
+        <div><label>Target endurance (h, optional)</label><input type="number" id="cmpEndur" value="" placeholder="optional" step="1"></div>
+        <div><label>Target range (km, optional)</label><input type="number" id="cmpRange" value="" placeholder="optional" step="0.5"></div>
+        <div class="hint" style="margin-top:24px">Depth, speed, glide, stability and hull rows fill in automatically from your Requirements and analysis.</div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="budget" id="cmpTable">
+          <thead><tr><th>Requirement</th><th>Target</th><th>Achieved</th><th>Margin</th><th>Status</th></tr></thead>
+          <tbody id="cmpBody"></tbody>
+        </table>
+      </div>
+      <div class="out" id="cmpSummary" style="font-size:13px;margin-top:8px"></div>
+    </section>
+
+    <!-- BUOYANCY TOLERANCE — MONTE CARLO -->
+    <section class="card span2" id="card-mc" data-ws="design">
+      <h2><span class="ic">🎲</span> Buoyancy tolerance — Monte-Carlo</h2>
+      <p class="hint" style="margin:-6px 0 8px">Will it still trim neutral if your mass and volume come out a bit off? This rolls the dice thousands of times within your build tolerances and shows the spread of net buoyancy and the chance the ballast can still reach neutral.</p>
+      <details class="explain">
+        <summary>New to this? What am I looking at?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">No build comes out exactly on paper — your finished mass and volume will be a little off. This simulates that uncertainty <b>thousands of times</b> to see whether your ballast system still has enough authority to reach neutral buoyancy every time.</p>
+          <p class="ex-item"><b>Tolerances (±)</b> — how far off you realistically expect your mass and volume to land. Bigger tolerance = wider spread of outcomes.</p>
+          <p class="ex-item"><b>Ballast trim authority (±)</b> — how much water your syringe can add/remove to correct buoyancy. This is the “safety net” band.</p>
+          <p class="ex-item"><b>The histogram</b> — each bar counts how many random builds landed at that net buoyancy. The shaded green band is what your ballast can fix; bars outside it can’t be trimmed to neutral.</p>
+          <p class="ex-item"><b>Chance it can trim to neutral</b> — the share of random builds that land inside the ballast band. Above ~99% is comfortable; lower means you need more ballast authority or tighter build tolerances.</p>
+        </div>
+      </details>
+      <div class="row3">
+        <div><label>Nominal mass (kg)</label><input type="number" id="mcMass" value="2.8" step="0.05"></div>
+        <div><label>Mass tolerance ± (g)</label><input type="number" id="mcMassTol" value="50" step="5"></div>
+        <div><label>Displaced volume (L)</label><input type="number" id="mcVol" value="2.83" step="0.05"></div>
+      </div>
+      <div class="row3">
+        <div><label>Volume tolerance ± (mL)</label><input type="number" id="mcVolTol" value="30" step="5"></div>
+        <div><label>Water density (kg/m³)</label><input type="number" id="mcRho" value="1025" step="1"></div>
+        <div><label>Ballast trim authority ± (mL)</label><input type="number" id="mcBallast" value="40" step="5"></div>
+      </div>
+      <canvas id="mcHist" width="1100" height="190" style="margin-top:10px;width:100%"></canvas>
+      <div class="out">
+        <div class="kv"><span class="k">Net buoyancy (mean ± SD)</span><span class="v" id="o_mcMean">–</span></div>
+        <div class="kv"><span class="k">Range (min … max)</span><span class="v" id="o_mcRange">–</span></div>
+        <div class="kv"><span class="k">Chance it can trim to neutral</span><span class="v" id="o_mcProb">–</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="tool" id="mcPull">↥ Pull mass, volume &amp; density from design</button>
+        <button class="tool" id="mcRun">🎲 Re-run</button>
+      </div>
+    </section>
+
     <!-- WATER -->
     <section class="card" id="card-water">
       <h2><span class="ic">💧</span> Water &amp; environment</h2>
@@ -1897,6 +1960,11 @@ function compute(){
   if(typeof drawMission==='function') drawMission();
   if(typeof drawTimeline==='function'){ drawTimeline(); if(!sim.running) drawSim(); updateSimReadouts(); }
   if(typeof updateHealth==='function') updateHealth({netg:net/g*1000, bg:bg, ysf:ysf, bsf:bsf, glideRatio:glideRatio});
+
+  // expose live metrics for the compliance matrix & tolerance cards
+  window.gMetrics = { mass, volL, net, g, rho:localRho, vh, glideRatio, gamma, bg, ysf, bsf,
+    collapse, governs, endurance, totalRange, cycles, workingDepth };
+  try{ window.dispatchEvent(new CustomEvent('designupdate')); }catch(_){}
 
   // ---- calculation worksheet: equation · numbers · result ----
   if($('worksheet')){
@@ -3564,6 +3632,110 @@ g6Reset();
 
 <!-- Realistic WebGL glider (Three.js from CDN). Online only; falls back to the
      dependency-free software glider above when offline / WebGL unavailable. -->
+<!-- ============ COMPLIANCE MATRIX + MONTE-CARLO TOLERANCE ============ -->
+<script>
+"use strict";
+(function(){
+  const el = id => document.getElementById(id);
+  if(!el('card-compliance')) return;
+  const pf = id => parseFloat(el(id).value);
+  const gv = id => { const x=document.getElementById(id); return x?parseFloat(x.value):NaN; };
+  const FT=0.3048;
+
+  // ---------------- requirements compliance matrix ----------------
+  function renderCompliance(){
+    const m=window.gMetrics, tb=el('cmpBody'); if(!tb) return;
+    if(!m || !isFinite(m.vh)){
+      tb.innerHTML='<tr><td colspan="5" style="color:var(--muted);padding:10px">Press <b>Generate</b> in the Requirements card (and make sure the glide solution is valid) to populate this matrix.</td></tr>';
+      el('cmpSummary').textContent=''; return;
+    }
+    const rows=[];
+    const add=(label,target,achieved,unit,pass,marginPct,note)=>rows.push({label,target,achieved,unit,pass,marginPct,note});
+    add('Rated (collapse) depth', gv('req_depth')*FT, m.collapse, 'm', m.collapse>=gv('req_depth')*FT, (m.collapse/(gv('req_depth')*FT)-1)*100);
+    add('Cruise speed', gv('req_speed')*FT, m.vh, 'm/s', m.vh>=gv('req_speed')*FT, (m.vh/(gv('req_speed')*FT)-1)*100);
+    const tGR=1/Math.tan(gv('req_angle')*Math.PI/180);
+    add('Glide ratio (L/D)', tGR, m.glideRatio, '', m.glideRatio>=tGR, (m.glideRatio/tGR-1)*100);
+    add('Static stability (BG)', 0, m.bg*1000, 'mm', m.bg>0, null, 'must be > 0');
+    add('Hull yield SF', 1.5, m.ysf, '×', m.ysf>=1.5, (m.ysf/1.5-1)*100);
+    add('Hull buckling SF', 2.0, m.bsf, '×', m.bsf>=2.0, (m.bsf/2.0-1)*100);
+    const tE=gv('cmpEndur'); if(isFinite(tE)&&tE>0){ const aE=m.endurance/3600; add('Endurance', tE, aE, 'h', aE>=tE, (aE/tE-1)*100); }
+    const tR=gv('cmpRange'); if(isFinite(tR)&&tR>0){ const aR=m.totalRange/1000; add('Range', tR, aR, 'km', aR>=tR, (aR/tR-1)*100); }
+    const fmtN=(x,u)=> isFinite(x)? ((Math.abs(x)>=100?x.toFixed(0):x.toFixed(2))+(u?' '+u:'')) : '–';
+    tb.innerHTML=rows.map(r=>{
+      const badge = r.pass===true?'<span class="badge good">meets</span>':r.pass===false?'<span class="badge bad">short</span>':'<span class="badge warn">—</span>';
+      const margin = (r.marginPct==null||!isFinite(r.marginPct))?'—':((r.marginPct>=0?'+':'')+r.marginPct.toFixed(0)+'%');
+      return '<tr><td>'+r.label+'</td><td>'+fmtN(r.target,r.unit)+(r.note?' <span class="hint">('+r.note+')</span>':'')+'</td><td>'+fmtN(r.achieved,r.unit)+'</td><td>'+margin+'</td><td>'+badge+'</td></tr>';
+    }).join('');
+    const nfail=rows.filter(r=>r.pass===false).length, npass=rows.filter(r=>r.pass===true).length;
+    el('cmpSummary').innerHTML = nfail===0
+      ? '<span class="badge good">All '+npass+' requirements met</span>'
+      : '<span class="badge bad">'+nfail+' requirement'+(nfail>1?'s':'')+' not met</span> — address the red rows.';
+  }
+  window.addEventListener('designupdate', renderCompliance);
+  ['req_depth','req_speed','req_angle','cmpEndur','cmpRange'].forEach(id=>{ const x=document.getElementById(id); if(x) x.addEventListener('input', renderCompliance); });
+
+  // ---------------- Monte-Carlo buoyancy tolerance ----------------
+  function randn(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+  function mc(){
+    const g=9.81;
+    const mass=pf('mcMass'), mtol=pf('mcMassTol')/1000;        // kg
+    const vol_m3=pf('mcVol')*1e-3, vtol_m3=pf('mcVolTol')*1e-6;
+    const rho=pf('mcRho'), ball_m3=pf('mcBallast')*1e-6;
+    const ballMass=ball_m3*rho;                                // kg the ballast can shift
+    const N=4000, net=new Array(N); let trim=0, sum=0, sum2=0, mn=Infinity, mx=-Infinity;
+    for(let i=0;i<N;i++){
+      const m=mass+randn()*mtol/3;                             // ± treated as 3σ
+      const v=vol_m3+randn()*vtol_m3/3;
+      const ng=(v*rho-m);                                      // net kg (+ = floaty)
+      net[i]=ng*1000;                                          // grams
+      if(Math.abs(ng)<=ballMass) trim++;
+      sum+=net[i]; sum2+=net[i]*net[i]; if(net[i]<mn)mn=net[i]; if(net[i]>mx)mx=net[i];
+    }
+    const mean=sum/N, sd=Math.sqrt(Math.max(sum2/N-mean*mean,0)), prob=trim/N*100, bandG=ballMass*1000;
+    el('o_mcMean').textContent = (mean>=0?'+':'')+mean.toFixed(1)+' g  (±'+sd.toFixed(1)+')';
+    el('o_mcRange').textContent = mn.toFixed(1)+' … '+mx.toFixed(1)+' g';
+    const pc = prob>=99?'good':prob>=90?'warn':'bad';
+    el('o_mcProb').innerHTML = prob.toFixed(1)+'% <span class="badge '+pc+'">'+(prob>=99?'robust':prob>=90?'marginal':'risky')+'</span>';
+    drawHist(net, mn, mx, bandG, mean);
+  }
+  function drawHist(data, mn, mx, bandG, mean){
+    const c=el('mcHist'); if(!c) return; const ctx=c.getContext('2d'), W=c.width, H=c.height;
+    ctx.clearRect(0,0,W,H); ctx.fillStyle='#0f151d'; ctx.fillRect(0,0,W,H);
+    const pad=Math.max((mx-mn)*0.08, 1), lo=Math.min(mn,-bandG)-pad, hi=Math.max(mx,bandG)+pad, span=hi-lo||1;
+    const X=g=>(g-lo)/span*W;
+    const BINS=44, bins=new Array(BINS).fill(0);
+    data.forEach(v=>{ let b=Math.floor((v-lo)/span*BINS); if(b<0)b=0; if(b>=BINS)b=BINS-1; bins[b]++; });
+    const bmax=Math.max.apply(null,bins)||1;
+    // ballast-trim band (green = can reach neutral)
+    ctx.fillStyle='rgba(95,168,117,.16)'; ctx.fillRect(X(-bandG),0,X(bandG)-X(-bandG),H);
+    ctx.strokeStyle='rgba(95,168,117,.5)'; ctx.lineWidth=1;
+    [X(-bandG),X(bandG)].forEach(x=>{ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); });
+    // bars
+    const bw=W/BINS;
+    for(let i=0;i<BINS;i++){ const bx=lo+(i+0.5)/BINS*span, inBand=Math.abs(bx)<=bandG;
+      const h=(bins[i]/bmax)*(H-22); ctx.fillStyle=inBand?'#5fa875':'#cf6b6b';
+      ctx.fillRect(i*bw+0.5, H-18-h, bw-1, h); }
+    // zero line + mean
+    ctx.strokeStyle='rgba(230,236,242,.55)'; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(X(0),0); ctx.lineTo(X(0),H-18); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#8b97a6'; ctx.font='10px ui-monospace,monospace'; ctx.textAlign='center';
+    ctx.fillText('0 g (neutral)', X(0), H-5);
+    ctx.textAlign='left';  ctx.fillText(lo.toFixed(0)+' g (heavy →sinks)', 4, 12);
+    ctx.textAlign='right'; ctx.fillText('(floats←) '+hi.toFixed(0)+' g', W-4, 12);
+  }
+  ['mcMass','mcMassTol','mcVol','mcVolTol','mcRho','mcBallast'].forEach(id=>el(id).addEventListener('input', mc));
+  el('mcRun').addEventListener('click', mc);
+  el('mcPull').addEventListener('click', ()=>{
+    const m=document.getElementById('mass'), v=document.getElementById('volL'), r=document.getElementById('surfaceDensity');
+    if(m) el('mcMass').value=parseFloat(m.value).toFixed(2);
+    if(v) el('mcVol').value=parseFloat(v.value).toFixed(2);
+    if(r) el('mcRho').value=parseFloat(r.value).toFixed(0);
+    mc(); const b=el('mcPull'),t=b.textContent; b.textContent='✓ pulled'; setTimeout(()=>{b.textContent=t;},1100);
+  });
+
+  renderCompliance(); mc();
+})();
+</script>
+
 <!-- ============ WORKSPACE TABS (group the cards) ============ -->
 <script>
 "use strict";
