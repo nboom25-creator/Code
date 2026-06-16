@@ -731,6 +731,18 @@
     <!-- DESIGN HEALTH DASHBOARD -->
     <section class="card span2" id="card-health">
       <h2><span class="ic">🩺</span> Design health</h2>
+      <details class="explain">
+        <summary>New to this? What am I looking at?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">A quick “is my design healthy?” summary. Across the whole card: <b>green = good, amber = caution, red = needs fixing</b>.</p>
+          <p class="ex-item"><b>Score / 100</b> — one overall grade for the design. It blends how strong the hull is, how well it glides, and whether it can float, sink and stay balanced. Higher is better.</p>
+          <p class="ex-item"><b>Status chips</b> — quick pass/warn/fail tags for the big questions: can it float? can it sink? is it stable (won’t roll over)? is the hull strong enough?</p>
+          <p class="ex-item"><b>Yield SF gauge</b> — “yield safety factor”: how many times stronger the hull material is than the squeeze it feels at depth. You want comfortably above ~1.5.</p>
+          <p class="ex-item"><b>Buckling SF gauge</b> — how close the tube is to crumpling like an empty soda can under pressure. You want above ~2.</p>
+          <p class="ex-item"><b>Glide ratio gauge</b> — how far it travels forward for each metre it sinks. Higher = a more efficient glider.</p>
+          <p class="ex-item"><b>Badges row</b> — fun achievements you unlock as the design hits good targets.</p>
+        </div>
+      </details>
       <div class="health-wrap">
         <div class="score-box">
           <canvas id="scoreRing" width="200" height="200"></canvas>
@@ -752,6 +764,24 @@
     <section class="card span2" id="card-req">
       <h2><span class="ic">📋</span> Requirements → design (lab syringe-pump glider)</h2>
       <p class="hint" style="margin:-6px 0 6px">Enter your project requirements, press <b>Generate</b>, and every section below is sized and analyzed automatically. Tune from there.</p>
+      <details class="explain">
+        <summary>New to this? What do these mean?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">This is the starting point: describe what you want the glider to do and what tube you’re building it from, press <b>Generate</b>, and the app sizes and checks everything else for you.</p>
+          <p class="ex-item"><b>Water</b> — fresh (a lab tank/pool) or salt (the ocean). Salt water is heavier, so things float a little more easily in it.</p>
+          <p class="ex-item"><b>Max operating depth</b> — the deepest you plan to dive. Sets how strong the hull has to be.</p>
+          <p class="ex-item"><b>Target along-track speed</b> — how fast you want it to travel horizontally.</p>
+          <p class="ex-item"><b>Hull tube outer ⌀ / length</b> — the size of the tube you’re using for the body.</p>
+          <p class="ex-item"><b>Hull material</b> — what the tube is made of (acrylic, PVC, aluminum…). Affects strength and weight.</p>
+          <p class="ex-item"><b>Syringe volume / number of syringes</b> — your buoyancy “engine”: how much water it can pull in and push out to sink and rise. More volume = more diving power.</p>
+          <p class="ex-item"><b>Target glide angle</b> — how steeply you want it to dive and climb. Steeper = faster down, but covers less distance.</p>
+          <p class="ex-item"><b>Wing aspect ratio</b> — long skinny wings (high number) glide more efficiently; short stubby wings (low) are sturdier.</p>
+          <p class="ex-item"><b>Oswald efficiency e</b> — how cleanly the wings make lift; ~0.8 is typical. (It sets the wing’s drag penalty for you.)</p>
+          <p class="ex-item"><b>Parasite drag C<sub>D0</sub></b> — a starting guess for body drag. The <b>Drag estimator</b> card can calculate a real value to drop in here.</p>
+          <p class="ex-item"><b>Generate button</b> — sizes the hull wall, ballast, wings and trim from your inputs and runs the full analysis.</p>
+          <p class="ex-item"><b>Export for 6-DOF</b> — saves the design as a file you can run in the Python/Colab flight simulator.</p>
+        </div>
+      </details>
       <div class="row3">
         <div><label>Water</label><select id="req_water"><option value="fresh">Fresh — lab/tank</option><option value="salt">Salt water</option></select></div>
         <div><label>Max operating depth (ft)</label><input type="number" id="req_depth" value="6.5" step="0.5"></div>
@@ -1312,6 +1342,18 @@
     <!-- DIVE SIMULATION -->
     <section class="card span2" id="card-sim" data-ws="sim">
       <h2><span class="ic">🌊</span> Dive simulation — glide path</h2>
+      <details class="explain">
+        <summary>New to this? What am I looking at?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">A simple animation of the glider doing its “sawtooth” — dive, pump, climb, pump — so you can watch the path and timing.</p>
+          <p class="ex-item"><b>The picture</b> — a side view of one dive cycle: it sinks at an angle, pumps water to flip its buoyancy at the bottom, climbs, then pumps again at the top.</p>
+          <p class="ex-item"><b>Play / Pause / Reset and Speed ×</b> — animation controls. Speed × just plays it faster so you don’t wait in real time.</p>
+          <p class="ex-item"><b>Phase</b> — what it’s doing right now (descending, pumping, ascending).</p>
+          <p class="ex-item"><b>Elapsed / Depth / Distance / Speed</b> — live readouts as it flies: time so far, how deep, how far across, and how fast.</p>
+          <p class="ex-item"><b>Cycles done</b> — how many full dive-and-climb loops it has completed.</p>
+          <p class="ex-item"><b>Heads up:</b> this is a simplified playback of the steady-glide numbers. The <b>6-DOF</b> card below is the full-physics version.</p>
+        </div>
+      </details>
       <canvas id="simCanvas" width="1100" height="360"></canvas>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
         <button class="tool" id="simPlay">▶ Play</button>
@@ -1334,6 +1376,18 @@
     <!-- 6-DOF FLIGHT (IN-BROWSER) -->
     <section class="card span2" id="card-g6" data-ws="sim">
       <h2><span class="ic">🛩️</span> 6-DOF flight — full dynamics (in-browser)</h2>
+      <details class="explain">
+        <summary>New to this? What am I looking at?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">The “real physics” flight simulator. Unlike the simple dive animation above, this actually solves all the forces and moments — so it can roll, turn, and get pushed around by currents.</p>
+          <p class="ex-item"><b>“6-DOF” and the two views</b> — 6 degrees of freedom means it can move in all 3 directions and rotate 3 ways. Left picture = side view; right = looking straight down from above.</p>
+          <p class="ex-item"><b>Play / Pause / Reset and Speed ×</b> — animation controls; Speed × fast-forwards.</p>
+          <p class="ex-item"><b>Heading cmd °</b> — the compass direction you tell it to steer toward; it uses its rudder to get there.</p>
+          <p class="ex-item"><b>Phase / Elapsed / Depth</b> — what it’s doing, how long it’s been going, and how deep it is.</p>
+          <p class="ex-item"><b>Roll / Pitch / Yaw</b> — its tilt three ways: <b>Roll</b> = leaning side to side, <b>Pitch</b> = nose up or down, <b>Yaw</b> = turning left/right (its compass heading).</p>
+          <p class="ex-item"><b>Speed / Travel</b> — how fast it’s going and how far it has gone.</p>
+        </div>
+      </details>
       <canvas id="g6Canvas" width="1100" height="340"></canvas>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
         <button class="tool" id="g6Play">▶ Play</button>
@@ -1381,6 +1435,16 @@
     <!-- MISSION PLANNER -->
     <section class="card span2" id="card-mission" data-ws="sim">
       <h2><span class="ic">🗺️</span> Mission planner</h2>
+      <details class="explain">
+        <summary>New to this? What am I looking at?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">Plan a trip across a map and see how the ocean current pushes the glider off course — and where to aim so you still hit your target.</p>
+          <p class="ex-item"><b>Current speed</b> — how fast the water itself is flowing. A current shoves a slow glider sideways, like wind on a paper plane.</p>
+          <p class="ex-item"><b>Current heading</b> — which way the water is flowing, in compass degrees (0 = North, 90 = East).</p>
+          <p class="ex-item"><b>The map</b> — drag the <b>red dot</b> to set your destination; the <b>green dot</b> is the start. It draws the straight-line plan and the path the current actually pushes you along.</p>
+          <p class="ex-item"><b>The readout</b> — tells you which heading to aim, how much extra time and distance the current costs, and whether you can still reach the target.</p>
+        </div>
+      </details>
       <div class="row3">
         <div><label>Current speed (m/s)</label><input type="number" id="missCur" value="0.1" step="0.02"></div>
         <div><label>Current heading (° from N, toward)</label><input type="number" id="missDir" value="90" step="5"></div>
