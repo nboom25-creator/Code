@@ -1076,6 +1076,46 @@
       </style>
       <h2><span class="ic">⭕</span> O-ring seal &amp; end-cap designer</h2>
       <p class="hint" style="margin:-6px 0 8px">Sizes a static <b>radial (piston) O-ring gland</b> for the hull end-cap and checks the cap won’t blow off at depth. AS568 cross-sections; squeeze/fill targets per the Parker O-ring handbook.</p>
+      <style>
+        .explain{border:1px solid var(--line); border-radius:8px; background:var(--inputbg); margin:0 0 12px; overflow:hidden}
+        .explain>summary{cursor:pointer; list-style:none; padding:9px 12px; font-size:12px; font-weight:600; color:var(--accent2); display:flex; align-items:center; gap:8px; user-select:none}
+        .explain>summary::-webkit-details-marker{display:none}
+        .explain>summary::before{content:'❔'; font-size:13px}
+        .explain>summary::after{content:'▸'; margin-left:auto; transition:transform .15s; color:var(--muted)}
+        .explain[open]>summary::after{transform:rotate(90deg)}
+        .explain[open]>summary{border-bottom:1px solid var(--line)}
+        .explain .ex-body{padding:11px 13px; font-size:12px; line-height:1.55; color:#aeb9c7}
+        .explain .ex-lead{margin:0 0 10px; color:#c2ccd8}
+        .explain .ex-item{margin:0 0 8px}
+        .explain .ex-item:last-child{margin-bottom:0}
+        .explain .ex-item b{color:var(--ink); font-weight:600}
+        .explain .ex-sub{margin:12px 0 7px; font-size:10.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--accent)}
+      </style>
+      <details class="explain">
+        <summary>New to this? What do these mean?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">Your hull is a tube with a removable cap on one end. This card makes sure two things are true: <b>(1)</b> the rubber O-ring actually seals, and <b>(2)</b> deep-water pressure won’t pop the cap off.</p>
+          <div class="ex-sub">The rubber seal (gland)</div>
+          <p class="ex-item"><b>O-ring cross-section W</b> — how thick the rubber O-ring “noodle” is. They come in standard thicknesses (shown here in inches).</p>
+          <p class="ex-item"><b>Gland depth</b> — how deep the groove that holds the O-ring is. A shallower groove squishes the O-ring more when you push the cap in.</p>
+          <p class="ex-item"><b>Groove width</b> — how wide that groove is. The squished O-ring needs a little room to bulge sideways — but not too much.</p>
+          <p class="ex-item"><b>O-ring inside dia / groove root dia</b> (optional) — fill these in and it also checks you’re not stretching the O-ring too much when you slip it over the cap.</p>
+          <p class="ex-item"><b>Squeeze</b> — how hard the O-ring is pressed. Too little → it leaks; too much → it tears or won’t go together. Sweet spot ≈ <b>15–30%</b>. Green = good.</p>
+          <p class="ex-item"><b>Gland fill</b> — how full of rubber the groove is. Leave it <b>60–85%</b> full so the rubber has room to swell (it expands when warm). Green = good.</p>
+          <p class="ex-item"><b>Stretch</b> — how much you’re stretching the O-ring over the cap. Past ~5% it gets thin and seals worse.</p>
+          <p class="ex-item"><b>Recommended gland depth / groove width</b> — if your squeeze or fill is off, machine the groove to <i>these</i> dimensions instead; they hit the ideal numbers.</p>
+          <div class="ex-sub">The end-cap & bolts</div>
+          <p class="ex-item"><b>Bore / cap dia</b> — the inside diameter of your tube, i.e. the size of the cap.</p>
+          <p class="ex-item"><b>Depth</b> — how deep you’ll dive. Deeper water pushes harder.</p>
+          <p class="ex-item"><b>Fresh / Salt</b> — which water; salt is slightly heavier, so pressure builds a touch faster.</p>
+          <p class="ex-item"><b>Number / size / material of bolts</b> — how many screws hold the cap on, how big they are (M5 = 5 mm), and what they’re made of (stainless & steel = strong, nylon & aluminum = weak).</p>
+          <p class="ex-item"><b>Pressure at depth</b> — how hard the water squeezes down there — the same feeling as your ears hurting in a deep pool.</p>
+          <p class="ex-item"><b>End-cap blow-off force</b> — the total push trying to pop the cap off the tube. Your bolts have to hold this.</p>
+          <p class="ex-item"><b>Load per bolt</b> — that push shared between your screws — what each one actually feels.</p>
+          <p class="ex-item"><b>Bolt safety factor</b> — how many times stronger your bolts are than they need to be. Above 2 = comfortable, below 1.5 = risky. Green = good.</p>
+          <p class="ex-item"><b>Recommended seating torque</b> — how tight to do up each screw (set a torque driver to this — don’t just crank it).</p>
+        </div>
+      </details>
       <div class="subhead"><span class="ic">⭕</span> Radial gland — squeeze &amp; fill</div>
       <div class="row3">
         <div><label>O-ring cross-section W</label>
@@ -1135,6 +1175,27 @@
     <section class="card span2" id="card-drag" data-ws="hydro">
       <h2><span class="ic">🌊</span> Drag build-up &amp; C<sub>D0</sub> estimator</h2>
       <p class="hint" style="margin:-6px 0 8px">Derives a physics-based parasite-drag coefficient from Reynolds number and flat-plate skin friction (ITTC-1957) plus a body-of-revolution form factor and wing wetted area — so C<sub>D0</sub> isn’t a guess. Push the result straight into the glide model.</p>
+      <details class="explain">
+        <summary>New to this? What do these mean?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">As your glider moves, the water pushes back on it — that’s <b>drag</b>. Guessing this number wrecks every speed and range estimate, so this card calculates it from real physics, then hands it to the glide model.</p>
+          <div class="ex-sub">What you put in</div>
+          <p class="ex-item"><b>Cruise speed</b> — how fast you expect it to move through the water.</p>
+          <p class="ex-item"><b>Hull length L / diameter D</b> — the size of your main tube. Long and skinny slips through water far better than short and fat.</p>
+          <p class="ex-item"><b>Wing planform area</b> — the flat area of the wings looking straight down on them.</p>
+          <p class="ex-item"><b>Water density</b> — how heavy the water is (salt ≈ 1025, fresh ≈ 998).</p>
+          <p class="ex-item"><b>Kinematic viscosity ν</b> — how “sticky” the water is. Leave the default unless you care about exact temperature.</p>
+          <div class="ex-sub">What it tells you</div>
+          <p class="ex-item"><b>Reynolds number</b> — one number summing up the flow: big & fast vs. small & sticky. Just a regime indicator; bigger generally means cleaner flow for its size.</p>
+          <p class="ex-item"><b>Skin-friction coefficient C<sub>f</sub></b> — how much the water rubbing along the surface slows you (like the wind on your hand out a car window).</p>
+          <p class="ex-item"><b>Form factor (1+k)</b> — a penalty for being a fat 3D body instead of a thin plate. Chunkier hull → bigger number.</p>
+          <p class="ex-item"><b>Hull wetted area</b> — how much surface is touching water; that’s where the rubbing happens.</p>
+          <p class="ex-item"><b>Hull drag / wing drag</b> — the push-back from the body and from the wings, listed separately.</p>
+          <p class="ex-item"><b>Total parasite drag</b> — all the “just shoving through water” resistance added up, in newtons.</p>
+          <p class="ex-item"><b>Derived C<sub>D0</sub></b> — that drag boiled down to the single number the glide math needs. Hit <b>“Use as C<sub>D0</sub>”</b> to send it over so your glide and speed are based on physics, not a guess.</p>
+          <p class="ex-item"><b>The two buttons</b> — “Pull L, D &amp; wing area” copies those sizes from the rest of your design; “Use as C<sub>D0</sub>” drops the result into the glide model and re-runs everything.</p>
+        </div>
+      </details>
       <div class="row3">
         <div><label>Cruise speed (m/s)</label><input type="number" id="dragV" value="0.30" step="0.05"></div>
         <div><label>Hull length L (m)</label><input type="number" id="dragL" value="0.60" step="0.05"></div>
@@ -1297,6 +1358,17 @@
     <!-- POLAR CHART -->
     <section class="card span2" id="card-polar" data-ws="hydro">
       <h2><span class="ic">📈</span> Glide polar — efficiency vs. speed across lift coefficient</h2>
+      <details class="explain">
+        <summary>New to this? What am I looking at?</summary>
+        <div class="ex-body">
+          <p class="ex-lead">A glider can’t pick its speed and its efficiency separately — angling the wings to fly more efficiently also changes how fast and how steeply it travels. This chart shows that trade-off so you can pick a setting.</p>
+          <p class="ex-item"><b>Bottom axis (C<sub>L</sub>, lift coefficient)</b> — how hard the wings are “biting” the water. Left = wings working gently (faster, shallower dive); right = wings working hard (slower, steeper dive).</p>
+          <p class="ex-item"><b>Blue line — glide ratio (L/D)</b> — how far forward you travel for every metre you sink. Higher = more efficient. A value of 3 means 3 m forward per 1 m down.</p>
+          <p class="ex-item"><b>Green line — horizontal speed</b> — how fast you’re actually covering ground at that setting.</p>
+          <p class="ex-item"><b>Yellow dot — best glide ratio</b> — the most efficient setting (the peak of the blue line). Best for covering distance.</p>
+          <p class="ex-item"><b>The takeaway</b> — to the right of the peak you trade efficiency for slower, steeper flight; that’s sometimes what you want for a quick deep dive.</p>
+        </div>
+      </details>
       <canvas id="polar" width="1100" height="300"></canvas>
       <div class="legend">
         <span><i class="swatch" style="background:#37c0d8"></i> Glide ratio (L/D, left axis)</span>
