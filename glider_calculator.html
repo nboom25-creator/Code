@@ -831,6 +831,14 @@
       </div>
       <div id="designList" class="out"></div>
       <div class="hint">Designs are stored in this browser. Load one to edit it.</div>
+      <div class="subhead" style="margin-top:16px"><span class="ic">🔗</span> Shareable link</div>
+      <p class="hint" style="margin:2px 0 8px">Packs the <b>entire current design</b> (all inputs, requirements, parts &amp; BOM) into a link. Anyone who opens it sees your exact design — nothing is uploaded, it all rides inside the URL.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="tool" id="btnShareLink">🔗 Create share link</button>
+        <button class="tool" id="btnShareCopy" disabled>⧉ Copy</button>
+        <span class="hint" id="shareLen"></span>
+      </div>
+      <input type="text" id="shareUrl" readonly placeholder="Press “Create share link”…" style="width:100%;margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--ink);background:var(--inputbg);border:1px solid var(--line2);border-radius:6px;padding:8px 10px">
     </section>
 
     <!-- REQUIREMENTS COMPLIANCE MATRIX -->
@@ -3632,6 +3640,75 @@ g6Reset();
 
 <!-- Realistic WebGL glider (Three.js from CDN). Online only; falls back to the
      dependency-free software glider above when offline / WebGL unavailable. -->
+<!-- ============ SHAREABLE LINK (whole design in the URL) ============ -->
+<script>
+"use strict";
+(function(){
+  const el = id => document.getElementById(id);
+  if(!el('btnShareLink')) return;
+
+  function b64urlFromBytes(bytes){ let bin=''; for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+  function b64urlToBytes(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='=';
+    const bin=atob(s), a=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return a; }
+
+  function reqObj(){ const o={}; if(typeof REQ_IDS!=='undefined') REQ_IDS.forEach(id=>{ const x=el(id); if(x) o[id]=x.value; }); return o; }
+  function applyReq(r){ if(!r||typeof REQ_IDS==='undefined') return; REQ_IDS.forEach(id=>{ if(r[id]!==undefined){ const x=el(id); if(x) x.value=r[id]; } }); }
+
+  async function encodeState(){
+    const payload = JSON.stringify({ v:1, s:snapshot(), r:reqObj() });
+    const bytes = new TextEncoder().encode(payload);
+    if(window.CompressionStream){
+      const cs=new CompressionStream('gzip'), w=cs.writable.getWriter(); w.write(bytes); w.close();
+      const buf=await new Response(cs.readable).arrayBuffer();
+      return 'g'+b64urlFromBytes(new Uint8Array(buf));
+    }
+    return 'u'+b64urlFromBytes(bytes);
+  }
+  async function decodeState(str){
+    const flag=str[0], data=b64urlToBytes(str.slice(1));
+    let jsonBytes=data;
+    if(flag==='g' && window.DecompressionStream){
+      const ds=new DecompressionStream('gzip'), w=ds.writable.getWriter(); w.write(data); w.close();
+      jsonBytes=new Uint8Array(await new Response(ds.readable).arrayBuffer());
+    }
+    return JSON.parse(new TextDecoder().decode(jsonBytes));
+  }
+
+  el('btnShareLink').addEventListener('click', async ()=>{
+    try{
+      const enc=await encodeState();
+      const url=location.origin+location.pathname+location.search+'#d='+enc;
+      el('shareUrl').value=url;
+      el('btnShareCopy').disabled=false;
+      try{ history.replaceState(null,'','#d='+enc); }catch(_){}
+      const kb=(url.length/1024).toFixed(1);
+      el('shareLen').textContent=url.length+' chars (~'+kb+' KB)'+(url.length>8000?' — long; some apps may trim it':'');
+    }catch(e){ el('shareUrl').value='Could not build link: '+e.message; }
+  });
+  el('btnShareCopy').addEventListener('click', ()=>{
+    const u=el('shareUrl'); u.select();
+    const done=()=>{ const b=el('btnShareCopy'),t=b.textContent; b.textContent='✓ Copied'; setTimeout(()=>{b.textContent=t;},1300); };
+    if(navigator.clipboard) navigator.clipboard.writeText(u.value).then(done).catch(()=>{ try{document.execCommand('copy');done();}catch(_){} });
+    else { try{document.execCommand('copy');done();}catch(_){} }
+  });
+
+  // ---- restore a shared design when the page opens with #d=... ----
+  (async function restore(){
+    const h=location.hash||'';
+    if(h.indexOf('#d=')!==0) return;
+    try{
+      const obj=await decodeState(h.slice(3));
+      if(obj && obj.s && typeof applySnapshot==='function'){
+        applySnapshot(obj.s); applyReq(obj.r);
+        if(typeof compute==='function') compute();
+        if(typeof saveReq==='function') saveReq();
+      }
+    }catch(e){ /* malformed link — ignore, keep local state */ }
+  })();
+})();
+</script>
+
 <!-- ============ COMPLIANCE MATRIX + MONTE-CARLO TOLERANCE ============ -->
 <script>
 "use strict";
