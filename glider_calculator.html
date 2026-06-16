@@ -1084,6 +1084,20 @@
         <button class="tool" id="btnStlToBudget">➕ Add part to assembly (budget)</button>
         <button class="tool" id="btnAsmClear">🗑 Start fresh assembly</button>
       </div>
+      <style>
+        #card-stl .asm-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:4px}
+        #card-stl .asm-slot{border:1px solid var(--line2);border-radius:8px;padding:10px;background:var(--inputbg)}
+        #card-stl .asm-slot.filled{border-color:var(--accent)}
+        #card-stl .asm-slot-h{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:8px;gap:8px}
+        #card-stl .asm-slot-st{font-size:10px;color:var(--muted);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px}
+        #card-stl .asm-slot.filled .asm-slot-st{color:var(--good)}
+        #card-stl .asm-up{display:inline-block;font-size:11px;font-weight:600;color:var(--ink);background:var(--panel);border:1px solid var(--line2);border-radius:6px;padding:6px 10px;cursor:pointer}
+        #card-stl .asm-up:hover{border-color:var(--accent);color:#fff}
+      </style>
+      <div class="subhead" style="margin-top:16px"><span class="ic">🧩</span> Guided component assembly (auto-placed)</div>
+      <p class="hint" style="margin:2px 0 8px">Upload each part as its own STL/OBJ/3MF and it's dropped into the right spot on the vehicle automatically — no shared origin needed. Uses the <b>Material</b>, <b>units</b> and <b>Forward/Up axes</b> chosen above; the main hull sets the vehicle length the others key off. Fine-tune any position afterward by dragging in the previews or editing the table.</p>
+      <div class="asm-slots" id="asmSlots"></div>
+
       <div class="subhead" style="margin-top:16px"><span class="ic">🧩</span> Assembly preview</div>
       <div class="sub" style="margin-bottom:4px">Side view (fore/aft × vertical)</div>
       <canvas id="asmCanvas" width="1100" height="280" style="touch-action:none;cursor:grab"></canvas>
@@ -2848,8 +2862,102 @@ $('btnStlToBudget').addEventListener('click', e=>{ if(!stlSI) return;
     geo:stlSI.geo, mat:stlSI.mat, infill:stlSI.infill, shell:stlSI.shell, printVolCm3:stlSI.printVolCm3});
   renderComponents(); renderPartsPanel(); if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
 $('btnAsmClear').addEventListener('click', e=>{
-  components=[]; selComp=-1; renderComponents(); renderPartsPanel();
+  components=[]; selComp=-1; ASM.slots={}; asmRenderSlots(); renderComponents(); renderPartsPanel();
   if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute(); save(); stlFlash(e.target); });
+
+// ---- guided component assembly: per-part upload with automatic placement ----
+const ASM_SLOTS=[
+  {key:'nose',    emoji:'🔺', name:'Nose cone'},
+  {key:'hull',    emoji:'🛢️', name:'Main hull'},
+  {key:'wings',   emoji:'✈️', name:'Wings'},
+  {key:'tail',    emoji:'🪶', name:'Tail fins'},
+  {key:'syringe', emoji:'💉', name:'Syringe engine'},
+];
+// canonical placement on the vehicle, given part p, hull length L (mm) and radius R (mm).
+// x = fore/aft (+forward), y = lateral, z = vertical (+up); all mm.
+const ASM_PLACE={
+  hull:    (p,L,R)=>({x:0,                              y:0, z:0}),
+  nose:    (p,L,R)=>({x:  L/2 + (p.geo.dims[0]||0)/2,   y:0, z:0}),
+  tail:    (p,L,R)=>({x: -L/2 - (p.geo.dims[0]||0)/2,   y:0, z:0}),
+  syringe: (p,L,R)=>({x:  L*0.18,                       y:0, z:0}),
+  wings:   (p,L,R)=>({x: -L*0.05,                       y:0, z:-R*0.20}),
+};
+const ASM={ slots:{} };
+
+// turn a parsed mesh into a component payload using the current STL selectors
+function modelToPart(mdl){
+  const s=parseFloat($('stlUnits').value);
+  const volM3=mdl.vol*s*s*s, areaM2=mdl.area*s*s, dims=mdl.dims.map(d=>d*s);
+  const M=MATERIALS[$('stlMaterial').value], dens=M?M.d:NaN;
+  const tShell=Math.max(num('stlShell'),0)/1000, infill=Math.min(Math.max(num('stlInfill'),0),100)/100;
+  const shellVolM3=Math.min(areaM2*tShell, volM3), coreVolM3=Math.max(volM3-shellVolM3,0);
+  const mass=isFinite(dens)? dens*(shellVolM3+infill*coreVolM3):0;
+  const aFore=+$('stlFwd').value, aVert=+$('stlUp').value, aLat=3-aFore-aVert;
+  return { vol:+(volM3*1000).toFixed(3), mass:+(isFinite(mass)?mass:0).toFixed(4),
+    geo:{V:volM3, A:areaM2, dims:[dims[aFore]*1000, (aLat>=0&&aLat<=2?dims[aLat]:0)*1000, dims[aVert]*1000]},
+    mat:$('stlMaterial').value, infill:num('stlInfill'), shell:num('stlShell'),
+    printVolCm3:(shellVolM3+infill*coreVolM3)*1e6 };
+}
+
+function asmRenderSlots(){
+  const wrap=$('asmSlots'); if(!wrap) return;
+  wrap.innerHTML=ASM_SLOTS.map(sl=>{
+    const p=ASM.slots[sl.key], filled=!!p;
+    return '<div class="asm-slot'+(filled?' filled':'')+'">'+
+      '<div class="asm-slot-h"><span>'+sl.emoji+' '+sl.name+'</span>'+
+      '<span class="asm-slot-st" title="'+(filled?escapeHtml(p._fname||''):'')+'">'+(filled?escapeHtml(p._fname||'loaded'):'empty')+'</span></div>'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+      '<label class="asm-up">'+(filled?'Replace':'Upload STL')+
+        '<input type="file" data-slot="'+sl.key+'" accept=".stl,.STL,.obj,.OBJ,.3mf,.3MF" hidden></label>'+
+      (filled?'<button class="mini del" data-clr="'+sl.key+'" title="Remove">✕</button>':'')+
+      '</div></div>';
+  }).join('');
+}
+
+// rebuild the slot registry from any slot-tagged components (e.g. after a reload)
+function asmInitFromComponents(){
+  ASM.slots={};
+  components.forEach(c=>{ if(c.slot){ ASM.slots[c.slot]={geo:c.geo, mass:c.mass, vol:c.vol, mat:c.mat,
+    infill:c.infill, shell:c.shell, printVolCm3:c.printVolCm3, _fname:c.name}; } });
+  asmRenderSlots();
+}
+
+// place every uploaded slot part at its canonical position and refresh the assembly
+function asmRelayout(){
+  const hull=ASM.slots.hull;
+  const reqLen=$('req_len')? parseFloat($('req_len').value)*25.4 : NaN;   // requirements length is inches
+  const hullLenMM=$('hullLength')? parseFloat($('hullLength').value) : NaN;
+  const L = hull ? (hull.geo.dims[0]||600) : (reqLen>0?reqLen : (hullLenMM>0?hullLenMM : 600));
+  const R = hull ? (hull.geo.dims[2]||120)/2 : ((num('radius')||60));
+  components=components.filter(c=>!c.slot);   // drop previously auto-placed parts
+  for(const sl of ASM_SLOTS){ const p=ASM.slots[sl.key]; if(!p) continue;
+    const pos=(ASM_PLACE[sl.key]||ASM_PLACE.hull)(p,L,R);
+    components.push({ slot:sl.key, name:sl.name, mass:p.mass, vol:p.vol,
+      x:+pos.x.toFixed(1), y:+pos.y.toFixed(1), z:+pos.z.toFixed(1),
+      geo:p.geo, mat:p.mat, infill:p.infill, shell:p.shell, printVolCm3:p.printVolCm3 });
+  }
+  renderComponents(); renderPartsPanel();
+  if($('useBudget').checked||$('useBudgetCG').checked||$('useBudgetCB').checked) compute();
+  save();
+}
+
+$('asmSlots').addEventListener('change', e=>{
+  const inp=e.target.closest('input[type=file]'); if(!inp) return;
+  const key=inp.dataset.slot, f=inp.files[0]; if(!f) return;
+  const slotEl=inp.closest('.asm-slot'), st=slotEl&&slotEl.querySelector('.asm-slot-st');
+  if(st) st.textContent='reading…';
+  meshFromFile(f).then(mdl=>{
+    if(!mdl){ if(st) st.textContent='parse failed'; return; }
+    const part=modelToPart(mdl); part._fname=f.name.replace(/\.[^.]+$/,'').slice(0,22);
+    ASM.slots[key]=part; asmRenderSlots(); asmRelayout();
+  }).catch(()=>{ if(st) st.textContent='read failed'; });
+  inp.value='';
+});
+$('asmSlots').addEventListener('click', e=>{
+  const b=e.target.closest('[data-clr]'); if(!b) return;
+  delete ASM.slots[b.dataset.clr]; asmRenderSlots(); asmRelayout();
+});
+asmRenderSlots();
 // imported-parts panel: edit material / infill, delete
 $('partsBody').addEventListener('input', e=>{
   const el=e.target; if(el.dataset.pi===undefined) return;
@@ -3197,6 +3305,7 @@ renderComponents();
 renderBom();
 load();
 renderPartsPanel();
+if(typeof asmInitFromComponents==='function') asmInitFromComponents();
 loadReq();
 $('mass').disabled=$('volL').disabled=$('useBudget').checked;
 $('cgx').disabled=$('cgz').disabled=$('useBudgetCG').checked;
