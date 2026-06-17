@@ -845,6 +845,7 @@
     <section class="card span2" id="card-compliance" data-ws="design">
       <h2><span class="ic">✅</span> Requirements compliance matrix</h2>
       <p class="hint" style="margin:-6px 0 8px">Checks the current design against your <b>Requirements</b> targets — green where you meet spec with margin, red where you fall short. Updates live as you change the design.</p>
+      <div><span class="est">≈ based on first-order analysis — a green row means the simplified model clears the target, not that the build is proven; confirm with FEA/tank testing</span></div>
       <details class="explain">
         <summary>New to this? What am I looking at?</summary>
         <div class="ex-body">
@@ -1177,6 +1178,7 @@
       </style>
       <h2><span class="ic">⭕</span> O-ring seal &amp; end-cap designer</h2>
       <p class="hint" style="margin:-6px 0 8px">Sizes a static <b>radial (piston) O-ring gland</b> for the hull end-cap and checks the cap won’t blow off at depth. AS568 cross-sections; squeeze/fill targets per the Parker O-ring handbook.</p>
+      <div><span class="est">≈ handbook rules of thumb — confirm groove dims against your O-ring spec and pressure-test before diving</span></div>
       <style>
         .explain{border:1px solid var(--line); border-radius:8px; background:var(--inputbg); margin:0 0 12px; overflow:hidden}
         .explain>summary{cursor:pointer; list-style:none; padding:9px 12px; font-size:12px; font-weight:600; color:var(--accent2); display:flex; align-items:center; gap:8px; user-select:none}
@@ -1276,6 +1278,7 @@
     <section class="card span2" id="card-drag" data-ws="hydro">
       <h2><span class="ic">🌊</span> Drag build-up &amp; C<sub>D0</sub> estimator</h2>
       <p class="hint" style="margin:-6px 0 8px">Derives a physics-based parasite-drag coefficient from Reynolds number and flat-plate skin friction (ITTC-1957) plus a body-of-revolution form factor and wing wetted area — so C<sub>D0</sub> isn’t a guess. Push the result straight into the glide model.</p>
+      <div><span class="est">≈ first-order estimate — flat-plate friction + correlation form factor, not CFD; verify before relying on it</span></div>
       <details class="explain">
         <summary>New to this? What do these mean?</summary>
         <div class="ex-body">
@@ -1477,7 +1480,7 @@
         <div class="kv"><span class="k">Speed</span><span class="v" id="o_g6Spd">–</span></div>
         <div class="kv"><span class="k">Travel</span><span class="v" id="o_g6Dist">–</span></div>
       </div>
-      <div class="hint">Full 12-state rigid-body dynamics (added mass, Coriolis/Munk, lift/drag/side force, buoyancy restoring, ballast + movable-mass trim, rudder, lateral current) integrated with RK4 — the same model as the Python simulator, running live from the current design. Left = side view, right = top-down.</div>
+      <div class="hint">Full 12-state rigid-body dynamics (added mass, Coriolis/Munk, lift/drag/side force, buoyancy restoring, ballast + movable-mass trim, rudder, lateral current) integrated with RK4 — the same model as the Python simulator, running live from the current design. Left = side view, right = top-down. <b>First-order hydrodynamic coefficients</b> — qualitative behaviour, not a validated CFD/tow-tank model.</div>
     </section>
 
     <!-- POLAR CHART -->
@@ -1624,6 +1627,11 @@
     background:rgba(13,20,32,.96); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
     border-top:1px solid var(--line2); font-family:var(--mono); overflow-x:auto; scrollbar-width:none}
   .statusbar::-webkit-scrollbar{display:none}
+  .statusbar .sb-toggle{display:flex; align-items:center; gap:5px; background:transparent; border:none; border-right:1px solid var(--line);
+    color:var(--accent); font-family:var(--mono); font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+    padding:5px 14px; cursor:pointer; white-space:nowrap}
+  .statusbar .sb-toggle:hover{background:rgba(74,158,255,.10)}
+  .statusbar .sb-toggle b{color:var(--ink)}
   .statusbar .sb-item{display:flex; flex-direction:column; justify-content:center; gap:2px; padding:5px 16px;
     border-right:1px solid var(--line); white-space:nowrap; min-width:92px}
   .statusbar .sb-k{font-size:9px; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); font-weight:700}
@@ -1638,6 +1646,8 @@
   .card.flashcard{animation:cardflash .9s ease-out; border-color:var(--accent)}
   @keyframes vchange{0%{background:rgba(74,158,255,.30)} 100%{background:transparent}}
   .kv .v.vchanged, .out .v.vchanged{animation:vchange .7s ease-out; border-radius:4px}
+  .est{display:inline-block; font-size:10px; font-weight:700; letter-spacing:.3px; color:var(--warn);
+    background:rgba(202,161,74,.12); border:1px solid rgba(202,161,74,.34); border-radius:5px; padding:2px 8px; margin:0 0 10px}
 </style>
 <div class="statusbar" id="statusbar" aria-label="Live design status"></div>
 
@@ -3794,8 +3804,9 @@ g6Reset();
       sum+=net[i]; sum2+=net[i]*net[i]; if(net[i]<mn)mn=net[i]; if(net[i]>mx)mx=net[i];
     }
     const mean=sum/N, sd=Math.sqrt(Math.max(sum2/N-mean*mean,0)), prob=trim/N*100, bandG=ballMass*1000;
-    el('o_mcMean').textContent = (mean>=0?'+':'')+mean.toFixed(1)+' g  (±'+sd.toFixed(1)+')';
-    el('o_mcRange').textContent = mn.toFixed(1)+' … '+mx.toFixed(1)+' g';
+    const imp=window.gUnits==='imperial', uf=imp?0.0352740:1, us=imp?' oz':' g', ud=imp?3:1;
+    el('o_mcMean').textContent = (mean>=0?'+':'')+(mean*uf).toFixed(ud)+us+'  (±'+(sd*uf).toFixed(ud)+')';
+    el('o_mcRange').textContent = (mn*uf).toFixed(ud)+' … '+(mx*uf).toFixed(ud)+us;
     const pc = prob>=99?'good':prob>=90?'warn':'bad';
     el('o_mcProb').innerHTML = prob.toFixed(1)+'% <span class="badge '+pc+'">'+(prob>=99?'robust':prob>=90?'marginal':'risky')+'</span>';
     drawHist(net, mn, mx, bandG, mean);
@@ -3826,6 +3837,7 @@ g6Reset();
   }
   ['mcMass','mcMassTol','mcVol','mcVolTol','mcRho','mcBallast'].forEach(id=>el(id).addEventListener('input', mc));
   el('mcRun').addEventListener('click', mc);
+  window.addEventListener('unitschange', mc);
   el('mcPull').addEventListener('click', ()=>{
     const m=document.getElementById('mass'), v=document.getElementById('volL'), r=document.getElementById('surfaceDensity');
     if(m) el('mcMass').value=parseFloat(m.value).toFixed(2);
@@ -3844,33 +3856,50 @@ g6Reset();
 (function(){
   const bar=document.getElementById('statusbar'); if(!bar) return;
 
+  // ---- global unit preference (Metric ⇄ Imperial) ----
+  window.gUnits = (function(){ try{ return localStorage.getItem('gliderUnits')==='imperial'?'imperial':'metric'; }catch(_){ return 'metric'; } })();
+  const unitLabel = ()=> window.gUnits==='imperial' ? 'Imperial' : 'Metric';
+
   // ---- live status bar (reads window.gMetrics on every 'designupdate') ----
+  // each metric returns a base SI value; u maps unit system -> [factor, suffix, decimals]
   const METRICS=[
-    {k:'Health',  get:m=>({v:window.gHealthScore, d:0, suf:'',    cls:v=>v>=80?'good':v>=50?'warn':'bad'})},
-    {k:'Buoyancy',get:m=>({v:(isFinite(m.net)&&m.g)?m.net/m.g*1000:NaN, d:0, suf:' g', signed:true, cls:v=>Math.abs(v)<25?'good':Math.abs(v)<60?'warn':'bad'})},
-    {k:'Glide L/D',get:m=>({v:m.glideRatio, d:2, suf:'',  cls:v=>v>=2.5?'good':v>=1.5?'warn':'bad'})},
-    {k:'Yield SF', get:m=>({v:m.ysf, d:2, suf:'×', cls:v=>v>=1.5?'good':v>=1.2?'warn':'bad'})},
-    {k:'Buckle SF',get:m=>({v:m.bsf, d:2, suf:'×', cls:v=>v>=2?'good':v>=1.5?'warn':'bad'})},
-    {k:'Stability',get:m=>({v:isFinite(m.bg)?m.bg*1000:NaN, d:1, suf:' mm', signed:true, cls:v=>v>0?'good':'bad'})},
+    {k:'Health',  base:m=>window.gHealthScore,                              u:{metric:[1,'',0],     imperial:[1,'',0]},        cls:v=>v>=80?'good':v>=50?'warn':'bad'},
+    {k:'Buoyancy',base:m=>(isFinite(m.net)&&m.g)?m.net/m.g*1000:NaN, signed:true, u:{metric:[1,' g',0], imperial:[0.0352740,' oz',2]}, cls:v=>Math.abs(v)<25?'good':Math.abs(v)<60?'warn':'bad'},
+    {k:'Glide L/D',base:m=>m.glideRatio,                                    u:{metric:[1,'',2],     imperial:[1,'',2]},        cls:v=>v>=2.5?'good':v>=1.5?'warn':'bad'},
+    {k:'Yield SF', base:m=>m.ysf, cap:99,                                   u:{metric:[1,'×',2],    imperial:[1,'×',2]},       cls:v=>v>=1.5?'good':v>=1.2?'warn':'bad'},
+    {k:'Buckle SF',base:m=>m.bsf, cap:99,                                   u:{metric:[1,'×',2],    imperial:[1,'×',2]},       cls:v=>v>=2?'good':v>=1.5?'warn':'bad'},
+    {k:'Stability',base:m=>isFinite(m.bg)?m.bg*1000:NaN, signed:true,       u:{metric:[1,' mm',1],  imperial:[0.0393701,' in',2]}, cls:v=>v>0?'good':'bad'},
   ];
-  bar.innerHTML=METRICS.map((mt,i)=>'<span class="sb-item"><span class="sb-k">'+mt.k+'</span>'+
-    '<span class="sb-v" id="sb-'+i+'"><span class="dot"></span><span class="sb-num">–</span></span></span>').join('');
+  function renderShell(){
+    bar.innerHTML='<button class="sb-toggle" id="sbUnits" title="Switch all units">⇄ <b>'+unitLabel()+'</b></button>'+
+      METRICS.map((mt,i)=>'<span class="sb-item"><span class="sb-k">'+mt.k+'</span>'+
+        '<span class="sb-v" id="sb-'+i+'"><span class="dot"></span><span class="sb-num">–</span></span></span>').join('');
+    document.getElementById('sbUnits').addEventListener('click', ()=> setUnits(window.gUnits==='imperial'?'metric':'imperial'));
+  }
   const st=METRICS.map(()=>({cur:NaN, token:0}));
   const fmtNum=(v,d,signed)=> !isFinite(v)?'–':((signed&&v>0?'+':'')+v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}));
-  function tick(i,target,d,suf,signed,cls){
+  function tick(i,baseVal,mt){
     const wrap=document.getElementById('sb-'+i); if(!wrap) return;
     const numEl=wrap.querySelector('.sb-num'), s=st[i];
-    const klass=isFinite(target)?('sb-'+cls(target)):'';
+    const klass=isFinite(baseVal)?('sb-'+mt.cls(baseVal)):'';
     wrap.className='sb-v '+klass;
-    if(!isFinite(target)){ numEl.textContent='–'; s.cur=NaN; return; }
+    if(!isFinite(baseVal)){ numEl.textContent='–'; s.cur=NaN; return; }
+    const conf=mt.u[window.gUnits]||mt.u.metric, f=conf[0], suf=conf[1], d=conf[2]||0, target=baseVal*f;
+    if(mt.cap && Math.abs(baseVal)>mt.cap){ numEl.textContent='>'+mt.cap+suf; s.cur=target; ++s.token; return; }
     const from=isFinite(s.cur)?s.cur:target, my=++s.token, t0=performance.now(), dur=440;
     (function step(now){ if(s.token!==my) return; const p=Math.min((now-t0)/dur,1);
       const e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2, val=from+(target-from)*e;
-      numEl.textContent=fmtNum(val,d,signed)+suf;
-      if(p<1) requestAnimationFrame(step); else { numEl.textContent=fmtNum(target,d,signed)+suf; s.cur=target; }
+      numEl.textContent=fmtNum(val,d,mt.signed)+suf;
+      if(p<1) requestAnimationFrame(step); else { numEl.textContent=fmtNum(target,d,mt.signed)+suf; s.cur=target; }
     })(t0);
   }
-  function refresh(){ const m=window.gMetrics||{}; METRICS.forEach((mt,i)=>{ const r=mt.get(m); tick(i,r.v,r.d,r.suf,r.signed,r.cls); }); }
+  function refresh(){ const m=window.gMetrics||{}; METRICS.forEach((mt,i)=>tick(i, mt.base(m), mt)); }
+  function setUnits(u){ window.gUnits=u; try{ localStorage.setItem('gliderUnits',u); }catch(_){}
+    const b=document.getElementById('sbUnits'); if(b) b.querySelector('b').textContent=unitLabel();
+    st.forEach(s=>{ s.cur=NaN; });                 // no count-up across a unit change
+    refresh(); try{ window.dispatchEvent(new CustomEvent('unitschange')); }catch(_){}
+  }
+  renderShell();
   window.addEventListener('designupdate', refresh);
   refresh();
 
