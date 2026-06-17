@@ -4,6 +4,7 @@
    ============================================================ */
 
 const Battle = {
+  TBOX: { x: 4, y: 118, w: 232, h: 38 }, // bottom message/menu frame geometry
   enemy: null,        // wild Pokémon instance
   player: null,       // active party Pokémon
   isWild: true,
@@ -372,29 +373,29 @@ const Battle = {
     }
   },
 
-  /* ---- rendering (all on-canvas, native 160x144) ---- */
+  /* ---- rendering (all on-canvas, GBA-native 240x160) ---- */
   render(ctx) {
     Game.setOverlay("");
     // Backgrounds: white upper, barely-green lower, brick divider between.
     ctx.fillStyle = "#f8f8f8"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.fillStyle = "#eef2e2"; ctx.fillRect(0, 55, VIEW_W, 43);
-    this.drawBrickDivider(ctx, 53);
+    ctx.fillStyle = "#eef2e2"; ctx.fillRect(0, 76, VIEW_W, 42);
+    this.drawBrickDivider(ctx, 74);
 
-    // platform ovals (line-drawn, GB style)
-    this.drawPlatform(ctx, 116, 50, 30, 7);
-    this.drawPlatform(ctx, 40, 90, 33, 8);
+    // platform ovals (line-drawn)
+    this.drawPlatform(ctx, 182, 72, 44, 10);
+    this.drawPlatform(ctx, 58, 116, 48, 11);
 
-    // enemy (top) — front sprite or ball during a throw
-    const bob = Math.round(Math.sin(this.introBounce * 0.08) * 1.5);
-    if (this.phase === "ballanim") this.drawBall(ctx, 108, 28);
-    else drawGrid(ctx, monSprite(this.enemy.species), 92, 6 + bob, 3);
+    // enemy (top-right) — front sprite or ball during a throw
+    const bob = Math.round(Math.sin(this.introBounce * 0.08) * 2);
+    if (this.phase === "ballanim") this.drawBall(ctx, 172, 44);
+    else drawGrid(ctx, monSprite(this.enemy.species), 150, 8 + bob, 4);
 
-    // player (bottom) — rear sprite
-    drawGrid(ctx, monBackSprite(this.player.species), 12, 44, 3);
+    // player (bottom-left) — rear sprite
+    drawGrid(ctx, monBackSprite(this.player.species), 26, 54, 4);
 
     // status boxes
-    this.drawStatusBox(ctx, this.enemy, this.enemyDispHP, 6, 10, 86, false);
-    this.drawStatusBox(ctx, this.player, this.playerDispHP, 72, 58, 82, true);
+    this.drawStatusBox(ctx, this.enemy, this.enemyDispHP, 10, 14, 112, false);
+    this.drawStatusBox(ctx, this.player, this.playerDispHP, 120, 80, 112, true);
 
     // bottom message / menu frame
     this.drawTextbox(ctx);
@@ -473,52 +474,48 @@ const Battle = {
   },
 
   drawTextbox(ctx) {
-    const x = 2, y = 96, w = 156, h = 46, k = "#181818";
+    const b = Battle.TBOX, x = b.x, y = b.y, w = b.w, h = b.h, k = "#181818";
     this.drawFrame(ctx, x, y, w, h);
-    const tx = x + 8, ty = y + 8;
+    const tx = x + 10, ty = y + 8, divX = x + 138;
 
     if (this.phase === "msg" || this.phase === "ballanim") {
-      drawTextLines(ctx, this.curMsg || "", tx, ty, k, 1, 1, 4);
+      drawTextLines(ctx, this.curMsg || "", tx, ty, k, 1, 1, 3);
       if ((Math.floor(Date.now() / 400) % 2))
         this.drawDownChevron(ctx, x + w - 12, y + h - 11);
       return;
     }
 
     if (this.phase === "menu") {
-      // left prompt
-      drawTextLines(ctx, `What will\n${DEX[this.player.species].name}\ndo?`, tx, ty, k, 1, 1, 4);
-      // inner vertical divider
-      ctx.fillStyle = k; ctx.fillRect(x + 84, y + 5, 1, h - 10);
+      drawTextLines(ctx, `What will\n${DEX[this.player.species].name} do?`, tx, ty + 4, k, 1, 1, 4);
+      ctx.fillStyle = k; ctx.fillRect(divX, y + 5, 1, h - 10); // inner divider
       this.drawGridMenu(ctx, ["FIGHT", "PkMn", "ITEM", "RUN"], this.menuIndex,
-        [[94, y + 12], [128, y + 12], [94, y + 28], [128, y + 28]]);
+        [[divX + 12, y + 10], [divX + 56, y + 10], [divX + 12, y + 26], [divX + 56, y + 26]]);
       return;
     }
 
     if (this.phase === "fight") {
-      // moves on the left
       const rows = this.player.moves;
       rows.forEach((m, i) => {
-        const ry = ty + i * 9;
-        if (i === this.moveIndex) drawArrow(ctx, x + 3, ry, k, 1);
+        const ry = ty + i * 8;
+        if (i === this.moveIndex) drawArrow(ctx, x + 4, ry, k, 1);
         drawText(ctx, MOVES[m.id].name, tx + 2, ry, k, 1);
       });
-      // PP / type panel on the right
-      ctx.fillStyle = k; ctx.fillRect(x + 96, y + 5, 1, h - 10);
+      ctx.fillStyle = k; ctx.fillRect(divX, y + 5, 1, h - 10);
       const mv = MOVES[rows[this.moveIndex].id];
-      drawText(ctx, "PP " + rows[this.moveIndex].pp + "/" + rows[this.moveIndex].maxpp, x + 102, y + 12, k, 1);
-      drawText(ctx, "TYPE/", x + 102, y + 26, k, 1);
-      drawText(ctx, mv.type.toUpperCase(), x + 102, y + 35, k, 1);
+      drawText(ctx, "PP " + rows[this.moveIndex].pp + "/" + rows[this.moveIndex].maxpp, divX + 8, y + 9, k, 1);
+      drawText(ctx, "TYPE/", divX + 8, y + 22, k, 1);
+      drawText(ctx, mv.type.toUpperCase(), divX + 8, y + 31, k, 1);
       return;
     }
 
     if (this.phase === "bag") {
       const bag = Game.bagList();
       if (!bag.length) { drawText(ctx, "No items!", tx, ty, k, 1); drawText(ctx, "B: BACK", tx, ty + 22, k, 1); return; }
-      bag.forEach((b, i) => {
-        const ry = ty + i * 9;
-        if (i === this.bagIndex) drawArrow(ctx, x + 3, ry, k, 1);
-        drawText(ctx, ITEMS[b.id].name, tx + 2, ry, k, 1);
-        drawText(ctx, "*" + b.qty, x + w - 26, ry, k, 1);
+      bag.forEach((b2, i) => {
+        const ry = ty + i * 8;
+        if (i === this.bagIndex) drawArrow(ctx, x + 4, ry, k, 1);
+        drawText(ctx, ITEMS[b2.id].name, tx + 2, ry, k, 1);
+        drawText(ctx, "*" + b2.qty, x + w - 30, ry, k, 1);
       });
       return;
     }
@@ -526,10 +523,10 @@ const Battle = {
     if (this.phase === "switch") {
       Game.party.forEach((p, i) => {
         const ry = ty + i * 8;
-        if (i === this.switchIndex) drawArrow(ctx, x + 3, ry, k, 1);
+        if (i === this.switchIndex) drawArrow(ctx, x + 4, ry, k, 1);
         drawText(ctx, DEX[p.species].name, tx + 2, ry, k, 1);
-        drawText(ctx, ":L" + p.level + " " + (p.hp <= 0 ? "FNT" : p.hp + "/" + p.maxhp),
-          x + 82, ry, k, 1);
+        drawText(ctx, ":L" + p.level + "  " + (p.hp <= 0 ? "FNT" : p.hp + "/" + p.maxhp),
+          x + 120, ry, k, 1);
       });
       return;
     }

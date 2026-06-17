@@ -3,8 +3,8 @@
    Talks to the global Game (main.js), UI (main.js) and Battle.
    ============================================================ */
 
-const TILE = 16;                 // pixels per tile
-const VIEW_W = 160, VIEW_H = 144; // canvas size (10 x 9 tiles)
+const TILE = 16;                  // pixels per tile
+const VIEW_W = 240, VIEW_H = 160; // GBA-native canvas size (15 x 10 tiles)
 
 const SOLID = new Set(["T", "w", "h", "H", "M", "L", "G", "s", "r", "F"]);
 const TALL  = "t";
@@ -135,9 +135,11 @@ const Engine = {
 
     const startTX = Math.floor(camPX / TILE) - 1;
     const startTY = Math.floor(camPY / TILE) - 1;
+    const cols = Math.ceil(VIEW_W / TILE) + 2;
+    const rows = Math.ceil(VIEW_H / TILE) + 2;
 
-    for (let ty = startTY; ty < startTY + 12; ty++) {
-      for (let tx = startTX; tx < startTX + 12; tx++) {
+    for (let ty = startTY; ty < startTY + rows; ty++) {
+      for (let tx = startTX; tx < startTX + cols; tx++) {
         const sx = Math.round(tx * TILE - camPX);
         const sy = Math.round(ty * TILE - camPY);
         this.drawTile(ctx, this.tileAt(tx, ty), sx, sy);

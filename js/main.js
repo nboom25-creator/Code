@@ -300,83 +300,85 @@ const Game = {
   renderUI(ctx) {
     const K = FONT_BLACK;
     if (this.mode === "dialogue") {
-      Battle.drawFrame(ctx, 2, 96, 156, 46);
-      drawTextLines(ctx, this.dlgPages[this.dlgIndex] || "", 10, 104, K, 1, 1, 4);
-      if (Math.floor(Date.now() / 400) % 2) Battle.drawDownChevron(ctx, 148, 132);
+      const b = Battle.TBOX;
+      Battle.drawFrame(ctx, b.x, b.y, b.w, b.h);
+      drawTextLines(ctx, this.dlgPages[this.dlgIndex] || "", b.x + 10, b.y + 8, K, 1, 1, 4);
+      if (Math.floor(Date.now() / 400) % 2) Battle.drawDownChevron(ctx, b.x + b.w - 12, b.y + b.h - 11);
     } else if (this.mode === "startmenu") {
       const items = ["POKéMON", "BAG", "SAVE", "CLOSE"];
-      Battle.drawFrame(ctx, 92, 4, 64, 58);
+      Battle.drawFrame(ctx, 158, 6, 78, 78);
       items.forEach((it, i) => {
-        const y = 12 + i * 12;
-        if (i === this.menuIndex) drawArrow(ctx, 96, y, K, 1);
-        drawText(ctx, it, 104, y, K, 1);
+        const y = 16 + i * 16;
+        if (i === this.menuIndex) drawArrow(ctx, 164, y, K, 1);
+        drawText(ctx, it, 174, y, K, 1);
       });
     } else if (this.mode === "partyview") {
-      Battle.drawFrame(ctx, 4, 4, 152, 136);
+      Battle.drawFrame(ctx, 6, 6, 228, 148);
       this.party.forEach((p, i) => {
-        const y = 12 + i * 22;
-        drawText(ctx, DEX[p.species].name, 12, y, K, 1);
-        drawText(ctx, ":L" + p.level, 120, y, K, 1);
+        const y = 16 + i * 22;
+        drawText(ctx, DEX[p.species].name, 16, y, K, 1);
+        drawText(ctx, ":L" + p.level, 150, y, K, 1);
         const r = p.hp / p.maxhp;
         const col = r > 0.5 ? "#3a9a3a" : r > 0.2 ? "#c08000" : "#c0301a";
-        drawText(ctx, "HP " + p.hp + "/" + p.maxhp, 16, y + 9, col, 1);
+        drawText(ctx, "HP " + p.hp + "/" + p.maxhp, 188, y, col, 1);
       });
-      drawText(ctx, "B: BACK", 12, 130, K, 1);
+      drawText(ctx, "B: BACK", 16, 142, K, 1);
     } else if (this.mode === "bagview") {
-      Battle.drawFrame(ctx, 4, 4, 152, 136);
+      Battle.drawFrame(ctx, 6, 6, 228, 148);
       const bag = this.bagList();
-      if (!bag.length) drawText(ctx, "BAG is empty!", 12, 14, K, 1);
+      if (!bag.length) drawText(ctx, "BAG is empty!", 16, 16, K, 1);
       bag.forEach((b, i) => {
-        const y = 12 + i * 20;
-        drawText(ctx, ITEMS[b.id].name, 12, y, K, 1);
-        drawText(ctx, "*" + b.qty, 130, y, K, 1);
-        drawText(ctx, ITEMS[b.id].desc, 16, y + 9, "#585858", 1);
+        const y = 16 + i * 20;
+        drawText(ctx, ITEMS[b.id].name, 16, y, K, 1);
+        drawText(ctx, "*" + b.qty, 120, y, K, 1);
+        drawText(ctx, ITEMS[b.id].desc, 150, y, "#585858", 1);
       });
-      drawText(ctx, "B: BACK", 12, 130, K, 1);
+      drawText(ctx, "B: BACK", 16, 142, K, 1);
     }
   },
 
   renderTitle(ctx) {
     ctx.fillStyle = "#f8f8f8"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.fillStyle = "#d8ecff"; ctx.fillRect(0, 0, VIEW_W, 64);
-    ctx.fillStyle = "#9ed0a0"; ctx.fillRect(0, 110, VIEW_W, 34);
+    ctx.fillStyle = "#d8ecff"; ctx.fillRect(0, 0, VIEW_W, 70);
+    ctx.fillStyle = "#9ed0a0"; ctx.fillRect(0, 124, VIEW_W, 36);
+    const cx = VIEW_W / 2;
     // title in the pixel font (red with a black shadow)
     const title = "POKéMON";
-    const tw = textWidth(title, 3);
-    drawText(ctx, title, (VIEW_W - tw) / 2 + 2, 18, "#181818", 3);
-    drawText(ctx, title, (VIEW_W - tw) / 2, 16, "#e0392b", 3);
+    const tw = textWidth(title, 4);
+    drawText(ctx, title, cx - tw / 2 + 2, 20, "#181818", 4);
+    drawText(ctx, title, cx - tw / 2, 18, "#e0392b", 4);
     const sub = "RED";
-    drawText(ctx, sub, (VIEW_W - textWidth(sub, 2)) / 2, 42, "#c02020", 2);
+    drawText(ctx, sub, cx - textWidth(sub, 2) / 2, 50, "#c02020", 2);
     const ver = "MOBILE  VERSION";
-    drawText(ctx, ver, (VIEW_W - textWidth(ver, 1)) / 2, 60, "#404858", 1);
+    drawText(ctx, ver, cx - textWidth(ver, 1) / 2, 70, "#404858", 1);
     // decorative sprites + pokeball
-    drawGrid(ctx, monSprite("charmander"), 16, 76, 2);
-    drawGrid(ctx, monSprite("pikachu"), 112, 78, 2);
-    ctx.fillStyle = "#181818"; ctx.beginPath(); ctx.arc(80, 92, 13, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#f8f8f8"; ctx.beginPath(); ctx.arc(80, 93, 11, 0, Math.PI, false); ctx.fill();
-    ctx.fillStyle = "#e0392b"; ctx.beginPath(); ctx.arc(80, 92, 11, Math.PI, 0, false); ctx.fill();
-    ctx.fillStyle = "#181818"; ctx.fillRect(69, 91, 22, 2);
-    ctx.beginPath(); ctx.arc(80, 92, 3, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#f8f8f8"; ctx.beginPath(); ctx.arc(80, 92, 1.5, 0, Math.PI*2); ctx.fill();
+    drawGrid(ctx, monSprite("charmander"), 36, 84, 2);
+    drawGrid(ctx, monSprite("pikachu"), 172, 86, 2);
+    ctx.fillStyle = "#181818"; ctx.beginPath(); ctx.arc(cx, 102, 14, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#f8f8f8"; ctx.beginPath(); ctx.arc(cx, 103, 12, 0, Math.PI, false); ctx.fill();
+    ctx.fillStyle = "#e0392b"; ctx.beginPath(); ctx.arc(cx, 102, 12, Math.PI, 0, false); ctx.fill();
+    ctx.fillStyle = "#181818"; ctx.fillRect(cx - 12, 101, 24, 2);
+    ctx.beginPath(); ctx.arc(cx, 102, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#f8f8f8"; ctx.beginPath(); ctx.arc(cx, 102, 1.5, 0, Math.PI*2); ctx.fill();
     // blinking prompt
     if (Math.floor(Date.now() / 500) % 2) {
       const p = this.hasSave() ? "CONTINUE - PRESS A" : "NEW GAME - PRESS A";
-      drawText(ctx, p, (VIEW_W - textWidth(p, 1)) / 2, 124, "#181818", 1);
+      drawText(ctx, p, cx - textWidth(p, 1) / 2, 138, "#181818", 1);
     }
   },
 
   renderStarter(ctx) {
     ctx.fillStyle = "rgba(20,20,20,0.45)"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    Battle.drawFrame(ctx, 8, 16, 144, 96);
-    const xs = [24, 64, 104];
+    Battle.drawFrame(ctx, 20, 20, 200, 110);
+    const xs = [46, 106, 166];
     STARTERS.forEach((sp, i) => {
-      if (i === this.starterIndex) { ctx.fillStyle = "#f8e088"; ctx.fillRect(xs[i] - 2, 26, 38, 52); }
-      drawGrid(ctx, monSprite(sp), xs[i], 30, 2);
+      if (i === this.starterIndex) { ctx.fillStyle = "#f8e088"; ctx.fillRect(xs[i] - 4, 34, 44, 60); }
+      drawGrid(ctx, monSprite(sp), xs[i], 38, 2);
     });
     const nm = DEX[STARTERS[this.starterIndex]].name;
-    drawText(ctx, nm, (VIEW_W - textWidth(nm, 1)) / 2, 86, FONT_BLACK, 1);
-    const hint = "< CHOOSE >   A:PICK";
-    drawText(ctx, hint, (VIEW_W - textWidth(hint, 1)) / 2, 100, FONT_BLACK, 1);
+    drawText(ctx, nm, (VIEW_W - textWidth(nm, 1)) / 2, 104, FONT_BLACK, 1);
+    const hint = "<  CHOOSE  >    A: PICK";
+    drawText(ctx, hint, (VIEW_W - textWidth(hint, 1)) / 2, 118, FONT_BLACK, 1);
   },
 
   esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>"); },
