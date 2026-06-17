@@ -115,10 +115,10 @@ const Game = {
   /* ---------- world events ---------- */
   triggerEncounter(x, y) {
     if (!this.party.length) return;
-    const region = y >= 16 ? "south" : "north";
+    const region = y >= 42 ? "forest" : "early";
     const table = WORLD.encounters[region];
     const species = table[Math.floor(Math.random() * table.length)];
-    const lvl = region === "south" ? 3 + Math.floor(Math.random() * 5) : 2 + Math.floor(Math.random() * 4);
+    const lvl = region === "forest" ? 5 + Math.floor(Math.random() * 6) : 2 + Math.floor(Math.random() * 5);
     const enemy = this.createPokemon(species, lvl);
     this.mode = "battle";
     Battle.start(enemy);
@@ -135,6 +135,12 @@ const Game = {
     } else if (kind === "lab") {
       if (!this.flags.hasStarter) this.startStarterSelect();
       else this.dialog(["PROF. OAK: Your POKéDEX is", "coming along nicely!", "Catch them all!"]);
+    } else if (kind === "gym") {
+      this.dialog(["VIRIDIAN GYM", "The door is locked.", "Come back when you've", "earned more BADGES!"]);
+    } else if (kind === "house") {
+      this.dialog(["A resident smiles:", "'VIRIDIAN CITY is the", "gateway to the rest", "of the region!'"]);
+    } else if (kind === "cabin") {
+      this.dialog(["An old hiker says:", "'Rest here, traveler.", "Your POKéMON look", "weary from the woods.'"], () => this.healParty());
     }
   },
 

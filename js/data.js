@@ -251,41 +251,81 @@ const ITEMS = {
 */
 
 const WORLD = {
-  // Pallet Town (top) + Route 1 (bottom) stitched into one scrollable map.
-  // Every row is exactly `width` (20) characters.
+  // One large scrollable world: Pallet Town -> Route 1 -> Viridian City
+  // -> Route 2 -> Viridian Forest -> a cabin. Every row is `width` (20) chars.
   width: 20,
   rows: [
-    "TTTTTTTTTTTTTTTTTTTT", // 0
+    "TTTTTTTTTTTTTTTTTTTT", // 0   --- PALLET TOWN ---
     "T..................T", // 1
-    "T..hhhh....hhhh....T", // 2  building roofs
-    "T..hHHh....hMMh....T", // 3  H=Center  M=Mart
-    "T..hddh....hddh....T", // 4  doors
-    "T.........s........T", // 5  town sign
-    "T........pp........T", // 6  path down the middle
-    "T..tttt..pp........T", // 7  grass patch (town)
+    "T..hhhh....hhhh....T", // 2   building roofs
+    "T..hHHh....hMMh....T", // 3   H=Center  M=Mart
+    "T..hddh....hddh....T", // 4   doors
+    "T.........s........T", // 5   town sign
+    "T........pp........T", // 6   path down the middle
+    "T..tttt..pp........T", // 7   grass patch (town)
     "T..tttt..pp..tttt..T", // 8
     "T..tttt..pp..tttt..T", // 9
     "T........pp........T", // 10
-    "T..hhhhh.pp........T", // 11 Oak's Lab roof
+    "T..hhhhh.pp........T", // 11  Oak's Lab roof
     "T..hLLLh.pp........T", // 12
-    "T..hdddh.pp........T", // 13 lab doors
-    "T....s...pp........T", // 14 lab sign
-    "T........pp........T", // 15
+    "T..hdddh.pp........T", // 13  lab doors
+    "T....s...pp........T", // 14  lab sign
+    "T........pp........T", // 15  --- ROUTE 1 ---
     "T........pp........T", // 16
-    "T..ttt...pp...sss..T", // 17 route signs
+    "T..ttt...pp...sss..T", // 17  route signs
     "T..ttt...pp........T", // 18
     "T..ttt...pp........T", // 19
-    "T.....========.....T", // 20 ledge (hop down)
-    "T..ttttt..ttttt....T", // 21 route grass
-    "T..ttttt..ttttt....T", // 22
-    "TTTTTTTTTTTTTTTTTTTT", // 23
+    "T.....========.....T", // 20  ledge (hop down)
+    "T..ttttt.pp.ttttt..T", // 21  route grass (path continues)
+    "T..ttttt.pp.ttttt..T", // 22
+    "T........pp........T", // 23
+    "T........pp........T", // 24
+    "TTTTTTTTTppTTTTTTTTT", // 25  city gate
+    "T........pp........T", // 26  --- VIRIDIAN CITY ---
+    "T........pp........T", // 27
+    "T..hhhh..pp..hhhh..T", // 28  Center (left) & Mart (right)
+    "T..hHHh..pp..hMMh..T", // 29
+    "T..hddh..pp..hddh..T", // 30  doors
+    "T........pp........T", // 31
+    "T...wwww.pp........T", // 32  pond
+    "T...wwww.pp..GGGG..T", // 33  Viridian Gym
+    "T...wwww.pp..GGGG..T", // 34
+    "T........pp..GddG..T", // 35  gym door
+    "T..s.....pp....s...T", // 36  city signs
+    "T........pp........T", // 37
+    "T..hhhh..pp........T", // 38  a house
+    "T..hddh..pp........T", // 39  house door
+    "T........pp........T", // 40
+    "TTTTTTTT.pp.TTTTTTTT", // 41  south gate
+    "T........pp........T", // 42  --- ROUTE 2 ---
+    "T..tt....pp....tt..T", // 43
+    "T..tt....pp....tt..T", // 44
+    "T........pp........T", // 45
+    "T.tttttt.pp.tttttt.T", // 46  --- VIRIDIAN FOREST ---
+    "T.tttttt.pp.tttttt.T", // 47
+    "T.tttttt.pp.tttttt.T", // 48
+    "T........pp........T", // 49
+    "T..s.....pp........T", // 50  forest sign
+    "T.TT.TT..pp..TT.TT.T", // 51  forest trees
+    "T.TtttT..pp..TtttT.T", // 52
+    "T..ttt...pp...ttt..T", // 53
+    "T........pp........T", // 54
+    "T..hhhh..pp........T", // 55  forest cabin
+    "T..hddh..pp........T", // 56
+    "T........pp........T", // 57
+    "TTTTTTTTTTTTTTTTTTTT", // 58  world's edge
   ],
   playerStart: { x: 9, y: 5 },
   // Door tiles ("x,y") and what they do — handled in main.js.
   doors: {
-    "4,4":  "center", "5,4":  "center",   // Pokémon Center: full heal
-    "12,4": "mart",   "13,4": "mart",     // Poké Mart: free restock
-    "4,13": "lab",    "5,13": "lab",  "6,13": "lab", // Oak's Lab: pick starter
+    "4,4":  "center", "5,4":  "center",            // Pallet Pokémon Center
+    "12,4": "mart",   "13,4": "mart",              // Pallet Poké Mart
+    "4,13": "lab",    "5,13": "lab",  "6,13": "lab",// Oak's Lab: pick starter
+    "4,30": "center", "5,30": "center",            // Viridian Pokémon Center
+    "14,30": "mart",  "15,30": "mart",             // Viridian Poké Mart
+    "14,35": "gym",   "15,35": "gym",              // Viridian Gym
+    "4,39": "house",                               // Viridian house
+    "4,56": "cabin",                               // Forest cabin
   },
   // Readable signs.
   signs: {
@@ -294,10 +334,13 @@ const WORLD = {
     "14,17": "ROUTE 1\nPALLET - VIRIDIAN",
     "15,17": "Wild POKéMON live\nin the tall grass.\nWalk in to find them!",
     "16,17": "TRAINER TIPS:\nWeaken a POKéMON,\nthen throw a BALL!",
+    "3,36":  "VIRIDIAN CITY\nThe Eternally Green\nParadise.",
+    "15,36": "VIRIDIAN GYM\nLEADER: GIOVANNI\nThe door won't budge.",
+    "3,50":  "ROUTE 2\nVIRIDIAN FOREST ahead.\nWild POKéMON here\nare stronger!",
   },
-  // Encounter tables — tougher Pokémon appear on the southern route.
+  // Encounter tables — Route 1 grass is mild; the forest is tougher.
   encounters: {
-    north: ["pidgey","rattata","caterpie","weedle","oddish","pidgey","rattata"],
-    south: ["pidgey","spearow","rattata","zubat","pikachu","oddish","caterpie","geodude"],
+    early:  ["pidgey","rattata","caterpie","weedle","oddish","pidgey","rattata","spearow"],
+    forest: ["caterpie","weedle","pidgey","pikachu","oddish","zubat","spearow","rattata","geodude"],
   },
 };

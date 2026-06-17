@@ -6,7 +6,7 @@
 const TILE = 16;                 // pixels per tile
 const VIEW_W = 160, VIEW_H = 144; // canvas size (10 x 9 tiles)
 
-const SOLID = new Set(["T", "w", "h", "H", "M", "L", "s", "r", "F"]);
+const SOLID = new Set(["T", "w", "h", "H", "M", "L", "G", "s", "r", "F"]);
 const TALL  = "t";
 const LEDGE = "=";
 
@@ -192,6 +192,11 @@ const Engine = {
       case "M": // Mart roof marker
         ctx.fillStyle = "#3068c0"; ctx.fillRect(x, y, TILE, TILE);
         ctx.fillStyle = "#f8d030"; ctx.font = "10px monospace"; ctx.fillText("M", x+4, y+12);
+        break;
+      case "G": // gym roof marker
+        ctx.fillStyle = "#586870"; ctx.fillRect(x, y, TILE, TILE);
+        ctx.fillStyle = "#3a474d"; ctx.fillRect(x, y+8, TILE, 1); ctx.fillRect(x+7, y, 1, TILE);
+        ctx.fillStyle = "#c0c8cc"; ctx.fillRect(x+5, y+4, 6, 3);
         break;
       case "L": // lab interior wall
         ctx.fillStyle = "#8890a0"; ctx.fillRect(x, y, TILE, TILE);
