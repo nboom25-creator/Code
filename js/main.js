@@ -282,12 +282,20 @@ const Game = {
   setOverlay(html) { if (this.overlay.innerHTML !== html) this.overlay.innerHTML = html; },
 
   loop() {
+    const ctx = this.ctx;
+    // Gate everything on the asset pipeline (sheets + tileset must load first).
+    if (!Assets.ready) {
+      this.renderLoading(ctx);
+      requestAnimationFrame(() => this.loop());
+      return;
+    }
+    if (!Engine.playerSprite) Engine.bindAssets();
+
     // update
     if (this.mode === "overworld") Engine.update();
     else if (this.mode === "battle") Battle.update();
 
     // render
-    const ctx = this.ctx;
     this.setOverlay("");
     if (this.mode === "title") { this.renderTitle(ctx); }
     else if (this.mode === "starter") { Engine.render(ctx); this.renderStarter(ctx); }
@@ -334,6 +342,22 @@ const Game = {
         drawText(ctx, ITEMS[b.id].desc, 150, y, "#585858", 1);
       });
       drawText(ctx, "B: BACK", 16, 142, K, 1);
+    }
+  },
+
+  renderLoading(ctx) {
+    ctx.fillStyle = "#181818"; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    const cx = VIEW_W / 2;
+    if (Assets.error) {
+      const m1 = "MISSING ASSETS", m2 = "Add sheets under", m3 = "/assets/sprites/", m4 = "/assets/tilesets/";
+      drawText(ctx, m1, cx - textWidth(m1, 1) / 2, 60, "#e0392b", 1);
+      drawText(ctx, m2, cx - textWidth(m2, 1) / 2, 80, "#f8f8f8", 1);
+      drawText(ctx, m3, cx - textWidth(m3, 1) / 2, 92, "#9ed0a0", 1);
+      drawText(ctx, m4, cx - textWidth(m4, 1) / 2, 104, "#9ed0a0", 1);
+    } else {
+      const dots = ".".repeat(1 + (Math.floor(Date.now() / 300) % 3));
+      const t = "LOADING" + dots;
+      drawText(ctx, t, cx - textWidth("LOADING...", 1) / 2, 78, "#f8f8f8", 1);
     }
   },
 
@@ -414,6 +438,7 @@ const Game = {
     this.bindControls();
     this.bindKeyboard();
 
+    Assets.loadAll();   // async; the loop shows LOADING until ready
     this.loop();
   },
 

@@ -12,9 +12,11 @@ const LEDGE = "=";
 
 const Engine = {
   map: null, w: 0, h: 0,
-  player: { x: 0, y: 0, dir: "down", ox: 0, oy: 0, moving: false, frame: 0, stepTimer: 0 },
+  player: { x: 0, y: 0, dir: "down", ox: 0, oy: 0, moving: false, frame: 0, stepParity: 0 },
   held: null,         // currently held direction
   busy: false,        // suppress input while warping/animating special
+  playerSprite: null, // CharacterSprite bound to the loaded player sheet
+  _tileIndex: null,   // char -> tileset index
 
   init() {
     this.map = WORLD.rows;
@@ -23,6 +25,13 @@ const Engine = {
     this.player.x = WORLD.playerStart.x;
     this.player.y = WORLD.playerStart.y;
     this.player.dir = "down";
+    this._tileIndex = {};
+    this.TILE_LIST.forEach((ch, i) => { this._tileIndex[ch] = i; });
+  },
+
+  // Called once assets finish loading (from Game.init).
+  bindAssets() {
+    if (Assets.sheets.player) this.playerSprite = new CharacterSprite(Assets.sheets.player);
   },
 
   tileAt(x, y) {
@@ -89,7 +98,7 @@ const Engine = {
     const p = this.player;
     p.x = p.tox; p.y = p.toy;
     p.ox = 0; p.oy = 0; p.moving = false;
-    p.frame = (p.frame + 1) % 2;
+    p.stepParity ^= 1; // alternate left-foot / right-foot each step
 
     // Door / warp?
     const key = p.x + "," + p.y;
@@ -149,13 +158,30 @@ const Engine = {
     // Player at screen center.
     const psx = Math.round(p.x * TILE + p.ox - camPX);
     const psy = Math.round(p.y * TILE + p.oy - camPY) - (p.hop || 0);
-    const frames = PLAYER_SPRITES[p.dir];
-    const grid = frames[p.moving ? p.frame : 0];
-    // sprite is 10 wide x 12 tall, scale ~1.4 -> center in tile
-    drawGrid(ctx, grid, psx + 1, psy - 3, 1.5);
+    // 16x16 character frame from the loaded sheet, drawn ~4px high so the
+    // feet sit on the tile (classic overworld framing).
+    if (this.playerSprite) {
+      const progress = p.moving ? (p.moveT / p.moveDur) : 0;
+      this.playerSprite.foot = p.stepParity;
+      this.playerSprite.draw(ctx, p.dir, p.moving, progress, psx, psy - 4);
+    }
   },
 
+  // Tile draw order -> index in the baked tileset (assets/tilesets/overworld.png).
+  // This array is the single source of truth shared with scripts/build_assets.js.
+  TILE_LIST: [".", "p", "t", "T", "w", "h", "H", "M", "G", "L", "d", "s", "="],
+
+  // Runtime tile draw: blit the 16x16 cell from the loaded tileset.
   drawTile(ctx, ch, x, y) {
+    const ts = Assets.tilesets.overworld;
+    const idx = this._tileIndex ? this._tileIndex[ch] : undefined;
+    if (ts && idx !== undefined) { ts.drawTile(ctx, idx, x, y); return; }
+    this.procTile(ctx, ch, x, y); // fallback (also the art baked into the sheet)
+  },
+
+  // Build-time art source: each case paints one 16x16 tile. The build script
+  // (scripts/build_assets.js) renders these into assets/tilesets/overworld.png.
+  procTile(ctx, ch, x, y) {
     switch (ch) {
       case ".": // grass
         ctx.fillStyle = "#78c850"; ctx.fillRect(x, y, TILE, TILE);
@@ -191,9 +217,11 @@ const Engine = {
         ctx.fillStyle = "#e0392b"; ctx.fillRect(x, y, TILE, TILE);
         ctx.fillStyle = "#fff"; ctx.fillRect(x+6, y+3, 4, 10); ctx.fillRect(x+3, y+6, 10, 4);
         break;
-      case "M": // Mart roof marker
+      case "M": // Mart roof marker (fillRect only, so it bakes cleanly)
         ctx.fillStyle = "#3068c0"; ctx.fillRect(x, y, TILE, TILE);
-        ctx.fillStyle = "#f8d030"; ctx.font = "10px monospace"; ctx.fillText("M", x+4, y+12);
+        ctx.fillStyle = "#2050a0"; ctx.fillRect(x, y+8, TILE, 1); ctx.fillRect(x+7, y, 1, TILE);
+        ctx.fillStyle = "#f8d030"; ctx.fillRect(x+4, y+4, 2, 7); ctx.fillRect(x+10, y+4, 2, 7);
+        ctx.fillRect(x+4, y+4, 8, 2); ctx.fillRect(x+4, y+7, 6, 2);
         break;
       case "G": // gym roof marker
         ctx.fillStyle = "#586870"; ctx.fillRect(x, y, TILE, TILE);
