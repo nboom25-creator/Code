@@ -169,14 +169,21 @@ const Game = {
     this.dlgIndex = 0;
     this.dlgDone = onDone || null;
     this.mode = "dialogue";
+    this._dlgStart = Date.now(); this.dlgFull = false;
   },
+  visibleDlg() {
+    const full = this.dlgPages[this.dlgIndex] || "";
+    if (this.dlgFull) return full;
+    return full.slice(0, Math.floor((Date.now() - this._dlgStart) / Battle.TYPE_MS));
+  },
+  dlgFullyShown() { return this.visibleDlg().length >= (this.dlgPages[this.dlgIndex] || "").length; },
   advanceDialog() {
     this.dlgIndex++;
     if (this.dlgIndex >= this.dlgPages.length) {
       const cb = this.dlgDone; this.dlgDone = null;
       this.mode = "overworld"; this.setOverlay("");
       if (cb) cb();
-    }
+    } else { this._dlgStart = Date.now(); this.dlgFull = false; }
   },
 
   /* ---------- starter ---------- */
@@ -243,7 +250,10 @@ const Game = {
         if (name === "a") this.confirmStarter();
         break;
       case "dialogue":
-        if (isPress && (name === "a" || name === "b")) this.advanceDialog();
+        if (isPress && (name === "a" || name === "b")) {
+          if (!this.dlgFullyShown()) this.dlgFull = true; // reveal instantly
+          else this.advanceDialog();
+        }
         break;
       case "startmenu":  if (isPress) this.navStartMenu(name); break;
       case "partyview":  if (isPress && (name === "b")) { this.mode = "startmenu"; } break;
@@ -310,8 +320,9 @@ const Game = {
     if (this.mode === "dialogue") {
       const b = Battle.TBOX;
       Battle.drawFrame(ctx, b.x, b.y, b.w, b.h);
-      drawTextLines(ctx, this.dlgPages[this.dlgIndex] || "", b.x + 10, b.y + 8, K, 1, 1, 4);
-      if (Math.floor(Date.now() / 400) % 2) Battle.drawDownChevron(ctx, b.x + b.w - 12, b.y + b.h - 11);
+      drawTextLines(ctx, this.visibleDlg(), b.x + 10, b.y + 8, K, 1, 1, 4);
+      if (this.dlgFullyShown() && Math.floor(Date.now() / 400) % 2)
+        Battle.drawDownChevron(ctx, b.x + b.w - 12, b.y + b.h - 11);
     } else if (this.mode === "startmenu") {
       const items = ["POKéMON", "BAG", "SAVE", "CLOSE"];
       Battle.drawFrame(ctx, 158, 6, 78, 78);

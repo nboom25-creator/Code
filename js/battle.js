@@ -4,7 +4,8 @@
    ============================================================ */
 
 const Battle = {
-  TBOX: { x: 4, y: 118, w: 232, h: 38 }, // bottom message/menu frame geometry
+  TBOX: { x: 2, y: 112, w: 236, h: 46 }, // bottom ~30% message/menu frame
+  TYPE_MS: 50,                           // ms per character (0.05s typewriter)
   enemy: null,        // wild Pokémon instance
   player: null,       // active party Pokémon
   isWild: true,
@@ -44,11 +45,20 @@ const Battle = {
     this.msgQueue = Array.isArray(messages) ? messages.slice() : [messages];
     this.onMsgDone = done || null;
     this.phase = "msg";
-    this.curMsg = this.msgQueue.shift();
+    this._setMsg(this.msgQueue.shift());
     Game.requestRender();
   },
+  // Begin typing a new line.
+  _setMsg(t) { this.curMsg = t || ""; this.typeStart = Date.now(); this.typeFull = false; },
+  // Characters revealed so far (the letter-by-letter typewriter).
+  visibleMsg() {
+    const full = this.curMsg || "";
+    if (this.typeFull) return full;
+    return full.slice(0, Math.floor((Date.now() - this.typeStart) / Battle.TYPE_MS));
+  },
+  msgFullyShown() { return this.visibleMsg().length >= (this.curMsg || "").length; },
   advanceMsg() {
-    if (this.msgQueue.length) { this.curMsg = this.msgQueue.shift(); Game.requestRender(); return; }
+    if (this.msgQueue.length) { this._setMsg(this.msgQueue.shift()); Game.requestRender(); return; }
     const cb = this.onMsgDone; this.onMsgDone = null; this.curMsg = null;
     if (cb) cb();
   },
@@ -64,7 +74,10 @@ const Battle = {
   onPress(input) {
     switch (this.phase) {
       case "msg":
-        if (input === "a" || input === "b") this.advanceMsg();
+        if (input === "a" || input === "b") {
+          if (!this.msgFullyShown()) this.typeFull = true; // reveal instantly
+          else this.advanceMsg();
+        }
         break;
       case "menu":   this.navMenu(input); break;
       case "fight":  this.navFight(input); break;
@@ -479,8 +492,8 @@ const Battle = {
     const tx = x + 10, ty = y + 8, divX = x + 138;
 
     if (this.phase === "msg" || this.phase === "ballanim") {
-      drawTextLines(ctx, this.curMsg || "", tx, ty, k, 1, 1, 3);
-      if ((Math.floor(Date.now() / 400) % 2))
+      drawTextLines(ctx, this.visibleMsg(), tx, ty, k, 1, 1, 3);
+      if (this.phase === "msg" && this.msgFullyShown() && (Math.floor(Date.now() / 400) % 2))
         this.drawDownChevron(ctx, x + w - 12, y + h - 11);
       return;
     }
