@@ -91,10 +91,31 @@ const Assets = {
       this.images.overworld = overworld;
       this.sheets.player = new SpriteSheet(player, 16, 16);   // 3 cols x 4 rows
       this.tilesets.overworld = new Tileset(overworld, 16, 16);
+      // Guard: catch frame/grid mismatches before they garble the blits.
+      this.validate();
       this.ready = true;
     } catch (e) {
       this.error = e;
       console.error(e);
+    }
+  },
+
+  // Verify each sheet's pixels divide evenly into its frame grid and that the
+  // frame counts match what the game expects. Throws a precise error otherwise.
+  validate() {
+    const checks = [
+      // [name, sheet, expectedCols, expectedRows]
+      ["player.png", this.sheets.player, 3, 4],                       // 3 frames x 4 dirs
+      ["overworld.png", this.tilesets.overworld,
+        (typeof Engine !== "undefined" ? Engine.TILE_LIST.length : this.tilesets.overworld.cols), 1],
+    ];
+    for (const [name, s, cols, rows] of checks) {
+      if (s.image.width % s.fw || s.image.height % s.fh)
+        throw new Error(`${name}: ${s.image.width}x${s.image.height} not divisible by ` +
+          `${s.fw}x${s.fh} frame — frames would be truncated/misaligned.`);
+      if (s.cols !== cols || s.rows !== rows)
+        throw new Error(`${name}: parsed ${s.cols}x${s.rows} frames but expected ` +
+          `${cols}x${rows}. Re-bake the sheet (scripts/build_assets.js) or fix the frame size.`);
     }
   },
 };
