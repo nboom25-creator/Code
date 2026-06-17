@@ -47,3 +47,29 @@ def test_summary_is_a_string():
     text = rep.summary()
     assert "UNDERWATER GLIDER" in text
     assert "Buoyancy" in text
+
+
+def test_water_section_uses_local_density_and_pressure():
+    cfg = _base_config()
+    cfg["water"] = {"surface_density": 1025, "working_depth_m": 200}
+    rep = report.run(cfg)
+    assert rep.water is not None
+    # buoyancy used the denser local water (deeper than surface density)
+    assert rep.buoyancy.water_density > 1025
+    # hull pressure exceeds the simple surface-density estimate
+    assert rep.hull.pressure_pa > 1025 * 9.80665 * 200
+
+
+def test_stability_section_components():
+    cfg = _base_config()
+    cfg["stability"] = {
+        "components": [
+            {"name": "battery", "mass_kg": 10, "x_m": 0.0, "z_m": -0.03},
+            {"name": "hull", "mass_kg": 42, "x_m": 0.0, "z_m": 0.0},
+        ],
+        "cb": {"x_m": 0.0, "z_m": 0.0},
+    }
+    rep = report.run(cfg)
+    assert rep.stability is not None
+    assert rep.stability.is_stable  # CG pulled below CB by the battery
+    assert "Stability" in rep.summary()

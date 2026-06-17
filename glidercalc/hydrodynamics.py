@@ -132,3 +132,58 @@ def glide_at_best_ratio(net_force_n: float,
     """Steady glide at the lift coefficient that maximises glide ratio."""
     cl = best_glide_cl(cd0, k)
     return glide(net_force_n, wing_area_m2, cl, cd0, k, water_density)
+
+
+def polar_sweep(net_force_n: float,
+                wing_area_m2: float,
+                cd0: float,
+                k: float,
+                cl_min: float = 0.1,
+                cl_max: float = 1.2,
+                steps: int = 12,
+                water_density: float = constants.DEFAULT_WATER_DENSITY
+                ) -> list[GlideResult]:
+    """Solve the steady glide across a range of lift coefficients.
+
+    Returns one :class:`GlideResult` per lift coefficient, evenly spaced from
+    ``cl_min`` to ``cl_max``. Useful for plotting or tabulating the glide polar
+    to see how speed, angle and glide ratio trade off.
+    """
+    if steps < 2:
+        raise ValueError("steps must be >= 2")
+    if cl_min <= 0:
+        raise ValueError("cl_min must be positive")
+    span = cl_max - cl_min
+    results = []
+    for i in range(steps):
+        cl = cl_min + span * i / (steps - 1)
+        results.append(glide(net_force_n, wing_area_m2, cl, cd0, k, water_density))
+    return results
+
+
+def polar_csv(results: list[GlideResult]) -> str:
+    """Format a polar sweep as CSV text (one row per operating point)."""
+    header = ("cl,cd,glide_ratio,glide_angle_deg,path_speed_mps,"
+              "horizontal_speed_mps,vertical_speed_mps")
+    rows = [header]
+    for r in results:
+        rows.append(
+            f"{r.cl:.4f},{r.cd:.4f},{r.glide_ratio:.4f},{r.glide_angle_deg:.3f},"
+            f"{r.speed_mps:.4f},{r.horizontal_speed_mps:.4f},"
+            f"{r.vertical_speed_mps:.4f}")
+    return "\n".join(rows)
+
+
+def polar_table(results: list[GlideResult]) -> str:
+    """Format a polar sweep as an aligned text table."""
+    header = (f"  {'CL':>6} {'CD':>6} {'L/D':>6} {'angle':>7} "
+              f"{'V':>7} {'Vhoriz':>7} {'Vvert':>7}")
+    sep = "  " + "-" * (len(header) - 2)
+    lines = ["Glide polar sweep", "-----------------", header, sep]
+    for r in results:
+        lines.append(
+            f"  {r.cl:6.3f} {r.cd:6.3f} {r.glide_ratio:6.2f} "
+            f"{r.glide_angle_deg:6.1f}° {r.speed_mps:7.3f} "
+            f"{r.horizontal_speed_mps:7.3f} {r.vertical_speed_mps:7.3f}")
+    lines.append("  (speeds in m/s, angle below horizontal)")
+    return "\n".join(lines)

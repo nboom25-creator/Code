@@ -3,9 +3,11 @@
 The package is organised into four calculation domains, each in its own module:
 
 * :mod:`glidercalc.buoyancy`      - net buoyancy, displaced volume, ballast sizing
-* :mod:`glidercalc.hydrodynamics` - lift/drag, glide angle, glide ratio, speeds
+* :mod:`glidercalc.hydrodynamics` - lift/drag, glide angle, glide ratio, polar sweep
 * :mod:`glidercalc.pressure_hull` - hull stress and collapse depth (cylinder/sphere)
 * :mod:`glidercalc.energy`        - pump energy, battery cycles, range and endurance
+* :mod:`glidercalc.stability`     - CG/CB static stability and pitch/roll trim
+* :mod:`glidercalc.water`         - depth-varying seawater density and pressure
 
 All calculations use SI units unless explicitly noted:
 metres (m), kilograms (kg), seconds (s), newtons (N), pascals (Pa), joules (J).
@@ -18,5 +20,7 @@ __all__ = [
     "hydrodynamics",
     "pressure_hull",
     "energy",
+    "stability",
+    "water",
     "constants",
 ]

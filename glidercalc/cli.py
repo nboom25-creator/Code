@@ -17,7 +17,8 @@ import json
 import sys
 from typing import Any
 
-from . import __version__, buoyancy, constants, energy, hydrodynamics, pressure_hull, report
+from . import (__version__, buoyancy, constants, energy, hydrodynamics,
+               pressure_hull, report, stability, water)
 
 
 def _load_config(path: str) -> dict[str, Any]:
@@ -90,14 +91,68 @@ def _cmd_energy(args: argparse.Namespace) -> None:
     print(res.summary())
 
 
+def _cmd_polar(args: argparse.Namespace) -> None:
+    results = hydrodynamics.polar_sweep(
+        args.net_force, args.wing_area, args.cd0, args.k,
+        cl_min=args.cl_min, cl_max=args.cl_max, steps=args.steps,
+        water_density=args.water_density)
+    if args.csv:
+        text = hydrodynamics.polar_csv(results)
+        if args.csv is True or args.csv == "-":
+            print(text)
+        else:
+            with open(args.csv, "w", encoding="utf-8") as fh:
+                fh.write(text + "\n")
+            print(f"wrote {len(results)} rows to {args.csv}")
+    else:
+        best = max(results, key=lambda r: r.glide_ratio)
+        print(hydrodynamics.polar_table(results))
+        print(f"  best glide ratio {best.glide_ratio:.2f} at CL={best.cl:.3f}")
+
+
+def _cmd_stability(args: argparse.Namespace) -> None:
+    res = stability.analyze(
+        cg_x_m=args.cg_x, cg_z_m=args.cg_z,
+        cb_x_m=args.cb_x, cb_z_m=args.cb_z,
+        total_mass_kg=args.mass, g=args.gravity)
+    print(res.summary())
+    if args.mass_shift is not None and args.shift_distance is not None:
+        pitch = stability.pitch_from_mass_shift(
+            args.mass_shift, args.shift_distance, args.mass, res.bg_m)
+        print(f"  Moving {args.mass_shift:.2f} kg by "
+              f"{args.shift_distance * 1e3:.0f} mm -> pitch {pitch:+.2f} deg")
+    if args.target_pitch is not None and args.mass_shift is not None:
+        travel = stability.mass_shift_for_pitch(
+            args.target_pitch, args.mass_shift, args.mass, res.bg_m)
+        print(f"  For {args.target_pitch:+.1f} deg pitch, move "
+              f"{args.mass_shift:.2f} kg by {travel * 1e3:+.0f} mm")
+
+
+def _cmd_density(args: argparse.Namespace) -> None:
+    res = water.analyze(args.depth, surface_density=args.surface_density,
+                        gradient=args.gradient, g=args.gravity)
+    print(res.summary())
+    if args.table:
+        print()
+        print("  depth(m)  density(kg/m^3)  pressure(MPa)")
+        n = 10
+        for i in range(n + 1):
+            d = args.depth * i / n
+            rho = water.seawater_density(d, args.surface_density, args.gradient, g=args.gravity)
+            p = water.pressure_at_depth(d, args.surface_density, args.gradient, g=args.gravity)
+            print(f"  {d:8.0f}  {rho:14.2f}  {p / 1e6:12.3f}")
+
+
 def _cmd_report(args: argparse.Namespace) -> None:
     cfg = _load_config(args.config)
     rep = report.run(cfg)
     if args.json:
         from dataclasses import asdict
         out = {
+            "water": asdict(rep.water) if rep.water else None,
             "buoyancy": asdict(rep.buoyancy),
             "glide": asdict(rep.glide) if rep.glide else None,
+            "stability": asdict(rep.stability) if rep.stability else None,
             "hull": asdict(rep.hull) if rep.hull else None,
             "energy": asdict(rep.energy) if rep.energy else None,
             "warnings": rep.warnings,
@@ -169,6 +224,51 @@ def build_parser() -> argparse.ArgumentParser:
                      help="buoyancy pump efficiency (0-1)")
     _add_water_args(p_e)
     p_e.set_defaults(func=_cmd_energy)
+
+    # polar ---------------------------------------------------------------
+    p_p = sub.add_parser("polar", help="sweep the glide polar over a range of CL")
+    p_p.add_argument("--net-force", type=float, required=True,
+                     help="net buoyancy force magnitude (N)")
+    p_p.add_argument("--wing-area", type=float, required=True, help="wing area (m^2)")
+    p_p.add_argument("--cd0", type=float, required=True, help="parasite drag coeff.")
+    p_p.add_argument("--k", type=float, required=True, help="induced-drag factor")
+    p_p.add_argument("--cl-min", type=float, default=0.1, help="lowest CL in sweep")
+    p_p.add_argument("--cl-max", type=float, default=1.2, help="highest CL in sweep")
+    p_p.add_argument("--steps", type=int, default=12, help="number of points")
+    p_p.add_argument("--csv", nargs="?", const=True, default=None,
+                     help="emit CSV; optionally give a file path to write to")
+    _add_water_args(p_p)
+    p_p.set_defaults(func=_cmd_polar)
+
+    # stability -----------------------------------------------------------
+    p_s = sub.add_parser("stability", help="static stability and pitch trim")
+    p_s.add_argument("--mass", type=float, required=True, help="total mass (kg)")
+    p_s.add_argument("--cg-x", type=float, default=0.0, help="CG longitudinal pos (m)")
+    p_s.add_argument("--cg-z", type=float, required=True, help="CG vertical pos (m)")
+    p_s.add_argument("--cb-x", type=float, default=0.0, help="CB longitudinal pos (m)")
+    p_s.add_argument("--cb-z", type=float, default=0.0, help="CB vertical pos (m)")
+    p_s.add_argument("--mass-shift", type=float, default=None,
+                     help="movable mass for pitch trim (kg)")
+    p_s.add_argument("--shift-distance", type=float, default=None,
+                     help="how far the mass slides (m, +forward)")
+    p_s.add_argument("--target-pitch", type=float, default=None,
+                     help="desired pitch angle (deg) to solve travel for")
+    _add_water_args(p_s)
+    p_s.set_defaults(func=_cmd_stability)
+
+    # density -------------------------------------------------------------
+    p_d = sub.add_parser("density", help="depth-varying seawater density & pressure")
+    p_d.add_argument("--depth", type=float, required=True, help="depth (m)")
+    p_d.add_argument("--surface-density", type=float,
+                     default=constants.DENSITY_SEAWATER,
+                     help="surface water density (kg/m^3)")
+    p_d.add_argument("--gradient", type=float, default=None,
+                     help="density gradient (kg/m^3 per m); omit to derive from K")
+    p_d.add_argument("--table", action="store_true",
+                     help="also print a depth/density/pressure table")
+    p_d.add_argument("--gravity", type=float, default=constants.GRAVITY,
+                     help="gravitational acceleration in m/s^2")
+    p_d.set_defaults(func=_cmd_density)
 
     # report --------------------------------------------------------------
     p_r = sub.add_parser("report", help="full chained analysis from a config file")

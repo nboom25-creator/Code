@@ -14,7 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from . import buoyancy, constants, energy, hydrodynamics, pressure_hull
+from . import (buoyancy, constants, energy, hydrodynamics, pressure_hull,
+               stability, water)
 
 
 @dataclass
@@ -24,13 +25,21 @@ class FullReport:
     hull: Optional[pressure_hull.HullResult]
     energy: Optional[energy.EnergyResult]
     warnings: list[str]
+    water: Optional[water.WaterColumnResult] = None
+    stability: Optional[stability.StabilityResult] = None
 
     def summary(self) -> str:
         blocks = ["=" * 60, "UNDERWATER GLIDER - DESIGN REPORT", "=" * 60, ""]
+        if self.water is not None:
+            blocks.append(self.water.summary())
+            blocks.append("")
         blocks.append(self.buoyancy.summary())
         if self.glide is not None:
             blocks.append("")
             blocks.append(self.glide.summary())
+        if self.stability is not None:
+            blocks.append("")
+            blocks.append(self.stability.summary())
         if self.hull is not None:
             blocks.append("")
             blocks.append(self.hull.summary())
@@ -54,6 +63,11 @@ def run(config: dict[str, Any]) -> FullReport:
 
         water_density: 1025          # optional global override
         gravity: 9.80665             # optional global override
+        water:                       # optional depth-varying density model
+          surface_density: 1025
+          gradient: 0.0047           # kg/m^3 per m (omit to derive from K)
+          bulk_modulus_pa: 2.2e9
+          working_depth_m: 200       # depth used for buoyancy density
         buoyancy:
           mass_kg: 52.0
           displaced_volume_l: 50.6   # litres (or displaced_volume_m3)
@@ -76,10 +90,34 @@ def run(config: dict[str, Any]) -> FullReport:
           depth_band_m: 200          # defaults to hull depth if present
           hotel_power_w: 0.5
           pump_efficiency: 0.5
+        stability:                   # optional static stability / pitch trim
+          cg: {x_m: 0.0, z_m: -0.01}
+          cb: {x_m: 0.0, z_m: 0.0}
+          # or give components: [{name: battery, mass_kg: 10, x_m: 0.1, z_m: -0.02}, ...]
     """
     warnings: list[str] = []
     rho = float(config.get("water_density", constants.DEFAULT_WATER_DENSITY))
     g = float(config.get("gravity", constants.GRAVITY))
+
+    # Optional depth-varying water model. When present it sets the density used
+    # for buoyancy (at the working depth) and the pressure used for the hull.
+    water_res: Optional[water.WaterColumnResult] = None
+    water_gradient = None
+    water_surface = rho
+    water_bulk = water.SEAWATER_BULK_MODULUS
+    if "water" in config:
+        w_cfg = config["water"]
+        water_surface = float(w_cfg.get("surface_density", rho))
+        water_bulk = float(w_cfg.get("bulk_modulus_pa", water.SEAWATER_BULK_MODULUS))
+        water_gradient = (float(w_cfg["gradient"]) if "gradient" in w_cfg
+                          and w_cfg["gradient"] is not None else None)
+        working_depth = float(w_cfg.get(
+            "working_depth_m",
+            config.get("hull", {}).get("depth_m", 0.0)))
+        water_res = water.analyze(working_depth, water_surface, water_gradient,
+                                  water_bulk, g)
+        # Use the local density at the working depth for buoyancy.
+        rho = water_res.local_density
 
     if "buoyancy" not in config:
         raise ValueError("config must contain a 'buoyancy' section")
@@ -131,16 +169,23 @@ def run(config: dict[str, Any]) -> FullReport:
                     else float(h_cfg["yield_strength_mpa"]) * 1e6)
         modulus_pa = (float(h_cfg["youngs_modulus_pa"]) if "youngs_modulus_pa" in h_cfg
                       else float(h_cfg["youngs_modulus_gpa"]) * 1e9)
+        hull_depth = float(h_cfg["depth_m"])
+        # With a depth-varying water model, use the integrated pressure (which
+        # is higher than rho_surface*g*d) for a more accurate hull check.
+        hull_pressure = (water.pressure_at_depth(
+            hull_depth, water_surface, water_gradient, water_bulk, g)
+            if water_res is not None else None)
         hull_res = pressure_hull.analyze(
             shape=str(h_cfg.get("shape", "cylinder")),
             radius_m=radius,
             thickness_m=thickness,
-            depth_m=float(h_cfg["depth_m"]),
+            depth_m=hull_depth,
             yield_strength_pa=yield_pa,
             youngs_modulus_pa=modulus_pa,
             poisson_ratio=float(h_cfg.get("poisson_ratio", 0.33)),
             water_density=rho,
             g=g,
+            pressure_pa=hull_pressure,
         )
         if hull_res.yield_safety_factor < 1.5:
             warnings.append(
@@ -183,10 +228,40 @@ def run(config: dict[str, Any]) -> FullReport:
                 g=g,
             )
 
+    stability_res: Optional[stability.StabilityResult] = None
+    if "stability" in config:
+        s_cfg = config["stability"]
+        if "components" in s_cfg:
+            comps = [stability.MassComponent(
+                name=str(c.get("name", f"mass{i}")),
+                mass_kg=float(c["mass_kg"]),
+                x_m=float(c.get("x_m", 0.0)),
+                z_m=float(c.get("z_m", 0.0)),
+            ) for i, c in enumerate(s_cfg["components"])]
+            total_mass, cg_x, cg_z = stability.center_of_mass(comps)
+        else:
+            cg = s_cfg["cg"]
+            cg_x, cg_z = float(cg.get("x_m", 0.0)), float(cg.get("z_m", 0.0))
+            total_mass = float(s_cfg.get("total_mass_kg", b_res.mass_kg))
+        cb = s_cfg["cb"]
+        stability_res = stability.analyze(
+            cg_x_m=cg_x, cg_z_m=cg_z,
+            cb_x_m=float(cb.get("x_m", 0.0)), cb_z_m=float(cb.get("z_m", 0.0)),
+            total_mass_kg=total_mass,
+            buoyancy_force_n=b_res.buoyancy_force_n,
+            g=g,
+        )
+        if not stability_res.is_stable:
+            warnings.append(
+                "Vehicle is statically UNSTABLE: the centre of buoyancy is not "
+                "above the centre of gravity. Lower the CG or raise the CB.")
+
     return FullReport(
         buoyancy=b_res,
         glide=glide_res,
         hull=hull_res,
         energy=energy_res,
         warnings=warnings,
+        water=water_res,
+        stability=stability_res,
     )
