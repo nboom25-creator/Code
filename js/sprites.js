@@ -34,6 +34,24 @@ function drawGrid(ctx, grid, x, y, scale, pal = PAL) {
   }
 }
 
+/* Temporary placeholder used when a real .png sprite is missing:
+   a flat gray silhouette of the grid with a clean dark outline
+   (a dilation pass), rather than a solid colored block. */
+function drawSilhouette(ctx, grid, x, y, scale, fill = "#9aa0a8", outline = "#33373d") {
+  const filled = (r, c) => grid[r] && grid[r][c] && PAL[grid[r][c]];
+  ctx.fillStyle = outline; // outline = 1-cell dilation of the shape
+  for (let r = 0; r < grid.length; r++)
+    for (let c = 0; c < grid[r].length; c++)
+      if (filled(r, c))
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++)
+            ctx.fillRect(x + (c + dx) * scale, y + (r + dy) * scale, scale, scale);
+  ctx.fillStyle = fill;       // solid gray body on top
+  for (let r = 0; r < grid.length; r++)
+    for (let c = 0; c < grid[r].length; c++)
+      if (filled(r, c)) ctx.fillRect(x + c * scale, y + r * scale, scale, scale);
+}
+
 /* ---- Pokémon battle sprites (~16 wide). Charming, not exact. ---- */
 const MON_SPRITES = {
   bulbasaur: [

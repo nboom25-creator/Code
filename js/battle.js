@@ -394,17 +394,17 @@ const Battle = {
     ctx.fillStyle = "#eef2e2"; ctx.fillRect(0, 76, VIEW_W, 42);
     this.drawBrickDivider(ctx, 74);
 
-    // platform ovals (line-drawn)
-    this.drawPlatform(ctx, 182, 72, 44, 10);
-    this.drawPlatform(ctx, 58, 116, 48, 11);
+    // circular grass/dirt platforms centred under each combatant
+    this.drawPlatform(ctx, 186, 78, 46);
+    this.drawPlatform(ctx, 58, 110, 50);
 
-    // enemy (top-right) — front sprite or ball during a throw
+    // enemy (top-right) — 64x64 front sprite (or ball during a throw)
     const bob = Math.round(Math.sin(this.introBounce * 0.08) * 2);
-    if (this.phase === "ballanim") this.drawBall(ctx, 172, 44);
-    else drawGrid(ctx, monSprite(this.enemy.species), 150, 8 + bob, 4);
+    if (this.phase === "ballanim") this.drawBall(ctx, 178, 50);
+    else this.drawMon(ctx, this.enemy.species, "front", 186, 80 + bob);
 
-    // player (bottom-left) — rear sprite
-    drawGrid(ctx, monBackSprite(this.player.species), 26, 54, 4);
+    // player (bottom-left) — 64x64 rear sprite
+    this.drawMon(ctx, this.player.species, "back", 58, 114);
 
     // status boxes
     this.drawStatusBox(ctx, this.enemy, this.enemyDispHP, 10, 14, 112, false);
@@ -421,11 +421,36 @@ const Battle = {
     for (let x = 4; x < VIEW_W; x += 8) ctx.fillRect(x, y + 2, 1, 1);
   },
 
-  drawPlatform(ctx, cx, cy, rx, ry) {
-    ctx.strokeStyle = "#b7c29a"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.ellipse(cx + 0.5, cy + 0.5, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = "#d4dcc2";
-    ctx.beginPath(); ctx.ellipse(cx + 0.5, cy + 0.5, rx - 3, ry - 2, 0, 0, Math.PI * 2); ctx.stroke();
+  // A filled circular grass/dirt platform (an ellipse with a shaded rim).
+  drawPlatform(ctx, cx, cy, r) {
+    const ry = Math.round(r * 0.34);
+    const ell = (rx, rry, fill) => {
+      ctx.fillStyle = fill; ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, rry, 0, 0, Math.PI * 2); ctx.fill();
+    };
+    ell(r + 1, ry + 1, "#7aa84a");          // dark rim
+    ell(r, ry, "#9ccc63");                  // grass top
+    ell(r - 4, ry - 2, "#b6dd86");          // lighter inner
+    // a couple of dirt speckles for texture
+    ctx.fillStyle = "#8a6a3a";
+    ctx.fillRect(cx - r + 8, cy + 1, 2, 1);
+    ctx.fillRect(cx + r - 12, cy - 1, 3, 1);
+    ctx.fillRect(cx - 4, cy + ry - 3, 2, 1);
+  },
+
+  // Draw a Pokémon at feet point (fx, fy): a real 64x64 PNG when present,
+  // otherwise a gray silhouette placeholder built from the procedural grid.
+  drawMon(ctx, species, side, fx, fy) {
+    const px = (typeof Assets !== "undefined" && Assets.SPRITE_PX) || 64;
+    const img = (typeof Assets !== "undefined") ? Assets.battleSprite(species, side) : null;
+    if (img) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, Math.round(fx - px / 2), Math.round(fy - px), px, px);
+      return;
+    }
+    const grid = side === "back" ? monBackSprite(species) : monSprite(species);
+    const scale = 4, gw = grid[0].length * scale, gh = grid.length * scale;
+    drawSilhouette(ctx, grid, Math.round(fx - gw / 2), Math.round(fy - gh), scale);
   },
 
   drawBall(ctx, x, y) {

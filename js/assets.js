@@ -71,6 +71,39 @@ const Assets = {
   ready: false,
   error: null,
 
+  // ---- battle sprites: 64x64 transparent PNGs in assets/sprites/ ----
+  // Keyed "<species>_<side>" (e.g. "charmander_back", "pidgey_front").
+  battle: {},       // key -> { state: "loading"|"ready"|"missing", img }
+  _missing: [],
+  SPRITE_PX: 64,
+
+  // Return the loaded Image for a battle sprite, or null while it loads /
+  // if its file is missing. First call kicks off the (cached) load.
+  battleSprite(species, side) {
+    const key = species + "_" + side;
+    let rec = this.battle[key];
+    if (!rec) {
+      rec = this.battle[key] = { state: "loading", img: null };
+      const img = new Image();
+      img.onload = () => { rec.img = img; rec.state = "ready"; };
+      img.onerror = () => { rec.state = "missing"; this._noteMissing(key + ".png"); };
+      img.src = "assets/sprites/" + key + ".png";
+    }
+    return rec.state === "ready" ? rec.img : null;
+  },
+
+  // Collect missing filenames and emit ONE clean warning (debounced).
+  _noteMissing(file) {
+    this._missing.push(file);
+    clearTimeout(this._missingTimer);
+    this._missingTimer = setTimeout(() => {
+      console.warn(
+        "[assets] Missing battle sprite(s) — drop 64x64 PNGs in assets/sprites/.\n" +
+        "Using a gray silhouette placeholder for:\n  " + this._missing.join("\n  "));
+      this._missing = [];
+    }, 300);
+  },
+
   loadImage(src) {
     return new Promise((resolve, reject) => {
       const img = new Image();
