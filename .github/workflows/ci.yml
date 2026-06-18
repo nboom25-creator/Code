@@ -27,7 +27,7 @@ jobs:
           python -m pip install --upgrade pip
           # Core + dev deps. scikit-learn enables the ML-strategy tests; without
           # it those tests are skipped via importorskip.
-          pip install pandas numpy PyYAML python-dotenv pytest scikit-learn
+          pip install pandas numpy PyYAML python-dotenv pytest scikit-learn pydantic
 
       - name: Run tests
         run: pytest -q

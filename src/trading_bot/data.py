@@ -83,3 +83,24 @@ class DataProvider:
             df = df.xs(symbol, level="symbol")
         keep = ["open", "high", "low", "close", "volume"]
         return df[keep].sort_index()
+
+    def get_news(self, symbol: str, *, limit: int = 10) -> list[dict]:
+        """Return recent news items for a symbol from Alpaca's news API.
+
+        Each item is a dict with headline, summary, source, and created_at.
+        Returns an empty list if the news endpoint is unavailable.
+        """
+        from alpaca.data.historical.news import NewsClient
+        from alpaca.data.requests import NewsRequest
+
+        client = NewsClient(self._creds.api_key, self._creds.api_secret)
+        response = client.get_news(NewsRequest(symbols=symbol, limit=limit))
+        items = []
+        for article in getattr(response, "news", []) or []:
+            items.append({
+                "headline": getattr(article, "headline", ""),
+                "summary": getattr(article, "summary", ""),
+                "source": getattr(article, "source", ""),
+                "created_at": str(getattr(article, "created_at", "")),
+            })
+        return items

@@ -11,5 +11,10 @@ alpaca-py>=0.20
 # Safe to omit — the ML strategy/tests are skipped if it's absent.
 scikit-learn>=1.3
 
+# Autonomous LLM agent layer (the `agent` command). Pydantic powers the
+# structured cognitive-phase outputs; anthropic is the Claude SDK.
+anthropic>=0.40
+pydantic>=2.5
+
 # Dev / test
 pytest>=7.4

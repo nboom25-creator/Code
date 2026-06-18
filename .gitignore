@@ -23,3 +23,6 @@ htmlcov/
 data/
 results/
 *.log
+
+# Agent runtime artifacts (audit trail + day state)
+logs/

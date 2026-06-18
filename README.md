@@ -120,9 +120,57 @@ src/trading_bot/
   notify.py       # log / webhook notifications
   report.py       # HTML dashboard generation
   cli.py          # command-line entry point
+  agent/          # autonomous LLM agent (Research-then-Decide loop)
+    schemas.py    #   structured outputs per cognitive phase (Pydantic)
+    tools.py      #   read-only perception tools + driver-only execute_order
+    guardrails.py #   hardcoded 5% sizing / 2% drawdown / HOLD-on-bad-data
+    llm.py        #   Claude (Opus 4.8) + offline scripted LLM (same interface)
+    cognition.py  #   the five-phase loop driver
+    audit.py      #   logs/YYYY-MM-DD.md transparency trail
+    runner.py     #   daily / cron runner + drawdown circuit breaker
+CLAUDE.md         # the agent's permanent system manual
 tests/            # offline unit tests
 .github/workflows/ci.yml  # CI: pytest on Python 3.10–3.12
 ```
+
+## Autonomous LLM agent (Research-then-Decide)
+
+On top of the rule-based engine there's an optional **agentic layer** driven by
+Claude (`claude-opus-4-8`) that runs a strict, multi-step cognitive loop:
+
+```
+Perception → Cognitive Planning → Reflection (bull/bear) → Action → Memory/Audit
+```
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...   # required for the agent
+python -m trading_bot agent           # runs one daily cycle per watchlist symbol
+```
+
+**Design principle — the LLM proposes, deterministic code disposes.** The model
+gets three *read-only* tools (`get_market_bars`, `get_company_news`,
+`get_portfolio_state`) to drive Perception, and emits a *structured* decision at
+each phase (validated by Pydantic via the Structured Outputs API). It is **never**
+given the `execute_order` tool. Every proposed trade is then run through a
+hardcoded guardrail layer before the harness — not the model — executes:
+
+- **5% max position size** — buys are resized down to ≤5% of equity, rejected
+  if that rounds below one share.
+- **2% daily drawdown circuit breaker** — trading halts for the day and alerts.
+- **HOLD on bad data** — if perception fails/returns empty data, the cycle
+  short-circuits to HOLD and logs a system exception (no LLM call to decide).
+
+No amount of prompt injection or hallucinated reasoning can place an unsafe or
+oversized trade, because the limits live in `agent/guardrails.py`, not the prompt.
+
+Every cycle is written to `logs/YYYY-MM-DD.md` — data seen, reasoning, both the
+bull and bear case, the decision, the guardrail verdict, and the action taken —
+for complete transparency. The agent's permanent operating manual is
+[`CLAUDE.md`](CLAUDE.md), loaded as its system prompt.
+
+To run it nightly, wire `python -m trading_bot agent` into cron or the project's
+session-start hook. The agent layer is fully unit-tested offline (no API key
+needed) via a scripted LLM and in-memory broker/data fakes.
 
 ## Disclaimer
 

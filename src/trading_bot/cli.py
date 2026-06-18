@@ -158,6 +158,32 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_agent(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    try:
+        config.validate()
+    except ValueError as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return 2
+    if not __import__("os").getenv("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY is not set — the agent needs it to call Claude.",
+              file=sys.stderr)
+        return 2
+    from .agent.runner import build_runner
+
+    runner = build_runner(config)
+    result = runner.run_day()
+    if result["halted"]:
+        print(f"Trading halted: {result['reason']}")
+    else:
+        print(f"Completed {len(result['results'])} cognitive cycles. "
+              f"See logs/ for the full audit trail.")
+        for r in result["results"]:
+            tag = "executed" if r.executed else ("HOLD/degraded" if r.degraded else "no order")
+            print(f"  {r.ticker}: {r.final_action} qty={r.quantity} ({tag})")
+    return 0
+
+
 def _cmd_status(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     try:
@@ -229,6 +255,10 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="run the live (paper/live) engine")
     run.add_argument("--once", action="store_true", help="run a single cycle and exit")
     run.set_defaults(func=_cmd_run)
+
+    agent = sub.add_parser(
+        "agent", help="run the autonomous LLM agent (Research-then-Decide loop)")
+    agent.set_defaults(func=_cmd_agent)
 
     status = sub.add_parser("status", help="show account + positions")
     status.set_defaults(func=_cmd_status)
