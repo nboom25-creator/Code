@@ -1,0 +1,49 @@
+# Trading bot configuration.
+# Secrets (API keys) belong in .env, NOT here.
+
+# "paper" (default, safe) or "live" (real money — requires extra confirmation).
+mode: paper
+
+# Tickers the bot will consider.
+symbols:
+  - AAPL
+  - MSFT
+  - SPY
+
+# Bar timeframe for signals: "1Min", "5Min", "15Min", "1Hour", "1Day".
+timeframe: 1Day
+
+# How often the live loop wakes up, in seconds.
+poll_interval_seconds: 60
+
+strategy:
+  # "sma_crossover" or "rsi_reversion"
+  name: sma_crossover
+  params:
+    # SMA crossover
+    fast_period: 20
+    slow_period: 50
+    # RSI mean-reversion (used when name == rsi_reversion)
+    rsi_period: 14
+    oversold: 30
+    overbought: 70
+
+risk:
+  # Max fraction of total equity allowed in a single position.
+  max_position_pct: 0.20
+  # Fraction of equity risked per trade (used to size positions vs. stop).
+  risk_per_trade_pct: 0.01
+  # Stop-loss distance as a fraction of entry price (drives position sizing).
+  stop_loss_pct: 0.05
+  # Maximum number of concurrent open positions.
+  max_open_positions: 5
+  # Halt all new entries once daily loss exceeds this fraction of equity.
+  daily_loss_limit_pct: 0.03
+
+backtest:
+  starting_cash: 100000
+  # Per-trade commission in dollars (Alpaca equities are commission-free; this
+  # lets you stress-test with costs).
+  commission: 0.0
+  # Slippage as a fraction of price applied against you on each fill.
+  slippage_pct: 0.0005

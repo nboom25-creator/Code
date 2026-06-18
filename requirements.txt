@@ -1,0 +1,11 @@
+# Core
+pandas>=2.0
+numpy>=1.24
+PyYAML>=6.0
+python-dotenv>=1.0
+
+# Broker / market data (Alpaca)
+alpaca-py>=0.20
+
+# Dev / test
+pytest>=7.4
