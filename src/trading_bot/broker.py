@@ -58,10 +58,14 @@ class AlpacaBroker:
         if self._client is None:
             from alpaca.trading.client import TradingClient
 
+            kwargs = {}
+            if self.config.credentials.base_url:
+                kwargs["url_override"] = self.config.credentials.base_url
             self._client = TradingClient(
                 self.config.credentials.api_key,
                 self.config.credentials.api_secret,
                 paper=self._paper,
+                **kwargs,
             )
         return self._client
 

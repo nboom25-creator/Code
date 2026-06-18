@@ -104,3 +104,96 @@ class DataProvider:
                 "created_at": str(getattr(article, "created_at", "")),
             })
         return items
+
+
+# Map our timeframe strings to yfinance (interval, period) pairs.
+_YF_TIMEFRAME = {
+    "1Min": ("1m", "5d"),
+    "5Min": ("5m", "1mo"),
+    "15Min": ("15m", "1mo"),
+    "1Hour": ("1h", "3mo"),
+    "1Day": ("1d", "1y"),
+}
+
+
+class YFinanceDataProvider:
+    """Free, keyless market data + news via the ``yfinance`` library.
+
+    Implements the same ``get_bars`` / ``get_news`` interface as the Alpaca
+    :class:`DataProvider`, so the agent's tools work with no broker credentials —
+    ideal for the dry-run sandbox. ``yfinance`` is imported lazily.
+    """
+
+    def get_bars(self, symbol: str, *, timeframe: str = "1Day",
+                 limit: int | None = None) -> pd.DataFrame:
+        import yfinance as yf
+
+        interval, period = _YF_TIMEFRAME.get(timeframe, ("1d", "1y"))
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period=period, interval=interval, auto_adjust=False)
+        if df.empty:
+            return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+        df = df.rename(columns={
+            "Open": "open", "High": "high", "Low": "low",
+            "Close": "close", "Volume": "volume",
+        })
+        df = df[["open", "high", "low", "close", "volume"]].sort_index()
+        if limit:
+            df = df.tail(limit)
+        return df
+
+    def get_news(self, symbol: str, *, limit: int = 10) -> list[dict]:
+        import yfinance as yf
+
+        raw = getattr(yf.Ticker(symbol), "news", None) or []
+        items: list[dict] = []
+        for entry in raw[:limit]:
+            # yfinance has changed this shape across versions; handle both the
+            # flat form and the newer nested {"content": {...}} form.
+            content = entry.get("content", entry) if isinstance(entry, dict) else {}
+            headline = content.get("title") or entry.get("title", "")
+            summary = content.get("summary") or content.get("description", "")
+            provider = content.get("provider") or {}
+            source = (provider.get("displayName") if isinstance(provider, dict)
+                      else "") or entry.get("publisher", "")
+            created = (content.get("pubDate") or entry.get("providerPublishTime", ""))
+            items.append({
+                "headline": headline,
+                "summary": summary,
+                "source": source,
+                "created_at": str(created),
+            })
+        return items
+
+
+class SyntheticDataProvider:
+    """Offline, deterministic market data + news for demonstrating the dry-run
+    where live data egress is unavailable.
+
+    Produces a gently trending OHLCV series (so the loop reaches a real BUY/HOLD
+    decision) and a couple of canned, sentiment-bearing headlines. Not real data —
+    for plumbing/demo only.
+    """
+
+    def __init__(self, *, trend: float = 0.004, seed: int = 7) -> None:
+        self.trend = trend
+        self.seed = seed
+
+    def get_bars(self, symbol: str, *, timeframe: str = "1Day",
+                 limit: int | None = None) -> pd.DataFrame:
+        from .backtest import generate_synthetic_bars
+
+        # Vary the seed per symbol so different tickers get different paths.
+        seed = self.seed + (sum(ord(c) for c in symbol) % 97)
+        bars = generate_synthetic_bars(n=60, seed=seed, trend=self.trend)
+        return bars.tail(limit) if limit else bars
+
+    def get_news(self, symbol: str, *, limit: int = 10) -> list[dict]:
+        return [
+            {"headline": f"{symbol} beats earnings, shares surge to record",
+             "summary": "Strong revenue growth and raised guidance.",
+             "source": "synthetic", "created_at": "2026-06-18"},
+            {"headline": f"Analysts upgrade {symbol} on momentum",
+             "summary": "Several desks turn bullish.",
+             "source": "synthetic", "created_at": "2026-06-18"},
+        ][:limit]

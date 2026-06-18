@@ -38,3 +38,5 @@ jobs:
           python -m trading_bot backtest --synthetic --strategy sma_crossover
           python -m trading_bot optimize --synthetic --strategy rsi_reversion --top 3
           python -m trading_bot walkforward --synthetic --strategy sma_crossover --bars 800
+          # Agent dry-run: offline brain + synthetic data, no network/keys needed.
+          python run_dry_run.py --offline --sim-data --symbols AAPL,MSFT

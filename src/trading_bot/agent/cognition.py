@@ -41,12 +41,16 @@ class CognitiveLoop:
         guardrails: Guardrails,
         audit: AuditLog,
         system_prompt: str,
+        dry_run: bool = False,
     ) -> None:
         self.llm = llm
         self.tools = tools
         self.guardrails = guardrails
         self.audit = audit
         self.system_prompt = system_prompt
+        # In dry-run mode, the final execute_order call is intercepted: the
+        # proposed trade and its reasoning are logged, but no order is sent.
+        self.dry_run = dry_run
 
     # ------------------------------------------------------------------ #
     def run_for_ticker(self, ticker: str, *, equity: float) -> CycleResult:
@@ -129,15 +133,23 @@ class CognitiveLoop:
         # --- Execution (driver only) ---------------------------------- #
         executed = False
         if verdict.approved and verdict.action in ("BUY", "SELL"):
-            try:
-                self.tools.execute_order(
-                    ticker, verdict.quantity, verdict.action.lower(), "market"
+            if self.dry_run:
+                # Intercept: do NOT send the order. Log the proposed trade only.
+                action_result = (
+                    f"DRY RUN — would have executed {verdict.action} "
+                    f"{verdict.quantity} {ticker} (~${verdict.quantity * price:,.0f}). "
+                    f"No order sent to the broker."
                 )
-                action_result = f"Executed {verdict.action} {verdict.quantity} {ticker}."
-                executed = True
-            except Exception as exc:  # noqa: BLE001
-                action_result = f"Execution FAILED: {exc}"
-                self.audit.system_event(f"{ticker}: order execution failed: {exc}")
+            else:
+                try:
+                    self.tools.execute_order(
+                        ticker, verdict.quantity, verdict.action.lower(), "market"
+                    )
+                    action_result = f"Executed {verdict.action} {verdict.quantity} {ticker}."
+                    executed = True
+                except Exception as exc:  # noqa: BLE001
+                    action_result = f"Execution FAILED: {exc}"
+                    self.audit.system_event(f"{ticker}: order execution failed: {exc}")
         else:
             action_result = f"No order placed ({verdict.action})."
 

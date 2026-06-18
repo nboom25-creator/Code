@@ -24,7 +24,7 @@ from ..notify import Notifier
 from .audit import AuditLog
 from .cognition import CognitiveLoop
 from .guardrails import Guardrails
-from .llm import LLM, AnthropicLLM
+from .llm import LLM, AnthropicLLM, HeuristicLLM
 from .tools import AgentTools
 
 log = logging.getLogger("trading_bot.agent")
@@ -78,6 +78,7 @@ class AgentRunner:
         notifier: Notifier | None = None,
         day_state: DayState | None = None,
         watchlist: list[str] | None = None,
+        dry_run: bool = False,
     ) -> None:
         self.config = config
         self.broker = broker
@@ -86,9 +87,11 @@ class AgentRunner:
         self.notifier = notifier or Notifier()
         self.day_state = day_state or DayState()
         self.watchlist = watchlist or config.symbols
+        self.dry_run = dry_run
         self.loop = CognitiveLoop(
             llm=llm, tools=tools, guardrails=self.guardrails,
             audit=self.audit, system_prompt=load_system_manual(),
+            dry_run=dry_run,
         )
 
     def run_day(self) -> dict:
@@ -137,3 +140,67 @@ def build_runner(config: Config | None = None) -> AgentRunner:
     tools = AgentTools(broker, data, default_timeframe=config.timeframe)
     llm = AnthropicLLM()
     return AgentRunner(config=config, llm=llm, tools=tools, broker=broker)
+
+
+def build_dry_run_runner(
+    config: Config | None = None,
+    *,
+    offline: bool = False,
+    sim_data: bool = False,
+    watchlist: list[str] | None = None,
+    sim_equity: float = 100_000.0,
+) -> tuple[AgentRunner, dict]:
+    """Wire a dry-run runner, auto-selecting providers from what's in ``.env``.
+
+    * Market data: free, keyless yfinance (no credentials required).
+    * Broker: Alpaca **paper** if ALPACA keys are present, else a simulated
+      in-memory paper account.
+    * Brain: Claude if ``ANTHROPIC_API_KEY`` is set and ``offline`` is False,
+      else the deterministic :class:`HeuristicLLM`.
+
+    Returns ``(runner, selections)`` where ``selections`` describes what was
+    wired, for transparent logging.
+    """
+    import os
+
+    config = config or load_config()
+
+    if sim_data:
+        from ..data import SyntheticDataProvider
+
+        data = SyntheticDataProvider()
+        data_kind = "synthetic (offline demo)"
+    else:
+        from ..data import YFinanceDataProvider
+
+        data = YFinanceDataProvider()
+        data_kind = "yfinance"
+
+    # Broker selection.
+    if config.credentials.api_key and config.credentials.api_secret:
+        from ..broker import AlpacaBroker
+
+        broker = AlpacaBroker(config)
+        broker_kind = "Alpaca paper" if broker.is_paper else "Alpaca LIVE"
+    else:
+        from .paper_sim import SimPaperBroker
+
+        broker = SimPaperBroker(equity=sim_equity, cash=sim_equity)
+        broker_kind = f"simulated paper (${sim_equity:,.0f})"
+
+    # Brain selection.
+    if offline or not os.getenv("ANTHROPIC_API_KEY"):
+        llm: LLM = HeuristicLLM()
+        brain = "HeuristicLLM (offline)"
+    else:
+        llm = AnthropicLLM()
+        brain = "Claude (claude-opus-4-8)"
+
+    tools = AgentTools(broker, data, default_timeframe=config.timeframe)
+    runner = AgentRunner(
+        config=config, llm=llm, tools=tools, broker=broker,
+        watchlist=watchlist or config.symbols, dry_run=True,
+    )
+    selections = {"data": data_kind, "broker": broker_kind, "brain": brain,
+                  "watchlist": runner.watchlist}
+    return runner, selections

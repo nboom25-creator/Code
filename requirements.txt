@@ -7,6 +7,9 @@ python-dotenv>=1.0
 # Broker / market data (Alpaca)
 alpaca-py>=0.20
 
+# Free, keyless market data + news for the dry-run sandbox.
+yfinance>=0.2.40
+
 # Optional: enables the "ml" strategy (machine-learning signal layer).
 # Safe to omit — the ML strategy/tests are skipped if it's absent.
 scikit-learn>=1.3

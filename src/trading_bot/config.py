@@ -53,6 +53,7 @@ class Credentials:
     api_key: str | None = None
     api_secret: str | None = None
     live_confirm: str | None = None
+    base_url: str | None = None
 
 
 @dataclass
@@ -117,6 +118,7 @@ def load_config(path: str | Path = "config.yaml", *, load_env: bool = True) -> C
             api_key=os.getenv("ALPACA_API_KEY"),
             api_secret=os.getenv("ALPACA_API_SECRET"),
             live_confirm=os.getenv("LIVE_TRADING_CONFIRM"),
+            base_url=os.getenv("ALPACA_API_BASE_URL"),
         ),
     )
     return cfg

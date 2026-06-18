@@ -172,6 +172,35 @@ To run it nightly, wire `python -m trading_bot agent` into cron or the project's
 session-start hook. The agent layer is fully unit-tested offline (no API key
 needed) via a scripted LLM and in-memory broker/data fakes.
 
+### Safe dry-run (`run_dry_run.py`)
+
+Triggers the entire research loop **exactly once** and **intercepts the final
+`execute_order`** — no trade is ever sent. The proposed trade and its Bull/Bear
+reasoning are written to `logs/YYYY-MM-DD.md`.
+
+```bash
+# Fully offline — synthetic data + local heuristic analyst, zero credentials:
+python run_dry_run.py --offline --sim-data --symbols AAPL,MSFT
+
+# Free live data (yfinance) + offline analyst:
+python run_dry_run.py --offline --symbols AAPL
+
+# Real research with Claude (needs ANTHROPIC_API_KEY in .env):
+python run_dry_run.py --symbols AAPL
+```
+
+Providers are auto-selected from `.env`, and each is independent:
+
+| Layer        | With keys in `.env`            | Without (default)                 |
+| ------------ | ------------------------------ | --------------------------------- |
+| Market data  | `yfinance` (free, keyless)     | `--sim-data` for synthetic        |
+| News + sentiment | yfinance headlines + local lexicon scorer | synthetic headlines           |
+| Portfolio    | Alpaca **paper** account       | simulated in-memory $100k account |
+| Reasoning    | Claude (`ANTHROPIC_API_KEY`)   | offline `HeuristicLLM`            |
+
+All keys, secrets, and base URLs load strictly from `.env` via `python-dotenv`
+(see [`.env.example`](.env.example)) — nothing is hardcoded.
+
 ## Disclaimer
 
 This software is provided for educational purposes and as a starting point. It

@@ -115,8 +115,16 @@ class AgentTools:
         })
 
     def get_company_news(self, ticker: str) -> str:
+        from .sentiment import aggregate, tag_news
+
         news = self.data.get_news(ticker, limit=10)
-        return json.dumps({"ticker": ticker, "count": len(news), "items": news[:10]})
+        tagged = tag_news(news)
+        return json.dumps({
+            "ticker": ticker,
+            "count": len(tagged),
+            "sentiment": aggregate(tagged),
+            "items": tagged[:10],
+        })
 
     def get_portfolio_state(self) -> str:
         account = self.broker.get_account()
