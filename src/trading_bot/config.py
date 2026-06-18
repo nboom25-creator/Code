@@ -35,6 +35,8 @@ class RiskConfig:
     max_position_pct: float = 0.20
     risk_per_trade_pct: float = 0.01
     stop_loss_pct: float = 0.05
+    # Take-profit distance as a fraction of entry price. 0 disables it.
+    take_profit_pct: float = 0.10
     max_open_positions: int = 5
     daily_loss_limit_pct: float = 0.03
 

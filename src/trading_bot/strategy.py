@@ -127,14 +127,107 @@ class RSIMeanReversion(Strategy):
         return Signal.HOLD
 
 
+class MACDCrossover(Strategy):
+    """Buy when the MACD line crosses above its signal line; sell on the
+    opposite cross. A momentum rule that reacts faster than raw SMA crossovers."""
+
+    name = "macd_crossover"
+
+    def __init__(
+        self,
+        fast: int = 12,
+        slow: int = 26,
+        signal: int = 9,
+        **_: Any,
+    ) -> None:
+        if fast >= slow:
+            raise ValueError("fast must be < slow")
+        super().__init__(fast=fast, slow=slow, signal=signal)
+        self.fast = fast
+        self.slow = slow
+        self.signal = signal
+
+    @property
+    def min_bars(self) -> int:
+        return self.slow + self.signal + 1
+
+    def generate_signal(self, bars: pd.DataFrame) -> Signal:
+        self._validate(bars)
+        if len(bars) < self.min_bars:
+            return Signal.HOLD
+        macd_df = indicators.macd(bars["close"], self.fast, self.slow, self.signal)
+        line = macd_df["macd"]
+        sig = macd_df["signal"]
+        if pd.isna(line.iloc[-2]) or pd.isna(sig.iloc[-2]):
+            return Signal.HOLD
+        prev = line.iloc[-2] - sig.iloc[-2]
+        curr = line.iloc[-1] - sig.iloc[-1]
+        if prev <= 0 < curr:
+            return Signal.BUY
+        if prev >= 0 > curr:
+            return Signal.SELL
+        return Signal.HOLD
+
+
+class BollingerBreakout(Strategy):
+    """Buy when price breaks out above the upper Bollinger band; exit when it
+    falls back below the middle band. A volatility-breakout momentum rule."""
+
+    name = "bollinger_breakout"
+
+    def __init__(self, period: int = 20, num_std: float = 2.0, **_: Any) -> None:
+        if period < 2:
+            raise ValueError("period must be >= 2")
+        super().__init__(period=period, num_std=num_std)
+        self.period = period
+        self.num_std = num_std
+
+    @property
+    def min_bars(self) -> int:
+        return self.period + 1
+
+    def generate_signal(self, bars: pd.DataFrame) -> Signal:
+        self._validate(bars)
+        if len(bars) < self.min_bars:
+            return Signal.HOLD
+        bands = indicators.bollinger_bands(bars["close"], self.period, self.num_std)
+        close = bars["close"]
+        if pd.isna(bands["upper"].iloc[-2]):
+            return Signal.HOLD
+        prev_close, curr_close = close.iloc[-2], close.iloc[-1]
+        prev_upper, curr_upper = bands["upper"].iloc[-2], bands["upper"].iloc[-1]
+        prev_mid, curr_mid = bands["mid"].iloc[-2], bands["mid"].iloc[-1]
+        # Breakout up: close crosses above the upper band.
+        if prev_close <= prev_upper and curr_close > curr_upper:
+            return Signal.BUY
+        # Exit: close crosses back below the middle band.
+        if prev_close >= prev_mid and curr_close < curr_mid:
+            return Signal.SELL
+        return Signal.HOLD
+
+
 STRATEGIES: dict[str, type[Strategy]] = {
     SMACrossover.name: SMACrossover,
     RSIMeanReversion.name: RSIMeanReversion,
+    MACDCrossover.name: MACDCrossover,
+    BollingerBreakout.name: BollingerBreakout,
 }
+
+
+def register_strategy(cls: type[Strategy]) -> type[Strategy]:
+    """Register a strategy subclass so it can be built by name. Usable as a
+    decorator. Lets optional strategies (e.g. the ML layer) opt in without a
+    hard import dependency in this module."""
+    STRATEGIES[cls.name] = cls
+    return cls
 
 
 def build_strategy(name: str, params: dict[str, Any] | None = None) -> Strategy:
     """Instantiate a registered strategy by name."""
+    if name not in STRATEGIES and name == "ml":
+        # The ML strategy lives in an optional module that self-registers on
+        # import (so scikit-learn stays an optional dependency).
+        from . import ml_strategy  # noqa: F401
     try:
         cls = STRATEGIES[name]
     except KeyError:

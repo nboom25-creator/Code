@@ -71,13 +71,14 @@ class RiskManager:
         """
         if price <= 0 or equity <= 0:
             return 0
-        stop_distance = price * self.config.stop_loss_pct
-        if stop_distance <= 0:
-            return 0
-        risk_dollars = equity * self.config.risk_per_trade_pct
-        risk_based_qty = risk_dollars / stop_distance
         cap_dollars = equity * self.config.max_position_pct
         cap_qty = cap_dollars / price
+        stop_distance = price * self.config.stop_loss_pct
+        if stop_distance <= 0:
+            # No stop configured: fall back to the position-size cap only.
+            return int(cap_qty)
+        risk_dollars = equity * self.config.risk_per_trade_pct
+        risk_based_qty = risk_dollars / stop_distance
         return int(min(risk_based_qty, cap_qty))
 
     def evaluate_entry(

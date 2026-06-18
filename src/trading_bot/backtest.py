@@ -73,10 +73,33 @@ class Backtester:
 
         equity_points: list[float] = []
         index = bars.index
+        stop_pct = self.risk.config.stop_loss_pct
+        tp_pct = self.risk.config.take_profit_pct
+        entry_price = 0.0  # tracks the open position's entry for stop/take-profit
 
         for i in range(len(bars)):
             window = bars.iloc[: i + 1]
             price = float(bars["close"].iloc[i])
+            high = float(bars["high"].iloc[i])
+            low = float(bars["low"].iloc[i])
+
+            # 1) Protective exits run first, intrabar, before any new signal.
+            if portfolio.has_position(symbol):
+                stop_price = entry_price * (1 - stop_pct) if stop_pct else 0.0
+                tp_price = entry_price * (1 + tp_pct) if tp_pct else 0.0
+                exit_at: float | None = None
+                if stop_pct and low <= stop_price:
+                    # Conservatively assume the stop fills at the stop level
+                    # (or the open, if it gapped through).
+                    exit_at = min(stop_price, float(bars["open"].iloc[i]))
+                elif tp_pct and high >= tp_price:
+                    exit_at = max(tp_price, float(bars["open"].iloc[i]))
+                if exit_at is not None:
+                    qty = portfolio.positions[symbol].quantity
+                    portfolio.sell(symbol, qty, exit_at,
+                                   commission=self.bt.commission, timestamp=index[i])
+                    entry_price = 0.0
+
             signal = self.strategy.generate_signal(window)
             equity = portfolio.equity({symbol: price})
 
@@ -95,12 +118,14 @@ class Backtester:
                         portfolio.buy(symbol, qty, fill,
                                       commission=self.bt.commission,
                                       timestamp=index[i])
+                        entry_price = fill
             elif signal is Signal.SELL and portfolio.has_position(symbol):
                 fill = _apply_slippage(price, "sell", self.bt.slippage_pct)
                 qty = portfolio.positions[symbol].quantity
                 portfolio.sell(symbol, qty, fill,
                                commission=self.bt.commission,
                                timestamp=index[i])
+                entry_price = 0.0
 
             equity_points.append(portfolio.equity({symbol: price}))
 

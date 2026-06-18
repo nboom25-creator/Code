@@ -12,12 +12,14 @@ behaviour matches what you validated.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import time
 
 from .broker import AlpacaBroker
 from .config import Config
 from .data import DataProvider
+from .notify import Notifier
 from .risk import RiskManager
 from .strategy import Signal, build_strategy
 
@@ -32,15 +34,34 @@ class TradingEngine:
         self.data = DataProvider(config.credentials)
         self.strategy = build_strategy(config.strategy.name, config.strategy.params)
         self.risk = RiskManager(config.risk)
-        self._day_started = False
+        self.notifier = Notifier()
+        self._day = None  # current trading date
+        self._day_start_equity = 0.0
+        self._trades_today = 0
 
     # ------------------------------------------------------------------ #
     def _ensure_day_started(self) -> None:
-        if not self._day_started:
+        today = dt.date.today()
+        if self._day is None:
             account = self.broker.get_account()
-            self.risk.start_day(account.equity)
-            self._day_started = True
-            log.info("Trading day started. Opening equity: $%.2f", account.equity)
+            self._start_day(today, account.equity)
+        elif today != self._day:
+            # Day rolled over: summarise yesterday, then reset for the new day.
+            account = self.broker.get_account()
+            self.notifier.daily_summary(
+                equity=account.equity,
+                day_start_equity=self._day_start_equity,
+                num_trades=self._trades_today,
+            )
+            self.risk.reset_kill_switch()
+            self._start_day(today, account.equity)
+
+    def _start_day(self, day: dt.date, equity: float) -> None:
+        self._day = day
+        self._day_start_equity = equity
+        self._trades_today = 0
+        self.risk.start_day(equity)
+        log.info("Trading day %s started. Opening equity: $%.2f", day, equity)
 
     def run_once(self) -> None:
         """Execute a single decision cycle across all configured symbols."""
@@ -96,12 +117,26 @@ class TradingEngine:
             if not decision.approved:
                 log.info("%s: BUY vetoed by risk manager: %s", symbol, decision.reason)
                 return
-            log.info("%s: BUY %d shares @ ~$%.2f", symbol, decision.quantity, price)
-            self.broker.submit_market_order(symbol, decision.quantity, "buy")
+            stop_price = price * (1 - self.config.risk.stop_loss_pct)
+            tp_pct = self.config.risk.take_profit_pct
+            tp_price = price * (1 + tp_pct) if tp_pct else None
+            log.info(
+                "%s: BUY %d shares @ ~$%.2f (stop $%.2f, tp %s)",
+                symbol, decision.quantity, price, stop_price,
+                f"${tp_price:.2f}" if tp_price else "none",
+            )
+            self.broker.submit_bracket_order(
+                symbol, decision.quantity,
+                stop_loss_price=stop_price, take_profit_price=tp_price,
+            )
+            self.notifier.trade("buy", symbol, decision.quantity, price)
+            self._trades_today += 1
             held.add(symbol)
         elif signal is Signal.SELL and holding:
             log.info("%s: SELL signal — closing position", symbol)
             self.broker.close_position(symbol)
+            self.notifier.trade("sell", symbol, 0, price)
+            self._trades_today += 1
             held.discard(symbol)
         else:
             log.debug("%s: %s (holding=%s) — no action", symbol, signal.value, holding)

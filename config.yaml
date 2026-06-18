@@ -33,8 +33,11 @@ risk:
   max_position_pct: 0.20
   # Fraction of equity risked per trade (used to size positions vs. stop).
   risk_per_trade_pct: 0.01
-  # Stop-loss distance as a fraction of entry price (drives position sizing).
+  # Stop-loss distance as a fraction of entry price (drives position sizing
+  # and exits). Applied as a protective stop on every entry.
   stop_loss_pct: 0.05
+  # Take-profit distance as a fraction of entry price. Set to 0 to disable.
+  take_profit_pct: 0.10
   # Maximum number of concurrent open positions.
   max_open_positions: 5
   # Halt all new entries once daily loss exceeds this fraction of equity.

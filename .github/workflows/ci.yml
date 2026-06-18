@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Core + dev deps. scikit-learn enables the ML-strategy tests; without
+          # it those tests are skipped via importorskip.
+          pip install pandas numpy PyYAML python-dotenv pytest scikit-learn
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Smoke-test the CLI (offline, synthetic data)
+        run: |
+          export PYTHONPATH=src
+          python -m trading_bot backtest --synthetic --strategy sma_crossover
+          python -m trading_bot optimize --synthetic --strategy rsi_reversion --top 3
+          python -m trading_bot walkforward --synthetic --strategy sma_crossover --bars 800

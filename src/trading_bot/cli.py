@@ -36,12 +36,25 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
         else config.symbols
     )
 
+    def maybe_report(result, *, suffix=""):
+        if not args.report:
+            return
+        from .report import write_report
+
+        path = args.report
+        if suffix:  # only set for real-data multi-symbol runs
+            stem, _, ext = path.rpartition(".")
+            path = f"{stem}_{suffix}.{ext}" if stem else f"{path}_{suffix}"
+        out = write_report(result, path)
+        print(f"  report written to {out}")
+
     if args.synthetic:
         print(f"Backtesting {strategy_name} on synthetic data...\n")
         bars = generate_synthetic_bars(n=args.bars)
         bt = Backtester(strategy, config.risk, config.backtest)
         result = bt.run("SYNTH", bars)
         print(result.summary())
+        maybe_report(result)
         return 0
 
     # Real data path — requires Alpaca credentials.
@@ -60,11 +73,71 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
         bt = Backtester(strategy, config.risk, config.backtest)
         result = bt.run(symbol, bars)
         print(result.summary())
+        maybe_report(result, suffix=symbol if len(symbols) > 1 else "")
         print()
         overall.append(result.metrics["total_return"])
     if overall:
         print(f"Average total return across {len(overall)} symbols: "
               f"{sum(overall) / len(overall):.2%}")
+    return 0
+
+
+def _load_bars_for_opt(args, config, symbols):
+    """Return (label, bars) for optimize/walkforward, synthetic or real."""
+    if args.synthetic:
+        return "SYNTH", generate_synthetic_bars(n=args.bars)
+    from .data import DataProvider
+
+    symbol = symbols[0]
+    provider = DataProvider(config.credentials)
+    bars = provider.get_bars(
+        symbol, timeframe=config.timeframe, start=args.start, end=args.end
+    )
+    return symbol, bars
+
+
+def _cmd_optimize(args: argparse.Namespace) -> int:
+    from .optimize import default_grid, grid_search
+
+    config = load_config(args.config)
+    strategy_name = args.strategy or config.strategy.name
+    symbols = ([s.strip().upper() for s in args.symbols.split(",")]
+               if args.symbols else config.symbols)
+    label, bars = _load_bars_for_opt(args, config, symbols)
+    if bars.empty:
+        print("no data to optimize on", file=sys.stderr)
+        return 1
+    grid = default_grid(strategy_name)
+    print(f"Grid-searching {strategy_name} on {label} "
+          f"({len(bars)} bars), ranking by {args.metric}...\n")
+    results = grid_search(strategy_name, grid, bars,
+                          risk_config=config.risk, backtest_config=config.backtest,
+                          metric=args.metric, symbol=label)
+    for r in results[: args.top]:
+        m = r.metrics
+        print(f"  score={r.score:+.3f}  return={m['total_return']:+.2%}  "
+              f"sharpe={m['sharpe']:+.2f}  dd={m['max_drawdown']:.2%}  {r.params}")
+    if results:
+        print(f"\nBest params: {results[0].params}")
+    return 0
+
+
+def _cmd_walkforward(args: argparse.Namespace) -> int:
+    from .optimize import default_grid, walk_forward
+
+    config = load_config(args.config)
+    strategy_name = args.strategy or config.strategy.name
+    symbols = ([s.strip().upper() for s in args.symbols.split(",")]
+               if args.symbols else config.symbols)
+    label, bars = _load_bars_for_opt(args, config, symbols)
+    if bars.empty:
+        print("no data for walk-forward", file=sys.stderr)
+        return 1
+    grid = default_grid(strategy_name)
+    wf = walk_forward(strategy_name, grid, bars, n_splits=args.splits,
+                      risk_config=config.risk, backtest_config=config.backtest,
+                      metric=args.metric, symbol=label)
+    print(wf.summary())
     return 0
 
 
@@ -126,7 +199,32 @@ def build_parser() -> argparse.ArgumentParser:
     bt.add_argument("--synthetic", action="store_true",
                     help="use generated data (no network/credentials)")
     bt.add_argument("--bars", type=int, default=500, help="synthetic bar count")
+    bt.add_argument("--report", help="write an HTML dashboard to this path")
     bt.set_defaults(func=_cmd_backtest)
+
+    opt = sub.add_parser("optimize", help="grid-search strategy parameters")
+    opt.add_argument("--strategy", help="strategy name (default: config)")
+    opt.add_argument("--symbols", help="comma-separated tickers (first is used)")
+    opt.add_argument("--start", help="start date YYYY-MM-DD")
+    opt.add_argument("--end", help="end date YYYY-MM-DD")
+    opt.add_argument("--synthetic", action="store_true", help="use generated data")
+    opt.add_argument("--bars", type=int, default=500, help="synthetic bar count")
+    opt.add_argument("--metric", default="sharpe",
+                     help="ranking metric: sharpe|total_return|win_rate")
+    opt.add_argument("--top", type=int, default=10, help="rows to display")
+    opt.set_defaults(func=_cmd_optimize)
+
+    wf = sub.add_parser("walkforward",
+                        help="walk-forward (out-of-sample) validation")
+    wf.add_argument("--strategy", help="strategy name (default: config)")
+    wf.add_argument("--symbols", help="comma-separated tickers (first is used)")
+    wf.add_argument("--start", help="start date YYYY-MM-DD")
+    wf.add_argument("--end", help="end date YYYY-MM-DD")
+    wf.add_argument("--synthetic", action="store_true", help="use generated data")
+    wf.add_argument("--bars", type=int, default=1000, help="synthetic bar count")
+    wf.add_argument("--metric", default="sharpe", help="optimization metric")
+    wf.add_argument("--splits", type=int, default=4, help="number of folds")
+    wf.set_defaults(func=_cmd_walkforward)
 
     run = sub.add_parser("run", help="run the live (paper/live) engine")
     run.add_argument("--once", action="store_true", help="run a single cycle and exit")

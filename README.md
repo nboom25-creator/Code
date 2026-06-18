@@ -14,17 +14,28 @@ data before risking a cent.
 
 ## Features
 
-- **Rule-based strategies** — SMA crossover and RSI mean-reversion, easy to
-  extend with your own.
-- **Backtesting engine** — simulate a strategy over historical bars with
-  realistic position sizing, commissions/slippage hooks, and performance metrics
-  (total return, Sharpe, max drawdown, win rate).
+- **Strategies** — rule-based SMA crossover, RSI mean-reversion, MACD crossover,
+  Bollinger breakout, plus an optional **ML signal layer** (scikit-learn
+  random-forest on engineered features). All behind one registry for easy
+  extension.
+- **Backtesting engine** — simulate a strategy over historical bars with no
+  look-ahead, realistic position sizing, commission/slippage hooks, intrabar
+  **stop-loss / take-profit** exits, and metrics (total return, Sharpe, max
+  drawdown, win rate).
+- **Optimization & validation** — grid-search strategy parameters and run
+  **walk-forward (out-of-sample) validation** to catch over-fitting before it
+  costs you.
 - **Risk management** — per-trade risk sizing, max open positions, max position
-  size, daily loss limit, and a global kill switch.
+  size, daily loss limit, stop-loss/take-profit, and a global kill switch.
+- **Live execution** — autonomous loop with broker-managed **bracket orders**
+  (stop + take-profit attached at entry) so protective exits hold even if the
+  bot goes offline.
+- **Notifications & dashboard** — log/Slack/Discord webhook alerts on trades and
+  daily P&L, plus a self-contained **HTML report** with an inline equity curve.
 - **Paper/live gating** — paper trading is the default; live requires two
   independent confirmations.
-- **Pure-Python core** — indicators, strategies, risk, and backtesting have no
-  network dependency and are unit-tested.
+- **Tested + CI** — 58 offline unit tests; GitHub Actions runs them on Python
+  3.10–3.12 on every push.
 
 ## Quick start
 
@@ -43,13 +54,37 @@ pytest
 # 4. Backtest a strategy on synthetic data (no network needed)
 python -m trading_bot backtest --synthetic --strategy sma_crossover
 
-# 5. Backtest on real historical data from Alpaca
+# 5. Backtest on real data + write an HTML dashboard
 python -m trading_bot backtest --symbols AAPL,MSFT --strategy rsi_reversion \
-    --start 2022-01-01 --end 2023-01-01
+    --start 2022-01-01 --end 2023-01-01 --report report.html
 
-# 6. Run live against the PAPER account
+# 6. Optimize parameters, then validate out-of-sample
+python -m trading_bot optimize --synthetic --strategy macd_crossover --top 5
+python -m trading_bot walkforward --synthetic --strategy sma_crossover
+
+# 7. Run live against the PAPER account
 python -m trading_bot run
 ```
+
+## Commands
+
+| Command       | What it does                                                  |
+| ------------- | ------------------------------------------------------------ |
+| `backtest`    | Backtest a strategy (`--synthetic` or real data); `--report` |
+| `optimize`    | Grid-search strategy parameters, ranked by a metric          |
+| `walkforward` | Walk-forward out-of-sample validation across folds           |
+| `run`         | Run the autonomous engine (`--once` for a single cycle)      |
+| `status`      | Show account equity and open positions                       |
+
+### Strategies
+
+`sma_crossover`, `rsi_reversion`, `macd_crossover`, `bollinger_breakout`, and
+`ml` (requires `pip install scikit-learn`).
+
+### Notifications
+
+Set `NOTIFY_WEBHOOK_URL` in `.env` to a Slack or Discord incoming-webhook URL to
+receive trade and daily-P&L alerts. Unset, alerts just go to the log.
 
 ## Configuration
 
@@ -73,15 +108,20 @@ Secrets (API keys) live in `.env`, never in `config.yaml`.
 src/trading_bot/
   config.py       # config + env loading
   indicators.py   # technical indicators (pure pandas/numpy)
-  strategy.py     # strategy base class + implementations
+  strategy.py     # strategy base class + rule-based implementations
+  ml_strategy.py  # optional ML signal layer (scikit-learn, self-registering)
   risk.py         # risk manager / guardrails
   portfolio.py    # in-memory portfolio for backtesting
-  backtest.py     # backtesting engine + metrics
+  backtest.py     # backtesting engine + metrics + stop/take-profit
+  optimize.py     # grid search + walk-forward validation
   data.py         # historical/live data provider
-  broker.py       # Alpaca broker wrapper (paper/live)
+  broker.py       # Alpaca broker wrapper (paper/live, bracket orders)
   engine.py       # live trading loop
+  notify.py       # log / webhook notifications
+  report.py       # HTML dashboard generation
   cli.py          # command-line entry point
 tests/            # offline unit tests
+.github/workflows/ci.yml  # CI: pytest on Python 3.10–3.12
 ```
 
 ## Disclaimer

@@ -113,6 +113,46 @@ class AlpacaBroker:
         )
         return self._get_client().submit_order(request)
 
+    def submit_bracket_order(
+        self,
+        symbol: str,
+        quantity: int,
+        *,
+        stop_loss_price: float,
+        take_profit_price: float | None = None,
+    ):
+        """Submit a long entry with broker-managed protective exits.
+
+        A bracket order attaches a stop-loss (and optional take-profit) that the
+        broker manages even if this bot is offline — important for an autonomous
+        system. Prices are rounded to the cent.
+        """
+        from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
+        from alpaca.trading.requests import (
+            MarketOrderRequest,
+            StopLossRequest,
+            TakeProfitRequest,
+        )
+
+        if quantity <= 0:
+            raise ValueError("quantity must be positive")
+        if stop_loss_price <= 0:
+            raise ValueError("stop_loss_price must be positive")
+
+        kwargs = dict(
+            symbol=symbol,
+            qty=quantity,
+            side=OrderSide.BUY,
+            time_in_force=TimeInForce.DAY,
+            order_class=OrderClass.BRACKET,
+            stop_loss=StopLossRequest(stop_price=round(stop_loss_price, 2)),
+        )
+        if take_profit_price and take_profit_price > 0:
+            kwargs["take_profit"] = TakeProfitRequest(
+                limit_price=round(take_profit_price, 2)
+            )
+        return self._get_client().submit_order(MarketOrderRequest(**kwargs))
+
     def close_position(self, symbol: str):
         return self._get_client().close_position(symbol)
 
