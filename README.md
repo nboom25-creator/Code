@@ -131,6 +131,7 @@ src/trading_bot/
     regime.py     #   market risk-on/off filter (scales new-entry exposure)
     portfolio_risk.py # account-wide caps (cash buffer / sector / # positions)
     account_rules.py  # limit-order cost model + PDT + wash-sale rules
+    backtest_agent.py # point-in-time backtest of the whole agent over history
     ledger.py     #   persistent trade ledger (FIFO closed-trade matching)
     performance.py#   realized P&L metrics + attribution by profile/confidence
     paper_sim.py  #   in-memory simulated paper broker
@@ -272,6 +273,26 @@ drawdown — **broken down by cap profile and by confidence bucket**, so you can
 see whether the small-cap engine adds value and whether the agent's conviction
 actually predicts winners. This is the feedback loop that makes the bot a
 learning system instead of a black box.
+
+### Backtesting the agent
+
+Beyond backtesting individual rule strategies, you can backtest the **whole
+agent** — its regime gate, research, reviews, sizing, and every guardrail — over
+historical days:
+
+```bash
+python -m trading_bot backtest-agent --symbols AAA,BBB,CCC --days 400 --cadence 5
+```
+
+It replays history one bar at a time with a **point-in-time** data feed (the
+agent only ever sees data up to "now" — no look-ahead), fills orders through a
+simulated broker that honors the bracket stops and marks the account to market
+each day, and runs the real cognitive loop on a configurable cadence. The output
+is an equity curve (total return, Sharpe, max drawdown) plus the full trade
+attribution from the ledger — including the by-confidence breakdown, so you can
+see whether the agent's conviction actually predicts winners. Uses the offline
+`HeuristicLLM` brain so a multi-year backtest runs in seconds with no API cost;
+swap in Claude for a (slower, paid) LLM-driven backtest.
 
 ### Safe dry-run (`run_dry_run.py`)
 

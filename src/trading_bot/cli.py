@@ -201,6 +201,29 @@ def _cmd_discover(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_backtest_agent(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    from .agent.backtest_agent import AgentBacktester
+    from .agent.research import build_research_bundle
+
+    symbols = ([s.strip().upper() for s in args.symbols.split(",")]
+               if args.symbols else (config.symbols or ["AAA", "BBB", "CCC"]))
+    history, benchmark = AgentBacktester.build_synthetic_history(
+        symbols, days=args.days, seed=args.seed)
+    research = build_research_bundle(sim=True) if not args.no_research else None
+
+    print(f"Backtesting the agent over {args.days} synthetic bars on "
+          f"{', '.join(symbols)} (cadence every {args.cadence} bars)...\n")
+    bt = AgentBacktester(
+        history=history, benchmark=benchmark, research=research,
+        starting_cash=args.cash, cadence=args.cadence,
+        portfolio_config=config.portfolio, execution_config=config.execution,
+    )
+    result = bt.run()
+    print(result.summary())
+    return 0
+
+
 def _cmd_regime(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     if args.sim:
@@ -315,6 +338,17 @@ def build_parser() -> argparse.ArgumentParser:
     disc.add_argument("--sim", action="store_true",
                       help="use offline simulated screener (no API key)")
     disc.set_defaults(func=_cmd_discover)
+
+    bta = sub.add_parser("backtest-agent",
+                         help="backtest the full agent over historical (synthetic) days")
+    bta.add_argument("--symbols", help="comma-separated tickers (default: config)")
+    bta.add_argument("--days", type=int, default=400, help="number of bars")
+    bta.add_argument("--cadence", type=int, default=5, help="run the agent every N bars")
+    bta.add_argument("--cash", type=float, default=100_000.0, help="starting cash")
+    bta.add_argument("--seed", type=int, default=11, help="synthetic data seed")
+    bta.add_argument("--no-research", action="store_true",
+                     help="disable the small-cap research layer")
+    bta.set_defaults(func=_cmd_backtest_agent)
 
     reg = sub.add_parser("regime", help="show the current market regime (entry gate)")
     reg.add_argument("--benchmark", help="benchmark symbol (default: config / SPY)")
