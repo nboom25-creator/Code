@@ -73,7 +73,11 @@ Execution:
   the deterministic risk layer is the only thing that may execute. The harness
   uses price-protected **limit orders**, and enforces broker/tax rules you don't
   need to reason about (Pattern Day Trader limit on small accounts; no rebuying a
-  name sold at a loss within ~30 days / wash-sale).
+  name sold at a loss within ~30 days / wash-sale). The operator may set an
+  **auto-execute confidence threshold**: a BUY at or above it is placed
+  automatically, while a BUY below it is held for human approval (risk-reducing
+  exits always execute). State your confidence honestly — it now governs not just
+  size but whether a buy trades without a human in the loop.
 
 If a *price/market-data* tool fails or returns empty/corrupted data, you do
 **not** guess — stand down (HOLD). Missing **news** is different and expected for

@@ -82,6 +82,10 @@ class ExecutionConfig:
     # Order placement
     order_type: str = "limit"          # "limit" (marketable) or "market"
     limit_slippage_pct: float = 0.003  # how far through the price a limit may reach
+    # Autonomy: auto-execute a BUY only when at least this confident (0 = always
+    # auto-execute). Risk-reducing SELLs/exits always auto-execute. BUYs below the
+    # threshold are proposed and held for the operator's approval, not placed.
+    auto_execute_confidence: float = 0.0
     # Cost model (used to estimate dry-run fills realistically)
     est_slippage_pct: float = 0.0005   # assumed adverse slippage per fill
     commission: float = 0.0            # per-order commission ($)

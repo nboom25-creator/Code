@@ -185,9 +185,11 @@ class AgentRunner:
                         ticker, equity=equity, exposure_scale=regime.exposure_scale,
                         portfolio=portfolio)
                     results.append(result)
-                    # Reflect a (proposed) buy so the next candidate sees the
-                    # reduced headroom within this same run.
-                    if result.final_action == "BUY" and result.notional > 0:
+                    # Reflect an auto-executing buy so the next candidate sees the
+                    # reduced headroom within this same run. Buys held for the
+                    # operator's approval did not trade, so they don't consume a slot.
+                    if (result.final_action == "BUY" and result.notional > 0
+                            and not result.pending_approval):
                         new_buys += 1
                         portfolio.add(ticker, result.notional, result.sector)
                     if result.executed:

@@ -40,6 +40,7 @@ class CycleResult:
     executed: bool
     notional: float = 0.0
     sector: str = ""
+    pending_approval: bool = False  # proposed but held for operator approval
 
 
 @dataclass
@@ -198,8 +199,11 @@ class CognitiveLoop:
             verdict=verdict, action_result=action_result, degraded=False,
             profile=p.profile,
         )
+        auto_ok, _ = self._auto_gate(verdict.action, decision.confidence)
+        pending = verdict.approved and verdict.quantity >= 1 and not auto_ok
         return CycleResult(ticker, verdict.action, verdict.quantity, False, executed,
-                           notional=verdict.quantity * p.price, sector=p.sector)
+                           notional=verdict.quantity * p.price, sector=p.sector,
+                           pending_approval=pending)
 
     # ================================================================== #
     # Manage: review an open position
@@ -326,6 +330,12 @@ class CognitiveLoop:
         if not approved or action not in ("BUY", "SELL") or qty < 1:
             return False, f"No order placed ({action})."
 
+        # --- Autonomy gate: hold low-confidence BUYs for operator approval --- #
+        auto, pending_msg = self._auto_gate(action, confidence)
+        if not auto:
+            self.audit.system_event(f"{ticker}: {pending_msg}")
+            return False, pending_msg
+
         # --- Account-rule pre-checks (block before placing) ----------- #
         from . import account_rules as ar
 
@@ -382,6 +392,19 @@ class CognitiveLoop:
         except Exception as exc:  # noqa: BLE001
             self.audit.system_event(f"{ticker}: order execution failed: {exc}")
             return False, f"Execution FAILED: {exc}"
+
+    def _auto_gate(self, action: str, confidence: float) -> tuple[bool, str | None]:
+        """Decide whether an approved order auto-executes or waits for approval.
+
+        Risk-reducing SELLs always auto-execute. A BUY auto-executes only when
+        confidence meets the operator's threshold (0 = always auto-execute).
+        """
+        thr = getattr(self.execution, "auto_execute_confidence", 0.0) or 0.0
+        if thr <= 0 or action.upper() == "SELL" or confidence >= thr:
+            return True, None
+        return False, (f"Proposed BUY held for review — {confidence:.0%} confidence "
+                       f"is below the {thr:.0%} auto-execute threshold. Awaiting your "
+                       f"approval; no order placed.")
 
     def _rule_block(self, action: str, confidence: float, price: float) -> str | None:
         """Return a reason string if an operator trading rule vetoes this BUY."""
