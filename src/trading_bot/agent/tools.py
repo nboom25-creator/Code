@@ -171,14 +171,29 @@ class AgentTools:
         latest = tail.iloc[-1]
         avg_volume = float(tail["volume"].mean()) or 1.0
         latest_volume = float(latest["volume"])
+        latest_close = float(latest["close"])
+        # ATR — typical daily $ move — and ATR% (volatility relative to price),
+        # used by the risk-sizer to make jumpy stocks get smaller positions.
+        atr = atr_pct = 0.0
+        if len(tail) >= 3:
+            from .. import indicators
+
+            atr_series = indicators.atr(
+                tail["high"], tail["low"], tail["close"],
+                period=min(14, len(tail) - 1)).dropna()
+            if len(atr_series) and latest_close:
+                atr = float(atr_series.iloc[-1])
+                atr_pct = atr / latest_close
         return json.dumps({
             "ticker": ticker,
             "bars_returned": int(len(bars)),
-            "latest_close": round(float(latest["close"]), 4),
+            "latest_close": round(latest_close, 4),
             "latest_volume": int(latest_volume),
             "avg_volume": int(avg_volume),
             # Unusual-volume signal — small-cap moves often start with a volume spike.
             "volume_ratio": round(latest_volume / avg_volume, 2),
+            "atr": round(atr, 4),
+            "atr_pct": round(atr_pct, 4),
             "window_high": round(float(tail["high"].max()), 4),
             "window_low": round(float(tail["low"].min()), 4),
             "first_close": round(float(tail.iloc[0]["close"]), 4),

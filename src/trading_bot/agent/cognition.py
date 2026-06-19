@@ -47,6 +47,7 @@ class Perception:
     text: str
     price: float
     avg_volume: float
+    atr_pct: float
     position_qty: float
     avg_entry: float
     profile: str
@@ -99,7 +100,7 @@ class CognitiveLoop:
         price = self._latest_price(ticker, calls)
         degraded = self._is_degraded(calls, price)
         if degraded:
-            return Perception(ticker, calls, text, price, 0.0, 0.0, 0.0,
+            return Perception(ticker, calls, text, price, 0.0, 0.0, 0.0, 0.0,
                               "", "", True, "")
 
         profile, directive = self._enrich_and_classify(ticker, calls)
@@ -109,6 +110,7 @@ class CognitiveLoop:
         return Perception(
             ticker=ticker, calls=calls, text=text, price=price,
             avg_volume=self._avg_volume(ticker, calls),
+            atr_pct=self._atr_pct(ticker, calls),
             position_qty=self._position_qty(ticker, calls),
             avg_entry=self._avg_entry(ticker, calls),
             profile=profile, directive=directive, degraded=False,
@@ -138,12 +140,26 @@ class CognitiveLoop:
             schema=TradeDecision,
         )
 
+        # Risk-sizer: the harness sets the dollar size from conviction + volatility;
+        # the model only chose direction. (Sizing always stays within the caps.)
+        target_notional = decision.target_notional_usd
+        sizing_note = None
+        if decision.action == "BUY":
+            target_notional = self.guardrails.target_notional(
+                equity=equity, confidence=decision.confidence, atr_pct=p.atr_pct)
+            sizing_note = (
+                f"Risk-sizer: conviction {decision.confidence:.0%} × calmness "
+                f"(ATR {p.atr_pct:.1%}) → target ${target_notional:,.0f} "
+                f"(model proposed ${decision.target_notional_usd:,.0f}).")
+
         verdict = self.guardrails.validate_decision(
             action=decision.action, ticker=ticker,
-            target_notional_usd=decision.target_notional_usd,
+            target_notional_usd=target_notional,
             equity=equity, price=p.price, current_position_qty=p.position_qty,
             avg_daily_volume=p.avg_volume, exposure_scale=exposure_scale,
         )
+        if sizing_note:
+            verdict.notes.insert(0, sizing_note)
 
         executed, action_result = self._execute(
             ticker, verdict.action, verdict.quantity, p.price,
@@ -219,7 +235,8 @@ class CognitiveLoop:
                 return notes, (False, 0), "No order (TRIM too small)."
             notes.append(f"TRIM: selling {qty} of {qty_held} shares ({frac:.0%}).")
         elif action == "ADD":
-            notional = equity * self.guardrails.max_position_pct * frac
+            notional = frac * self.guardrails.target_notional(
+                equity=equity, confidence=review.confidence, atr_pct=p.atr_pct)
             v = self.guardrails.validate_decision(
                 action="BUY", ticker=ticker, target_notional_usd=notional,
                 equity=equity, price=p.price, current_position_qty=qty_held,
@@ -408,6 +425,17 @@ class CognitiveLoop:
                     and call.input.get("ticker") == ticker:
                 try:
                     return float(json.loads(call.output).get("avg_volume", 0.0))
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    continue
+        return 0.0
+
+    @staticmethod
+    def _atr_pct(ticker: str, calls: list[ToolCall]) -> float:
+        for call in calls:
+            if call.name == "get_market_bars" and not call.is_error \
+                    and call.input.get("ticker") == ticker:
+                try:
+                    return float(json.loads(call.output).get("atr_pct", 0.0))
                 except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                     continue
         return 0.0

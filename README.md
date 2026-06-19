@@ -182,6 +182,23 @@ To run it nightly, wire `python -m trading_bot agent` into cron or the project's
 session-start hook. The agent layer is fully unit-tested offline (no API key
 needed) via a scripted LLM and in-memory broker/data fakes.
 
+### Conviction + volatility position sizing
+
+Instead of a flat 5% on every trade, the harness sizes each entry by **how
+confident the agent is** and **how volatile the stock is**:
+
+```
+target = 5% cap  ×  confidence (0–1)  ×  calmness (referenceATR / stockATR, ≤1)
+```
+
+A high-conviction idea in a calm stock approaches the full cap; a low-conviction
+idea in a jumpy stock gets a small slice — so positions carry more even risk.
+Volatility comes from **ATR** (now reported by `get_market_bars`). The model only
+chooses direction + conviction; the **code decides the dollar size**, and that
+size is still clamped by every hard cap (5% / 1% ADV / regime) afterward — it can
+only shrink a position, never grow it past the limits. The audit log shows the
+math (model proposal vs risk-sized target).
+
 ### Market regime filter (risk-on / risk-off)
 
 Before taking *new* exposure, the agent assesses the broad market (a benchmark vs

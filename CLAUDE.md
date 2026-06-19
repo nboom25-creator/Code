@@ -92,6 +92,12 @@ here so your proposals stay inside the envelope from the start.
   daily volume**, so the position can actually be exited. For thin small/micro-caps
   this often binds tighter than the 5% cap; if it rounds to less than one share the
   name is too illiquid and the trade is rejected (HOLD).
+- **Conviction + volatility sizing.** Within the caps above, the harness sets the
+  dollar size as ``5% × your confidence × calmness`` (calmness = a reference
+  volatility ÷ the stock's ATR, capped at 1). State your confidence honestly: it
+  directly scales how much capital the trade gets. You choose direction and
+  conviction; the code sizes. This only ever shrinks a position relative to the
+  hard caps, never grows it.
 - **Daily drawdown — 2% circuit breaker.** If the account's equity falls **2% or
   more below the day's opening equity**, the harness halts all trading for the
   day and alerts the operator. Do not attempt to "trade back" a loss.

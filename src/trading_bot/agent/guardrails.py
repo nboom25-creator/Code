@@ -24,6 +24,7 @@ DAILY_DRAWDOWN_LIMIT_PCT = 0.02  # halt the day at a 2% drawdown
 STOP_LOSS_PCT = 0.05  # protective stop, 5% below entry
 TAKE_PROFIT_PCT = 0.10  # take-profit, 10% above entry (0 disables)
 MAX_ADV_PARTICIPATION_PCT = 0.01  # a BUY may be at most 1% of avg daily volume
+REFERENCE_ATR_PCT = 0.03  # "typical" daily volatility; calmer = full size, jumpier = less
 
 
 @dataclass
@@ -43,12 +44,32 @@ class Guardrails:
         stop_loss_pct: float = STOP_LOSS_PCT,
         take_profit_pct: float = TAKE_PROFIT_PCT,
         max_adv_participation_pct: float = MAX_ADV_PARTICIPATION_PCT,
+        reference_atr_pct: float = REFERENCE_ATR_PCT,
     ) -> None:
         self.max_position_pct = max_position_pct
         self.daily_drawdown_limit_pct = daily_drawdown_limit_pct
         self.stop_loss_pct = stop_loss_pct
         self.take_profit_pct = take_profit_pct
         self.max_adv_participation_pct = max_adv_participation_pct
+        self.reference_atr_pct = reference_atr_pct
+
+    # ------------------------------------------------------------------ #
+    def target_notional(self, *, equity: float, confidence: float, atr_pct: float) -> float:
+        """Conviction- and volatility-scaled target size for a new long.
+
+        Starts from the 5% max position and takes a fraction of it:
+        ``5% × confidence × calmness`` where calmness = reference_vol / stock_vol
+        (capped at 1). A high-conviction idea in a calm stock approaches the full
+        cap; a low-conviction idea in a jumpy stock gets a small slice. The result
+        is still clamped by validate_decision (equity, ADV, regime), so this can
+        only shrink a position, never grow it past the hard caps.
+        """
+        conviction = max(0.0, min(1.0, confidence))
+        if atr_pct and atr_pct > 0:
+            calmness = min(1.0, self.reference_atr_pct / atr_pct)
+        else:
+            calmness = 1.0  # no volatility info — let the hard caps bind
+        return max(0.0, equity * self.max_position_pct * conviction * calmness)
 
     # ------------------------------------------------------------------ #
     def bracket_prices(self, entry_price: float) -> tuple[float, float | None]:
