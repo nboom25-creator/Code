@@ -19,6 +19,7 @@ agent_risk:
   take_profit_pct: 0.10           # 10% take-profit
   max_adv_participation_pct: 0.01 # never more than 1% of a stock's daily volume
   reference_atr_pct: 0.03         # volatility baseline for conviction sizing
+  trailing_stop_pct: 0.10         # exit a winner if it falls 10% from its peak
 
 # Extra filters on new buys (0 / empty turns a rule off).
 rules:

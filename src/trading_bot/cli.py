@@ -295,6 +295,17 @@ def _cmd_performance(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_readiness(args: argparse.Namespace) -> int:
+    from .agent.ledger import TradeLedger
+    from .agent.performance import format_readiness
+
+    config = load_config(args.config)
+    ledger = TradeLedger(args.ledger)
+    print(format_readiness(ledger, mode=args.mode,
+                           auto_execute_threshold=config.execution.auto_execute_confidence))
+    return 0
+
+
 def _cmd_status(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     try:
@@ -411,6 +422,13 @@ def build_parser() -> argparse.ArgumentParser:
     perf.add_argument("--ledger", default="logs/ledger.jsonl", help="ledger path")
     perf.add_argument("--mode", help="filter by mode: live | paper | dry_run")
     perf.set_defaults(func=_cmd_performance)
+
+    rdy = sub.add_parser("readiness",
+                         help="is the paper track record strong enough to go live?")
+    rdy.add_argument("--ledger", default="logs/ledger.jsonl", help="ledger path")
+    rdy.add_argument("--mode", default="paper", help="mode to assess (default paper)")
+    rdy.add_argument("--config", default="config.yaml", help="config path")
+    rdy.set_defaults(func=_cmd_readiness)
 
     status = sub.add_parser("status", help="show account + positions")
     status.set_defaults(func=_cmd_status)

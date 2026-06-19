@@ -77,6 +77,8 @@ class CognitiveLoop:
         mode: str | None = None,
         execution=None,
         rules=None,
+        trailing_stop_pct: float = 0.0,
+        trailing_store=None,
     ) -> None:
         self.llm = llm
         self.tools = tools
@@ -92,6 +94,8 @@ class CognitiveLoop:
 
         self.execution = execution or ExecutionConfig()
         self.rules = rules or TradingRulesConfig()
+        self.trailing_stop_pct = trailing_stop_pct
+        self.trailing_store = trailing_store
 
     # ================================================================== #
     # Perception (shared by entry and review)
@@ -218,6 +222,16 @@ class CognitiveLoop:
         if qty_held <= 0:  # nothing to manage
             return CycleResult(ticker, "HOLD", 0, False, False)
 
+        # Deterministic trailing stop — runs before any LLM reasoning. If price has
+        # fallen far enough from the position's peak, force an EXIT (risk-reducing,
+        # so it always auto-executes). Protects gains as a winner pulls back.
+        if self.trailing_stop_pct and self.trailing_store is not None:
+            breached, peak, stop_level = self.trailing_store.check(
+                ticker, p.price, self.trailing_stop_pct)
+            if breached:
+                return self._trailing_exit(ticker, p, qty_held, equity, peak,
+                                           stop_level, exposure_scale, portfolio)
+
         unrealized_pct = ((p.price / p.avg_entry - 1) * 100) if p.avg_entry else 0.0
         note = getattr(self.llm, "note_position", None)
         if callable(note):
@@ -248,6 +262,24 @@ class CognitiveLoop:
             profile=p.profile, unrealized_pct=unrealized_pct, qty_held=qty_held,
         )
         return CycleResult(ticker, review.action, executed[1], False, executed[0])
+
+    def _trailing_exit(self, ticker, p, qty_held, equity, peak, stop_level,
+                       exposure_scale, portfolio) -> CycleResult:
+        """Force a full EXIT because the trailing stop was hit (no LLM involved)."""
+        from .schemas import PositionReview
+
+        reason = (f"Trailing stop hit: ${p.price:,.2f} fell to/below ${stop_level:,.2f} "
+                  f"({self.trailing_stop_pct:.0%} below the ${peak:,.2f} peak).")
+        self.audit.system_event(f"{ticker}: TRAILING STOP — {reason} Forcing EXIT.")
+        review = PositionReview(action="EXIT", fraction=1.0, confidence=1.0,
+                                rationale=reason)
+        verdict, executed, action_result = self._apply_review(
+            ticker, review, qty_held, equity, p,
+            exposure_scale=exposure_scale, portfolio=portfolio)
+        self.audit.system_event(f"{ticker}: {action_result}")
+        if executed[0] or self.dry_run:
+            self.trailing_store.drop(ticker)
+        return CycleResult(ticker, "EXIT", executed[1], False, executed[0])
 
     def _apply_review(self, ticker, review, qty_held, equity, p, *,
                       exposure_scale=1.0, portfolio=None):

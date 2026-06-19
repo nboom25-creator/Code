@@ -94,12 +94,17 @@ class AgentRunner:
         from .ledger import TradeLedger
 
         self.ledger = ledger or TradeLedger()
+        from .trailing import TrailingStopStore
+
+        self.trailing_store = TrailingStopStore()
         mode = "dry_run" if dry_run else config.mode
         self.loop = CognitiveLoop(
             llm=llm, tools=tools, guardrails=self.guardrails,
             audit=self.audit, system_prompt=load_system_manual(),
             dry_run=dry_run, ledger=self.ledger, mode=mode,
             execution=config.execution, rules=config.rules,
+            trailing_stop_pct=config.agent_risk.trailing_stop_pct,
+            trailing_store=self.trailing_store,
         )
 
     def run_day(self) -> dict:
@@ -145,6 +150,7 @@ class AgentRunner:
         # Phase A — manage what we already hold (exits/trims/adds come first).
         # These run in every regime: in bad tape you especially want to de-risk.
         held = {p.symbol for p in self.broker.get_positions()}
+        self.trailing_store.prune(held)  # forget peaks for names we no longer hold
         for ticker in sorted(held):
             log.info("Reviewing open position %s", ticker)
             try:

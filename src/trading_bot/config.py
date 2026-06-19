@@ -57,6 +57,7 @@ class AgentRiskConfig:
     take_profit_pct: float = 0.10         # take-profit above entry (0 disables)
     max_adv_participation_pct: float = 0.01  # max % of avg daily volume per buy
     reference_atr_pct: float = 0.03       # "calm" volatility baseline for sizing
+    trailing_stop_pct: float = 0.0        # exit if price falls this far from its peak (0 = off)
 
 
 @dataclass
