@@ -183,3 +183,12 @@ class AlpacaBroker:
 
     def is_market_open(self) -> bool:
         return bool(self._get_client().get_clock().is_open)
+
+
+def build_broker(config: Config):
+    """Select the execution venue from ``config.broker`` (default Alpaca)."""
+    if config.broker.lower() == "robinhood":
+        from .robinhood import RobinhoodMCPBroker
+
+        return RobinhoodMCPBroker(config)
+    return AlpacaBroker(config)

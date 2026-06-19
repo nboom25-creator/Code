@@ -7,6 +7,10 @@ python-dotenv>=1.0
 # Broker / market data (Alpaca)
 alpaca-py>=0.20
 
+# Optional: required only for the Robinhood agentic-trading broker
+# (config.yaml `broker: robinhood`). Safe to omit if you use Alpaca.
+# mcp>=1.0
+
 # Free, keyless market data + news for the dry-run sandbox.
 yfinance>=0.2.40
 

@@ -110,11 +110,15 @@ class Credentials:
     api_secret: str | None = None
     live_confirm: str | None = None
     base_url: str | None = None
+    # Robinhood agentic-trading MCP (only used when broker == "robinhood").
+    rh_mcp_url: str | None = None
+    rh_mcp_token: str | None = None
 
 
 @dataclass
 class Config:
     mode: str = "paper"
+    broker: str = "alpaca"  # which execution venue: "alpaca" or "robinhood"
     symbols: list[str] = field(default_factory=list)
     timeframe: str = "1Day"
     poll_interval_seconds: int = 60
@@ -138,6 +142,9 @@ class Config:
         live-trading request is missing its required confirmations."""
         if self.mode.lower() not in {"paper", "live"}:
             raise ValueError(f"mode must be 'paper' or 'live', got {self.mode!r}")
+        if self.broker.lower() not in {"alpaca", "robinhood"}:
+            raise ValueError(
+                f"broker must be 'alpaca' or 'robinhood', got {self.broker!r}")
         if not self.symbols:
             raise ValueError("at least one symbol must be configured")
         if self.is_live and self.credentials.live_confirm != LIVE_CONFIRM_VALUE:
@@ -167,6 +174,7 @@ def load_config(path: str | Path = "config.yaml", *, load_env: bool = True) -> C
 
     cfg = Config(
         mode=raw.get("mode", "paper"),
+        broker=str(raw.get("broker", "alpaca")).lower(),
         symbols=list(raw.get("symbols", [])),
         timeframe=raw.get("timeframe", "1Day"),
         poll_interval_seconds=int(raw.get("poll_interval_seconds", 60)),
@@ -187,6 +195,8 @@ def load_config(path: str | Path = "config.yaml", *, load_env: bool = True) -> C
             api_secret=os.getenv("ALPACA_API_SECRET"),
             live_confirm=os.getenv("LIVE_TRADING_CONFIRM"),
             base_url=os.getenv("ALPACA_API_BASE_URL"),
+            rh_mcp_url=os.getenv("ROBINHOOD_MCP_URL"),
+            rh_mcp_token=os.getenv("ROBINHOOD_MCP_TOKEN"),
         ),
     )
     return cfg

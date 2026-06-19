@@ -249,13 +249,13 @@ class AgentRunner:
 def build_runner(config: Config | None = None) -> AgentRunner:
     """Wire the agent to the real Alpaca broker, data provider, Claude, and the
     real research pipeline (FMP/EDGAR/Firecrawl per the keys present)."""
-    from ..broker import AlpacaBroker
+    from ..broker import build_broker
     from ..data import DataProvider
     from .research import build_research_bundle
 
     config = config or load_config()
     config.validate()
-    broker = AlpacaBroker(config)
+    broker = build_broker(config)
     data = DataProvider(config.credentials)
     research = build_research_bundle(sim=False)
     tools = AgentTools(broker, data, research=research, default_timeframe=config.timeframe)
