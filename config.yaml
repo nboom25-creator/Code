@@ -83,7 +83,7 @@ portfolio:
 # Order execution + account rules for the autonomous agent.
 execution:
   order_type: limit        # "limit" (marketable, price-protected) or "market"
-  auto_execute_confidence: 0.80  # auto-place BUYs at >=80% confidence; below that,
+  auto_execute_confidence: 0.70  # auto-place BUYs at >=70% confidence; below that,
                                  # hold for your approval. Exits always auto-execute.
   limit_slippage_pct: 0.003  # limit may reach 0.3% through the current price
   est_slippage_pct: 0.0005   # assumed slippage for dry-run fill estimates
