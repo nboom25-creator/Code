@@ -127,6 +127,15 @@ class AgentRunner:
         log.info("Regime: %s (x%.2f) — %s", regime.regime, regime.exposure_scale,
                  regime.reason)
 
+        # Portfolio picture — account-wide caps (cash buffer, sector, # positions).
+        portfolio = self._build_portfolio_risk(equity)
+        self.audit.system_event(
+            f"Portfolio caps: invested {portfolio.invested_value() / equity:.0%}/"
+            f"{portfolio.max_invested_pct:.0%}, "
+            f"{portfolio.position_count()}/{portfolio.max_positions} positions, "
+            f"sector cap {portfolio.max_sector_pct:.0%}"
+            + ("" if portfolio.use_sector else " (sector cap off — no research)"))
+
         results = []
         reviews = []
 
@@ -137,7 +146,8 @@ class AgentRunner:
             log.info("Reviewing open position %s", ticker)
             try:
                 r = self.loop.review_position(ticker, equity=equity,
-                                             exposure_scale=regime.exposure_scale)
+                                             exposure_scale=regime.exposure_scale,
+                                             portfolio=portfolio)
                 reviews.append(r)
                 if r.executed:
                     self.notifier.send(f"🤖 review {r.final_action} {ticker} (agent)")
@@ -145,8 +155,8 @@ class AgentRunner:
                 log.exception("Review failed for %s", ticker)
                 self.audit.system_event(f"{ticker}: review raised an exception — skipped.")
 
-        # Phase B — new entries, gated by the regime. In risk-off (scale 0) we skip
-        # entries entirely (and save the LLM calls) — manage-only mode.
+        # Phase B — new entries, gated by the regime AND the portfolio caps. In
+        # risk-off (scale 0) we skip entries entirely — manage-only mode.
         if regime.exposure_scale <= 0:
             self.audit.system_event(
                 "Risk-off regime — skipping all new entries; managing existing "
@@ -155,11 +165,21 @@ class AgentRunner:
             for ticker in self.watchlist:
                 if ticker in held:
                     continue
+                if not portfolio.can_open_new(ticker):
+                    self.audit.system_event(
+                        f"{ticker}: max positions ({portfolio.max_positions}) reached "
+                        f"— skipping new entry.")
+                    continue
                 log.info("Running cognitive cycle for %s", ticker)
                 try:
                     result = self.loop.run_for_ticker(
-                        ticker, equity=equity, exposure_scale=regime.exposure_scale)
+                        ticker, equity=equity, exposure_scale=regime.exposure_scale,
+                        portfolio=portfolio)
                     results.append(result)
+                    # Reflect a (proposed) buy so the next candidate sees the
+                    # reduced headroom within this same run.
+                    if result.final_action == "BUY" and result.notional > 0:
+                        portfolio.add(ticker, result.notional, result.sector)
                     if result.executed:
                         self.notifier.send(
                             f"🤖 {result.final_action} {result.quantity} {ticker} (agent)")
@@ -167,7 +187,32 @@ class AgentRunner:
                     log.exception("Cycle failed for %s", ticker)
                     self.audit.system_event(f"{ticker}: cycle raised an exception — skipped.")
         return {"halted": False, "results": results, "reviews": reviews,
-                "regime": regime}
+                "regime": regime, "portfolio": portfolio}
+
+    def _build_portfolio_risk(self, equity: float):
+        """Snapshot current holdings (with sectors, if research is available)."""
+        from .portfolio_risk import Holding, PortfolioRisk
+
+        research = self.loop.tools.research
+        holdings = []
+        for pos in self.broker.get_positions():
+            sector = ""
+            if research is not None:
+                call = self.loop.tools.dispatch("get_fundamentals", {"ticker": pos.symbol})
+                if not call.is_error:
+                    import json
+                    try:
+                        f = json.loads(call.output).get("fundamentals") or {}
+                        sector = f.get("sector", "") or ""
+                    except (json.JSONDecodeError, TypeError, ValueError):
+                        sector = ""
+            holdings.append(Holding(pos.symbol, float(pos.market_value), sector))
+        pc = self.config.portfolio
+        return PortfolioRisk(
+            equity=equity, holdings=holdings,
+            max_invested_pct=pc.max_invested_pct, max_sector_pct=pc.max_sector_pct,
+            max_positions=pc.max_positions, use_sector=research is not None,
+        )
 
 
 def build_runner(config: Config | None = None) -> AgentRunner:

@@ -38,6 +38,8 @@ class CycleResult:
     quantity: int
     degraded: bool
     executed: bool
+    notional: float = 0.0
+    sector: str = ""
 
 
 @dataclass
@@ -51,6 +53,7 @@ class Perception:
     position_qty: float
     avg_entry: float
     profile: str
+    sector: str
     directive: str
     degraded: bool
     context: str
@@ -101,7 +104,7 @@ class CognitiveLoop:
         degraded = self._is_degraded(calls, price)
         if degraded:
             return Perception(ticker, calls, text, price, 0.0, 0.0, 0.0, 0.0,
-                              "", "", True, "")
+                              "", "", "", True, "")
 
         profile, directive = self._enrich_and_classify(ticker, calls)
         observe = getattr(self.llm, "observe", None)
@@ -113,7 +116,8 @@ class CognitiveLoop:
             atr_pct=self._atr_pct(ticker, calls),
             position_qty=self._position_qty(ticker, calls),
             avg_entry=self._avg_entry(ticker, calls),
-            profile=profile, directive=directive, degraded=False,
+            profile=profile, sector=self._sector(ticker, calls),
+            directive=directive, degraded=False,
             context=self._context_text(text, calls),
         )
 
@@ -121,7 +125,7 @@ class CognitiveLoop:
     # Entry: consider a new position
     # ================================================================== #
     def run_for_ticker(self, ticker: str, *, equity: float,
-                       exposure_scale: float = 1.0) -> CycleResult:
+                       exposure_scale: float = 1.0, portfolio=None) -> CycleResult:
         p = self._perceive(ticker)
         if p.degraded:
             return self._log_degraded(ticker, p)
@@ -152,11 +156,14 @@ class CognitiveLoop:
                 f"(ATR {p.atr_pct:.1%}) → target ${target_notional:,.0f} "
                 f"(model proposed ${decision.target_notional_usd:,.0f}).")
 
+        portfolio_cap = (portfolio.headroom(p.sector)
+                         if portfolio is not None and decision.action == "BUY" else None)
         verdict = self.guardrails.validate_decision(
             action=decision.action, ticker=ticker,
             target_notional_usd=target_notional,
             equity=equity, price=p.price, current_position_qty=p.position_qty,
             avg_daily_volume=p.avg_volume, exposure_scale=exposure_scale,
+            portfolio_cap=portfolio_cap,
         )
         if sizing_note:
             verdict.notes.insert(0, sizing_note)
@@ -173,13 +180,14 @@ class CognitiveLoop:
             verdict=verdict, action_result=action_result, degraded=False,
             profile=p.profile,
         )
-        return CycleResult(ticker, verdict.action, verdict.quantity, False, executed)
+        return CycleResult(ticker, verdict.action, verdict.quantity, False, executed,
+                           notional=verdict.quantity * p.price, sector=p.sector)
 
     # ================================================================== #
     # Manage: review an open position
     # ================================================================== #
     def review_position(self, ticker: str, *, equity: float,
-                        exposure_scale: float = 1.0) -> CycleResult:
+                        exposure_scale: float = 1.0, portfolio=None) -> CycleResult:
         p = self._perceive(ticker)
         if p.degraded:
             return self._log_degraded(ticker, p, review=True)
@@ -208,7 +216,8 @@ class CognitiveLoop:
         )
 
         verdict, executed, action_result = self._apply_review(
-            ticker, review, qty_held, equity, p, exposure_scale=exposure_scale)
+            ticker, review, qty_held, equity, p,
+            exposure_scale=exposure_scale, portfolio=portfolio)
 
         self.audit.write_review(
             ticker=ticker, perception=p.calls, perception_text=p.text,
@@ -218,7 +227,8 @@ class CognitiveLoop:
         )
         return CycleResult(ticker, review.action, executed[1], False, executed[0])
 
-    def _apply_review(self, ticker, review, qty_held, equity, p, *, exposure_scale=1.0):
+    def _apply_review(self, ticker, review, qty_held, equity, p, *,
+                      exposure_scale=1.0, portfolio=None):
         """Translate a PositionReview into a guarded, executed order."""
         notes: list[str] = []
         action = review.action.upper()
@@ -240,7 +250,8 @@ class CognitiveLoop:
             v = self.guardrails.validate_decision(
                 action="BUY", ticker=ticker, target_notional_usd=notional,
                 equity=equity, price=p.price, current_position_qty=qty_held,
-                avg_daily_volume=p.avg_volume, exposure_scale=exposure_scale)
+                avg_daily_volume=p.avg_volume, exposure_scale=exposure_scale,
+                portfolio_cap=(portfolio.headroom(p.sector) if portfolio else None))
             notes += v.notes
             if not v.approved:
                 return notes, (False, 0), f"No order (ADD vetoed: {v.action})."
@@ -428,6 +439,17 @@ class CognitiveLoop:
                 except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                     continue
         return 0.0
+
+    @staticmethod
+    def _sector(ticker: str, calls: list[ToolCall]) -> str:
+        for call in calls:
+            if call.name == "get_fundamentals" and not call.is_error:
+                try:
+                    f = json.loads(call.output).get("fundamentals") or {}
+                    return f.get("sector", "") or ""
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    return ""
+        return ""
 
     @staticmethod
     def _atr_pct(ticker: str, calls: list[ToolCall]) -> float:

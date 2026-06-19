@@ -101,6 +101,7 @@ class Guardrails:
         current_position_qty: float,
         avg_daily_volume: float = 0.0,
         exposure_scale: float = 1.0,
+        portfolio_cap: float | None = None,
     ) -> GuardrailVerdict:
         """Resize/veto a proposed decision against the hard limits."""
         notes: list[str] = []
@@ -134,6 +135,18 @@ class Guardrails:
             notes.append(
                 f"Regime exposure scaled to {exposure_scale:.0%}: effective cap "
                 f"${cap_notional:,.0f} ({self.max_position_pct:.0%} x {exposure_scale:.0%}).")
+        # Portfolio-level headroom (sector / total-invested caps) further limits size.
+        if portfolio_cap is not None:
+            if portfolio_cap <= 0:
+                return GuardrailVerdict(
+                    False, "HOLD", 0,
+                    notes + ["Portfolio cap reached (sector or total-invested limit) "
+                             "— no room for a new position; forcing HOLD."])
+            if portfolio_cap < cap_notional:
+                notes.append(
+                    f"Portfolio headroom ${portfolio_cap:,.0f} is tighter than the "
+                    f"position cap ${cap_notional:,.0f}; using portfolio headroom.")
+                cap_notional = portfolio_cap
         notional = max(0.0, float(target_notional_usd))
         if notional > cap_notional:
             label = (f"{self.max_position_pct:.0%} cap" if exposure_scale >= 1.0

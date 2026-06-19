@@ -42,6 +42,13 @@ class RiskConfig:
 
 
 @dataclass
+class PortfolioConfig:
+    max_invested_pct: float = 0.90  # keep >=10% cash
+    max_sector_pct: float = 0.30    # <=30% of equity in any one sector
+    max_positions: int = 10
+
+
+@dataclass
 class BacktestConfig:
     starting_cash: float = 100_000.0
     commission: float = 0.0
@@ -65,6 +72,7 @@ class Config:
     benchmark: str = "SPY"  # market-regime benchmark
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
     risk: RiskConfig = field(default_factory=RiskConfig)
+    portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     credentials: Credentials = field(default_factory=Credentials)
 
@@ -115,6 +123,7 @@ def load_config(path: str | Path = "config.yaml", *, load_env: bool = True) -> C
             "params": raw.get("strategy", {}).get("params", {}),
         }),
         risk=RiskConfig(**(raw.get("risk", {}) or {})),
+        portfolio=PortfolioConfig(**(raw.get("portfolio", {}) or {})),
         backtest=BacktestConfig(**(raw.get("backtest", {}) or {})),
         credentials=Credentials(
             api_key=os.getenv("ALPACA_API_KEY"),

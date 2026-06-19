@@ -46,6 +46,12 @@ risk:
   # Halt all new entries once daily loss exceeds this fraction of equity.
   daily_loss_limit_pct: 0.03
 
+# Portfolio-level (account-wide) caps for the autonomous agent.
+portfolio:
+  max_invested_pct: 0.90  # keep at least 10% cash
+  max_sector_pct: 0.30    # at most 30% of equity in any one sector
+  max_positions: 10       # hold at most 10 names at once
+
 backtest:
   starting_cash: 100000
   # Per-trade commission in dollars (Alpaca equities are commission-free; this

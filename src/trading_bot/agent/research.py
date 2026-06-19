@@ -28,6 +28,7 @@ from dataclasses import asdict, dataclass, field
 class Fundamentals:
     ticker: str
     name: str = ""
+    sector: str = ""
     market_cap: float | None = None
     debt_to_equity: float | None = None
     current_ratio: float | None = None
@@ -129,6 +130,7 @@ class FmpClient:
         r = (ratios or [{}])[0]
         return Fundamentals(
             ticker=ticker, name=p.get("companyName", ""),
+            sector=p.get("sector", ""),
             market_cap=_f(p.get("mktCap")),
             debt_to_equity=_f(r.get("debtEquityRatioTTM")),
             current_ratio=_f(r.get("currentRatioTTM")),
@@ -278,7 +280,8 @@ class SimResearch:
     def fundamentals(self, ticker):
         # A plausible, reasonably healthy small-cap profile.
         return Fundamentals(
-            ticker=ticker, name=f"{ticker} Inc", market_cap=420_000_000,
+            ticker=ticker, name=f"{ticker} Inc", sector="Technology",
+            market_cap=420_000_000,
             debt_to_equity=0.6, current_ratio=2.1, cash=85_000_000,
             revenue_growth=0.18, free_cash_flow=1.2, source="sim",
         )

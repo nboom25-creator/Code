@@ -98,6 +98,11 @@ here so your proposals stay inside the envelope from the start.
   directly scales how much capital the trade gets. You choose direction and
   conviction; the code sizes. This only ever shrinks a position relative to the
   hard caps, never grows it.
+- **Portfolio caps (account-wide).** Beyond the per-trade caps, the whole account
+  is limited: keep a **cash buffer** (at most ~90% invested), no more than ~**30%
+  in any one sector**, and at most ~**10 open positions**. A new buy is capped by
+  the remaining sector/total headroom, and rejected if a sector or the cash buffer
+  is full. This stops ten correlated names from becoming one oversized bet.
 - **Daily drawdown — 2% circuit breaker.** If the account's equity falls **2% or
   more below the day's opening equity**, the harness halts all trading for the
   day and alerts the operator. Do not attempt to "trade back" a loss.

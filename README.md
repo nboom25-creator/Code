@@ -129,6 +129,7 @@ src/trading_bot/
     research.py   #   screener + SEC EDGAR + Firecrawl + sim providers
     sentiment.py  #   local lexicon sentiment scorer
     regime.py     #   market risk-on/off filter (scales new-entry exposure)
+    portfolio_risk.py # account-wide caps (cash buffer / sector / # positions)
     ledger.py     #   persistent trade ledger (FIFO closed-trade matching)
     performance.py#   realized P&L metrics + attribution by profile/confidence
     paper_sim.py  #   in-memory simulated paper broker
@@ -181,6 +182,22 @@ for complete transparency. The agent's permanent operating manual is
 To run it nightly, wire `python -m trading_bot agent` into cron or the project's
 session-start hook. The agent layer is fully unit-tested offline (no API key
 needed) via a scripted LLM and in-memory broker/data fakes.
+
+### Portfolio-level risk caps
+
+Per-trade caps aren't enough — ten small longs in the same sector are really one
+big bet. Account-wide limits (configurable under `portfolio:` in `config.yaml`)
+prevent that:
+
+- **Cash buffer** — stay at most `max_invested_pct` invested (default 90%).
+- **Sector cap** — at most `max_sector_pct` of equity in any one sector (30%).
+- **Max positions** — hold at most `max_positions` names at once (10).
+
+Each run the agent snapshots current holdings (with sectors from the research
+layer), and every new buy is capped by the remaining sector/total headroom — or
+skipped entirely when a sector or the cash buffer is full, or the position count
+is maxed. Sectors are only enforced when the research layer is configured;
+otherwise the cash-buffer and position-count caps still apply.
 
 ### Conviction + volatility position sizing
 
