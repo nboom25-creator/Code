@@ -20,6 +20,12 @@ agent_risk:
   max_adv_participation_pct: 0.01 # never more than 1% of a stock's daily volume
   reference_atr_pct: 0.03         # volatility baseline for conviction sizing
 
+# Extra filters on new buys (0 / empty turns a rule off).
+rules:
+  min_price: 5.0            # never buy a stock under $5 (skip penny stocks)
+  min_confidence: 0.60      # only act when the agent is at least 60% confident
+  max_new_buys_per_run: 3   # open at most 3 new positions per run
+
 # Also hunt for small/micro-cap opportunities each run.
 discovery:
   enabled: true

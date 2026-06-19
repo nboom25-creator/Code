@@ -24,7 +24,7 @@ import json
 from dataclasses import dataclass
 
 from .audit import AuditLog
-from .guardrails import Guardrails
+from .guardrails import GuardrailVerdict, Guardrails
 from .ledger import Fill, TradeLedger
 from .llm import LLM
 from .schemas import AdversarialCheck, PositionReview, ReasoningState, TradeDecision
@@ -75,6 +75,7 @@ class CognitiveLoop:
         ledger: TradeLedger | None = None,
         mode: str | None = None,
         execution=None,
+        rules=None,
     ) -> None:
         self.llm = llm
         self.tools = tools
@@ -86,9 +87,10 @@ class CognitiveLoop:
         self.dry_run = dry_run
         self.ledger = ledger
         self.mode = mode or ("dry_run" if dry_run else "paper")
-        from ..config import ExecutionConfig
+        from ..config import ExecutionConfig, TradingRulesConfig
 
         self.execution = execution or ExecutionConfig()
+        self.rules = rules or TradingRulesConfig()
 
     # ================================================================== #
     # Perception (shared by entry and review)
@@ -147,6 +149,18 @@ class CognitiveLoop:
             ),
             schema=TradeDecision,
         )
+
+        # Operator trading rules (price / confidence floors) can veto a BUY before
+        # it's ever sized.
+        rule_block = self._rule_block(decision.action, decision.confidence, p.price)
+        if rule_block:
+            verdict = GuardrailVerdict(False, "HOLD", 0, [rule_block])
+            self.audit.write_cycle(
+                ticker=ticker, perception=p.calls, perception_text=p.text,
+                reasoning=reasoning, adversarial=adversarial, decision=decision,
+                verdict=verdict, action_result="No order (trading rule).",
+                degraded=False, profile=p.profile)
+            return CycleResult(ticker, "HOLD", 0, False, False, sector=p.sector)
 
         # Risk-sizer: the harness sets the dollar size from conviction + volatility;
         # the model only chose direction. (Sizing always stays within the caps.)
@@ -249,6 +263,9 @@ class CognitiveLoop:
                 return notes, (False, 0), "No order (TRIM too small)."
             notes.append(f"TRIM: selling {qty} of {qty_held} shares ({frac:.0%}).")
         elif action == "ADD":
+            block = self._rule_block("BUY", review.confidence, p.price)
+            if block:
+                return notes + [block], (False, 0), "No order (trading rule)."
             notional = frac * self.guardrails.target_notional(
                 equity=equity, confidence=review.confidence, atr_pct=p.atr_pct)
             v = self.guardrails.validate_decision(
@@ -365,6 +382,19 @@ class CognitiveLoop:
         except Exception as exc:  # noqa: BLE001
             self.audit.system_event(f"{ticker}: order execution failed: {exc}")
             return False, f"Execution FAILED: {exc}"
+
+    def _rule_block(self, action: str, confidence: float, price: float) -> str | None:
+        """Return a reason string if an operator trading rule vetoes this BUY."""
+        if action != "BUY":
+            return None
+        r = self.rules
+        if r.min_price and 0 < price < r.min_price:
+            return (f"Trading rule: price ${price:,.2f} is below the "
+                    f"${r.min_price:,.2f} minimum — skipping.")
+        if r.min_confidence and confidence < r.min_confidence:
+            return (f"Trading rule: confidence {confidence:.0%} is below the "
+                    f"{r.min_confidence:.0%} minimum — skipping.")
+        return None
 
     def _record_fill(self, ticker, side, qty, price, profile, confidence, rationale):
         if self.ledger is None or qty < 1:

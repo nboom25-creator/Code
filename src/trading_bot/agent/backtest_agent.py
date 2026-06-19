@@ -225,6 +225,7 @@ class AgentBacktester:
         portfolio_config: PortfolioConfig | None = None,
         execution_config: ExecutionConfig | None = None,
         guardrails: Guardrails | None = None,
+        rules_config=None,
         benchmark_symbol: str = "SPY",
     ) -> None:
         self.history = history
@@ -253,6 +254,7 @@ class AgentBacktester:
             guardrails=guardrails or Guardrails(),
             audit=_SilentAudit(), system_prompt="(backtest)", dry_run=False,
             ledger=self.ledger, mode="backtest", execution=execution,
+            rules=rules_config,
         )
         self.starting_cash = starting_cash
 

@@ -99,7 +99,7 @@ class AgentRunner:
             llm=llm, tools=tools, guardrails=self.guardrails,
             audit=self.audit, system_prompt=load_system_manual(),
             dry_run=dry_run, ledger=self.ledger, mode=mode,
-            execution=config.execution,
+            execution=config.execution, rules=config.rules,
         )
 
     def run_day(self) -> dict:
@@ -165,9 +165,15 @@ class AgentRunner:
                 "Risk-off regime — skipping all new entries; managing existing "
                 "positions only.")
         else:
+            new_buys = 0
+            max_new = getattr(self.config.rules, "max_new_buys_per_run", 0)
             for ticker in self._entry_universe():
                 if ticker in held:
                     continue
+                if max_new and new_buys >= max_new:
+                    self.audit.system_event(
+                        f"Max new buys per run ({max_new}) reached — stopping entries.")
+                    break
                 if not portfolio.can_open_new(ticker):
                     self.audit.system_event(
                         f"{ticker}: max positions ({portfolio.max_positions}) reached "
@@ -182,6 +188,7 @@ class AgentRunner:
                     # Reflect a (proposed) buy so the next candidate sees the
                     # reduced headroom within this same run.
                     if result.final_action == "BUY" and result.notional > 0:
+                        new_buys += 1
                         portfolio.add(ticker, result.notional, result.sector)
                     if result.executed:
                         self.notifier.send(

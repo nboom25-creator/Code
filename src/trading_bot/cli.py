@@ -258,6 +258,7 @@ def _cmd_backtest_agent(args: argparse.Namespace) -> int:
         starting_cash=args.cash, cadence=args.cadence,
         portfolio_config=config.portfolio, execution_config=config.execution,
         guardrails=build_guardrails(config.agent_risk),
+        rules_config=config.rules,
         benchmark_symbol=benchmark_symbol,
     )
     result = bt.run()

@@ -60,6 +60,14 @@ class AgentRiskConfig:
 
 
 @dataclass
+class TradingRulesConfig:
+    """Extra operator filters on new buys (0 / empty = rule off)."""
+    min_price: float = 0.0              # skip buys below this share price
+    min_confidence: float = 0.0         # only act when at least this confident (0-1)
+    max_new_buys_per_run: int = 0       # cap new positions opened per run (0 = no cap)
+
+
+@dataclass
 class DiscoveryConfig:
     """Auto-discovery of small/micro-cap candidates during the agent's run."""
     enabled: bool = False
@@ -111,6 +119,7 @@ class Config:
     risk: RiskConfig = field(default_factory=RiskConfig)
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
     agent_risk: AgentRiskConfig = field(default_factory=AgentRiskConfig)
+    rules: TradingRulesConfig = field(default_factory=TradingRulesConfig)
     discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
@@ -165,6 +174,7 @@ def load_config(path: str | Path = "config.yaml", *, load_env: bool = True) -> C
         risk=RiskConfig(**(raw.get("risk", {}) or {})),
         portfolio=PortfolioConfig(**(raw.get("portfolio", {}) or {})),
         agent_risk=AgentRiskConfig(**(raw.get("agent_risk", {}) or {})),
+        rules=TradingRulesConfig(**(raw.get("rules", {}) or {})),
         discovery=DiscoveryConfig(**(raw.get("discovery", {}) or {})),
         execution=ExecutionConfig(**(raw.get("execution", {}) or {})),
         backtest=BacktestConfig(**(raw.get("backtest", {}) or {})),
