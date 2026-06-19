@@ -130,6 +130,7 @@ src/trading_bot/
     sentiment.py  #   local lexicon sentiment scorer
     regime.py     #   market risk-on/off filter (scales new-entry exposure)
     portfolio_risk.py # account-wide caps (cash buffer / sector / # positions)
+    account_rules.py  # limit-order cost model + PDT + wash-sale rules
     ledger.py     #   persistent trade ledger (FIFO closed-trade matching)
     performance.py#   realized P&L metrics + attribution by profile/confidence
     paper_sim.py  #   in-memory simulated paper broker
@@ -182,6 +183,26 @@ for complete transparency. The agent's permanent operating manual is
 To run it nightly, wire `python -m trading_bot agent` into cron or the project's
 session-start hook. The agent layer is fully unit-tested offline (no API key
 needed) via a scripted LLM and in-memory broker/data fakes.
+
+### Execution quality + account rules
+
+How orders are actually placed and tracked (configurable under `execution:` in
+`config.yaml`):
+
+- **Limit orders** — entries/exits are price-protected limit orders ("buy now but
+  never pay more than X"), not blind market orders. The limit reaches at most
+  `limit_slippage_pct` through the current price. Buys still attach the bracket
+  stop/take-profit.
+- **Cost model** — recorded (dry-run) fills assume a little adverse slippage
+  (`est_slippage_pct`) so the performance ledger isn't optimistic.
+- **Pattern Day Trader (PDT) rule** — on a sub-$25k account the bot blocks a 4th
+  same-day round trip in a rolling window, which would otherwise restrict the
+  account.
+- **Wash-sale avoidance** — it won't rebuy a name it sold at a loss within the
+  last `wash_sale_days` (default 30), preserving the tax loss.
+
+Both account rules read the trade ledger and are enforced in code before any
+order is placed; each can be toggled off in config.
 
 ### Portfolio-level risk caps
 

@@ -74,6 +74,7 @@ class CognitiveLoop:
         dry_run: bool = False,
         ledger: TradeLedger | None = None,
         mode: str | None = None,
+        execution=None,
     ) -> None:
         self.llm = llm
         self.tools = tools
@@ -85,6 +86,9 @@ class CognitiveLoop:
         self.dry_run = dry_run
         self.ledger = ledger
         self.mode = mode or ("dry_run" if dry_run else "paper")
+        from ..config import ExecutionConfig
+
+        self.execution = execution or ExecutionConfig()
 
     # ================================================================== #
     # Perception (shared by entry and review)
@@ -171,7 +175,7 @@ class CognitiveLoop:
         executed, action_result = self._execute(
             ticker, verdict.action, verdict.quantity, p.price,
             confidence=decision.confidence, profile=p.profile,
-            rationale=decision.rationale, approved=verdict.approved,
+            rationale=decision.rationale, approved=verdict.approved, equity=equity,
         )
 
         self.audit.write_cycle(
@@ -257,14 +261,16 @@ class CognitiveLoop:
                 return notes, (False, 0), f"No order (ADD vetoed: {v.action})."
             ex, res = self._execute(ticker, "BUY", v.quantity, p.price,
                                     confidence=review.confidence, profile=p.profile,
-                                    rationale=review.rationale, approved=True)
+                                    rationale=review.rationale, approved=True,
+                                    equity=equity)
             return notes, (ex, v.quantity), res
         else:  # HOLD
             return notes, (False, 0), "HOLD — keeping the position unchanged."
 
         ex, res = self._execute(ticker, side.upper(), qty, p.price,
                                 confidence=review.confidence, profile=p.profile,
-                                rationale=review.rationale, approved=True)
+                                rationale=review.rationale, approved=True,
+                                equity=equity)
         return notes, (ex, qty), res
 
     # ================================================================== #
@@ -298,11 +304,30 @@ class CognitiveLoop:
     # Execution + ledger (driver only)
     # ================================================================== #
     def _execute(self, ticker, action, qty, price, *, confidence, profile,
-                 rationale, approved) -> tuple[bool, str]:
+                 rationale, approved, equity=0.0) -> tuple[bool, str]:
         action = action.upper()
         if not approved or action not in ("BUY", "SELL") or qty < 1:
             return False, f"No order placed ({action})."
 
+        # --- Account-rule pre-checks (block before placing) ----------- #
+        from . import account_rules as ar
+
+        ex = self.execution
+        if action == "SELL" and ex.enforce_pdt and ar.pdt_would_block(
+                ticker, self.ledger, equity, self.mode,
+                threshold=ex.pdt_equity_threshold, max_day_trades=ex.pdt_max_day_trades):
+            msg = (f"Blocked: would be a 4th day trade on a sub-"
+                   f"${ex.pdt_equity_threshold:,.0f} account (PDT rule).")
+            self.audit.system_event(f"{ticker}: {msg}")
+            return False, msg
+        if action == "BUY" and ex.avoid_wash_sales and ar.wash_sale_blocked(
+                ticker, self.ledger, self.mode, days=ex.wash_sale_days):
+            msg = (f"Blocked: sold {ticker} at a loss within {ex.wash_sale_days} "
+                   f"days — avoiding a wash sale.")
+            self.audit.system_event(f"{ticker}: {msg}")
+            return False, msg
+
+        # --- Order type + price protection ---------------------------- #
         stop_price = take_profit_price = None
         bracket_desc = ""
         if action == "BUY":
@@ -310,20 +335,33 @@ class CognitiveLoop:
             bracket_desc = (f" with stop ${stop_price:,.2f}"
                             + (f" / take-profit ${take_profit_price:,.2f}"
                                if take_profit_price else ""))
+        limit_price = None
+        order_desc = "market"
+        if ex.order_type == "limit":
+            tol = ex.limit_slippage_pct
+            limit_price = round(price * (1 + tol) if action == "BUY"
+                                else price * (1 - tol), 2)
+            order_desc = f"limit ${limit_price:,.2f}"
+
+        # Cost-aware fill estimate for the ledger (so recorded P&L isn't optimistic).
+        fill_price = ar.estimated_fill_price(price, action.lower(), ex.est_slippage_pct)
 
         if self.dry_run:
-            result = (f"DRY RUN — would have executed {action} {qty} {ticker} "
-                      f"(~${qty * price:,.0f}){bracket_desc}. No order sent.")
-            self._record_fill(ticker, action.lower(), qty, price, profile,
+            result = (f"DRY RUN — would have placed {action} {qty} {ticker} as a "
+                      f"{order_desc} order{bracket_desc} (est. fill ${fill_price:,.2f}). "
+                      f"No order sent.")
+            self._record_fill(ticker, action.lower(), qty, fill_price, profile,
                               confidence, rationale)
             return False, result
         try:
             self.tools.execute_order(
-                ticker, qty, action.lower(), "market",
-                stop_loss_price=stop_price, take_profit_price=take_profit_price)
-            self._record_fill(ticker, action.lower(), qty, price, profile,
+                ticker, qty, action.lower(), ex.order_type,
+                stop_loss_price=stop_price, take_profit_price=take_profit_price,
+                limit_price=limit_price)
+            self._record_fill(ticker, action.lower(), qty, fill_price, profile,
                               confidence, rationale)
-            return True, f"Executed {action} {qty} {ticker}{bracket_desc}."
+            return True, (f"Executed {action} {qty} {ticker} as {order_desc}"
+                          f"{bracket_desc}.")
         except Exception as exc:  # noqa: BLE001
             self.audit.system_event(f"{ticker}: order execution failed: {exc}")
             return False, f"Execution FAILED: {exc}"

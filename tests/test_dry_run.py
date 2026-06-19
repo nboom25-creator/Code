@@ -106,7 +106,7 @@ def test_dry_run_intercepts_execution_but_logs_reasoning(tmp_path):
     import datetime as dt
     md = (tmp_path / f"{dt.date.today().isoformat()}.md").read_text()
     assert "DRY RUN" in md
-    assert "would have executed BUY" in md
+    assert "would have placed BUY" in md
     assert "Bull case" in md and "Bear case" in md
     assert "Decision (proposed)" in md
 

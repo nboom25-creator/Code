@@ -52,6 +52,18 @@ portfolio:
   max_sector_pct: 0.30    # at most 30% of equity in any one sector
   max_positions: 10       # hold at most 10 names at once
 
+# Order execution + account rules for the autonomous agent.
+execution:
+  order_type: limit        # "limit" (marketable, price-protected) or "market"
+  limit_slippage_pct: 0.003  # limit may reach 0.3% through the current price
+  est_slippage_pct: 0.0005   # assumed slippage for dry-run fill estimates
+  commission: 0.0
+  enforce_pdt: true          # block the 4th day trade on a sub-$25k account
+  pdt_equity_threshold: 25000
+  pdt_max_day_trades: 3
+  avoid_wash_sales: true     # don't rebuy a name sold at a loss within...
+  wash_sale_days: 30         # ...this many days
+
 backtest:
   starting_cash: 100000
   # Per-trade commission in dollars (Alpaca equities are commission-free; this

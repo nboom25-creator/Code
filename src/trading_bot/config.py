@@ -49,6 +49,22 @@ class PortfolioConfig:
 
 
 @dataclass
+class ExecutionConfig:
+    # Order placement
+    order_type: str = "limit"          # "limit" (marketable) or "market"
+    limit_slippage_pct: float = 0.003  # how far through the price a limit may reach
+    # Cost model (used to estimate dry-run fills realistically)
+    est_slippage_pct: float = 0.0005   # assumed adverse slippage per fill
+    commission: float = 0.0            # per-order commission ($)
+    # Account rules
+    enforce_pdt: bool = True           # block the 4th day trade on a <$25k account
+    pdt_equity_threshold: float = 25_000.0
+    pdt_max_day_trades: int = 3
+    avoid_wash_sales: bool = True      # don't rebuy a loser within the window
+    wash_sale_days: int = 30
+
+
+@dataclass
 class BacktestConfig:
     starting_cash: float = 100_000.0
     commission: float = 0.0
@@ -73,6 +89,7 @@ class Config:
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
     risk: RiskConfig = field(default_factory=RiskConfig)
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
+    execution: ExecutionConfig = field(default_factory=ExecutionConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     credentials: Credentials = field(default_factory=Credentials)
 
@@ -124,6 +141,7 @@ def load_config(path: str | Path = "config.yaml", *, load_env: bool = True) -> C
         }),
         risk=RiskConfig(**(raw.get("risk", {}) or {})),
         portfolio=PortfolioConfig(**(raw.get("portfolio", {}) or {})),
+        execution=ExecutionConfig(**(raw.get("execution", {}) or {})),
         backtest=BacktestConfig(**(raw.get("backtest", {}) or {})),
         credentials=Credentials(
             api_key=os.getenv("ALPACA_API_KEY"),

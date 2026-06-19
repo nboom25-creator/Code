@@ -70,7 +70,10 @@ Deep research (for thinly-covered small/micro-caps):
 Execution:
 - `execute_order(ticker, qty, side, order_type)` — **reserved for the harness.**
   You never call this. You express intent through the structured Trade Decision;
-  the deterministic risk layer is the only thing that may execute.
+  the deterministic risk layer is the only thing that may execute. The harness
+  uses price-protected **limit orders**, and enforces broker/tax rules you don't
+  need to reason about (Pattern Day Trader limit on small accounts; no rebuying a
+  name sold at a loss within ~30 days / wash-sale).
 
 If a *price/market-data* tool fails or returns empty/corrupted data, you do
 **not** guess — stand down (HOLD). Missing **news** is different and expected for

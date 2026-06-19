@@ -321,25 +321,29 @@ class AgentTools:
         *,
         stop_loss_price: float | None = None,
         take_profit_price: float | None = None,
+        limit_price: float | None = None,
     ) -> Any:
         """Place an order. Called only by the harness after guardrail validation.
 
-        A BUY with a ``stop_loss_price`` is submitted as a **bracket order** so the
-        protective stop (and optional take-profit) are attached at entry and held
-        broker-side even if the agent goes offline. Falls back to a plain market
-        order if the broker has no bracket support.
+        A BUY with a ``stop_loss_price`` is a **bracket order** (protective stop +
+        optional take-profit attached at entry, held broker-side). When
+        ``order_type == "limit"`` and a ``limit_price`` is given, orders are
+        price-protected limit orders; otherwise they fall back to market orders.
         """
-        if order_type != "market":
-            raise ValueError("only market orders are supported by this harness")
+        use_limit = order_type == "limit" and limit_price and limit_price > 0
         if side == "sell":
             if qty <= 0:
                 return self.broker.close_position(ticker)
+            if use_limit and hasattr(self.broker, "submit_limit_order"):
+                return self.broker.submit_limit_order(ticker, qty, "sell", limit_price)
             return self.broker.submit_market_order(ticker, qty, "sell")
         # side == "buy"
         if stop_loss_price and hasattr(self.broker, "submit_bracket_order"):
             return self.broker.submit_bracket_order(
-                ticker, qty,
-                stop_loss_price=stop_loss_price,
+                ticker, qty, stop_loss_price=stop_loss_price,
                 take_profit_price=take_profit_price,
+                limit_price=limit_price if use_limit else None,
             )
+        if use_limit and hasattr(self.broker, "submit_limit_order"):
+            return self.broker.submit_limit_order(ticker, qty, "buy", limit_price)
         return self.broker.submit_market_order(ticker, qty, "buy")

@@ -97,6 +97,7 @@ class AgentRunner:
             llm=llm, tools=tools, guardrails=self.guardrails,
             audit=self.audit, system_prompt=load_system_manual(),
             dry_run=dry_run, ledger=self.ledger, mode=mode,
+            execution=config.execution,
         )
 
     def run_day(self) -> dict:

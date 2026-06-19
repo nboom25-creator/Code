@@ -117,6 +117,19 @@ class AlpacaBroker:
         )
         return self._get_client().submit_order(request)
 
+    def submit_limit_order(self, symbol: str, quantity: int, side: str,
+                           limit_price: float):
+        """Submit a day limit order — fills at ``limit_price`` or better, never worse."""
+        from alpaca.trading.enums import OrderSide, TimeInForce
+        from alpaca.trading.requests import LimitOrderRequest
+
+        if quantity <= 0:
+            raise ValueError("quantity must be positive")
+        order_side = OrderSide.BUY if side == "buy" else OrderSide.SELL
+        return self._get_client().submit_order(LimitOrderRequest(
+            symbol=symbol, qty=quantity, side=order_side,
+            time_in_force=TimeInForce.DAY, limit_price=round(limit_price, 2)))
+
     def submit_bracket_order(
         self,
         symbol: str,
@@ -124,15 +137,18 @@ class AlpacaBroker:
         *,
         stop_loss_price: float,
         take_profit_price: float | None = None,
+        limit_price: float | None = None,
     ):
         """Submit a long entry with broker-managed protective exits.
 
         A bracket order attaches a stop-loss (and optional take-profit) that the
         broker manages even if this bot is offline — important for an autonomous
-        system. Prices are rounded to the cent.
+        system. If ``limit_price`` is given the entry is a price-protected limit
+        order; otherwise it's a market order. Prices are rounded to the cent.
         """
         from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
         from alpaca.trading.requests import (
+            LimitOrderRequest,
             MarketOrderRequest,
             StopLossRequest,
             TakeProfitRequest,
@@ -155,7 +171,12 @@ class AlpacaBroker:
             kwargs["take_profit"] = TakeProfitRequest(
                 limit_price=round(take_profit_price, 2)
             )
-        return self._get_client().submit_order(MarketOrderRequest(**kwargs))
+        if limit_price and limit_price > 0:
+            kwargs["limit_price"] = round(limit_price, 2)
+            request = LimitOrderRequest(**kwargs)
+        else:
+            request = MarketOrderRequest(**kwargs)
+        return self._get_client().submit_order(request)
 
     def close_position(self, symbol: str):
         return self._get_client().close_position(symbol)
