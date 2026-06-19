@@ -60,9 +60,12 @@ class AuditLog:
         verdict: GuardrailVerdict | None,
         action_result: str,
         degraded: bool,
+        profile: str = "",
     ) -> None:
         ts = dt.datetime.now().strftime("%H:%M:%S")
         lines = [f"## {ticker} — {ts}\n"]
+        if profile:
+            lines.append(f"_Profile: **{profile}**_\n")
 
         lines.append("### 1. Perception\n")
         for call in perception:

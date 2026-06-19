@@ -129,15 +129,18 @@ class AgentRunner:
 
 
 def build_runner(config: Config | None = None) -> AgentRunner:
-    """Wire the agent to the real Alpaca broker, data provider, and Claude."""
+    """Wire the agent to the real Alpaca broker, data provider, Claude, and the
+    real research pipeline (FMP/EDGAR/Firecrawl per the keys present)."""
     from ..broker import AlpacaBroker
     from ..data import DataProvider
+    from .research import build_research_bundle
 
     config = config or load_config()
     config.validate()
     broker = AlpacaBroker(config)
     data = DataProvider(config.credentials)
-    tools = AgentTools(broker, data, default_timeframe=config.timeframe)
+    research = build_research_bundle(sim=False)
+    tools = AgentTools(broker, data, research=research, default_timeframe=config.timeframe)
     llm = AnthropicLLM()
     return AgentRunner(config=config, llm=llm, tools=tools, broker=broker)
 
@@ -148,6 +151,8 @@ def build_dry_run_runner(
     offline: bool = False,
     sim_data: bool = False,
     watchlist: list[str] | None = None,
+    discover_sector: str | None = None,
+    discover_limit: int = 3,
     sim_equity: float = 100_000.0,
 ) -> tuple[AgentRunner, dict]:
     """Wire a dry-run runner, auto-selecting providers from what's in ``.env``.
@@ -163,7 +168,10 @@ def build_dry_run_runner(
     """
     import os
 
+    from .research import build_research_bundle
+
     config = config or load_config()
+    research = build_research_bundle(sim=sim_data)
 
     if sim_data:
         from ..data import SyntheticDataProvider
@@ -175,6 +183,14 @@ def build_dry_run_runner(
 
         data = YFinanceDataProvider()
         data_kind = "yfinance"
+
+    # Optional discovery: build the watchlist from the small-cap screener.
+    discovered: list[str] = []
+    if discover_sector:
+        candidates = research.discover_small_caps(discover_sector, 2_000_000_000, 100_000)
+        discovered = [c.ticker for c in candidates][:discover_limit]
+        if discovered:
+            watchlist = discovered
 
     # Broker selection.
     if config.credentials.api_key and config.credentials.api_secret:
@@ -196,11 +212,13 @@ def build_dry_run_runner(
         llm = AnthropicLLM()
         brain = "Claude (claude-opus-4-8)"
 
-    tools = AgentTools(broker, data, default_timeframe=config.timeframe)
+    tools = AgentTools(broker, data, research=research,
+                       default_timeframe=config.timeframe)
     runner = AgentRunner(
         config=config, llm=llm, tools=tools, broker=broker,
         watchlist=watchlist or config.symbols, dry_run=True,
     )
     selections = {"data": data_kind, "broker": broker_kind, "brain": brain,
-                  "watchlist": runner.watchlist}
+                  "research": ", ".join(research.capabilities) or "none",
+                  "discovered": discovered, "watchlist": runner.watchlist}
     return runner, selections

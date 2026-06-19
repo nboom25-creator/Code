@@ -122,10 +122,13 @@ src/trading_bot/
   cli.py          # command-line entry point
   agent/          # autonomous LLM agent (Research-then-Decide loop)
     schemas.py    #   structured outputs per cognitive phase (Pydantic)
-    tools.py      #   read-only perception tools + driver-only execute_order
-    guardrails.py #   hardcoded 5% sizing / 2% drawdown / HOLD-on-bad-data
-    llm.py        #   Claude (Opus 4.8) + offline scripted LLM (same interface)
-    cognition.py  #   the five-phase loop driver
+    tools.py      #   perception + deep-research tools; driver-only execute_order
+    guardrails.py #   hardcoded 5% sizing / 2% drawdown / bracket stops
+    llm.py        #   Claude (Opus 4.8) + offline HeuristicLLM (same interface)
+    cognition.py  #   five-phase driver + small-cap fallback & classification
+    research.py   #   screener + SEC EDGAR + Firecrawl + sim providers
+    sentiment.py  #   local lexicon sentiment scorer
+    paper_sim.py  #   in-memory simulated paper broker
     audit.py      #   logs/YYYY-MM-DD.md transparency trail
     runner.py     #   daily / cron runner + drawdown circuit breaker
 CLAUDE.md         # the agent's permanent system manual
@@ -200,6 +203,40 @@ Providers are auto-selected from `.env`, and each is independent:
 
 All keys, secrets, and base URLs load strictly from `.env` via `python-dotenv`
 (see [`.env.example`](.env.example)) — nothing is hardcoded.
+
+### Small/micro-cap research
+
+Thinly-covered names get an alternative, high-density research pipeline and a
+discovery mechanism:
+
+```bash
+# Screen for small-caps in a sector (FMP_API_KEY for live, or --sim offline):
+python -m trading_bot discover --sector technology
+
+# Run the agent on screened small-caps (dry-run, fully offline):
+python run_dry_run.py --offline --sim-data --discover healthcare
+```
+
+**Discovery** — `discover_small_caps(sector, market_cap_max=2e9, min_volume=1e5)`
+screens via Financial Modeling Prep (or the simulated screener offline).
+
+**Multi-tiered research fallback** — when generic news returns **fewer than 3
+items**, the harness automatically enriches perception:
+- *Tier 1 — alternative financial data:* SEC EDGAR 10-Q/10-K filings and Form 4
+  insider activity (free; set `SEC_EDGAR_USER_AGENT`), plus fundamentals.
+- *Tier 2 — deep web search:* a developer scraping API (Firecrawl) runs
+  `"{TICKER} stock analysis {Company} earnings guidance"` against niche investor
+  blogs / regional outlets and returns markdown.
+
+**Asymmetric information processing** — each name is classified large- vs
+small-cap (by market cap, or sparse coverage as a proxy). Large-caps weigh macro
+trends + high-volume news sentiment; small-caps **heavily weigh raw fundamentals
+(cash, debt/equity, current ratio, growth) and unusual volume**. If news
+sentiment is empty, the agent does **not** fail — it relies 100% on fundamentals.
+
+Every external provider degrades gracefully to empty on failure, and a full set
+of offline `Sim` providers makes the whole pipeline testable and demonstrable
+with no network or keys.
 
 ## Disclaimer
 

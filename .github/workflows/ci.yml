@@ -40,3 +40,6 @@ jobs:
           python -m trading_bot walkforward --synthetic --strategy sma_crossover --bars 800
           # Agent dry-run: offline brain + synthetic data, no network/keys needed.
           python run_dry_run.py --offline --sim-data --symbols AAPL,MSFT
+          # Small-cap discovery + deep-research fallback (all simulated).
+          python -m trading_bot discover --sector technology --sim
+          python run_dry_run.py --offline --sim-data --discover healthcare

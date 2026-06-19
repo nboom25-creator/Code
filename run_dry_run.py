@@ -42,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="force the offline HeuristicLLM even if a Claude key is set")
     parser.add_argument("--sim-data", action="store_true",
                         help="use synthetic market data/news (no network egress needed)")
+    parser.add_argument("--discover", metavar="SECTOR",
+                        help="screen small-caps in SECTOR and use them as the watchlist")
     parser.add_argument("--equity", type=float, default=100_000.0,
                         help="starting equity for the simulated paper account")
     parser.add_argument("-c", "--config", default="config.yaml")
@@ -57,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
 
     runner, selections = build_dry_run_runner(
         config, offline=args.offline, sim_data=args.sim_data,
-        watchlist=watchlist, sim_equity=args.equity,
+        watchlist=watchlist, discover_sector=args.discover, sim_equity=args.equity,
     )
 
     print("=" * 64)
@@ -65,6 +67,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Market data : {selections['data']}")
     print(f"  Broker      : {selections['broker']}")
     print(f"  Brain       : {selections['brain']}")
+    print(f"  Research    : {selections['research']}")
+    if selections.get("discovered"):
+        print(f"  Discovered  : {', '.join(selections['discovered'])}")
     print(f"  Watchlist   : {', '.join(selections['watchlist'])}")
     print("=" * 64)
 

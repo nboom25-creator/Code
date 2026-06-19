@@ -84,14 +84,22 @@ class CognitiveLoop:
             )
             return CycleResult(ticker, "HOLD", 0, degraded=True, executed=False)
 
+        # --- Multi-tiered research fallback + cap classification ------ #
+        profile, directive = self._enrich_and_classify(ticker, calls)
+        # Let a stateful (heuristic) LLM observe the full, enriched evidence.
+        observe = getattr(self.llm, "observe", None)
+        if callable(observe):
+            observe(calls, profile=profile)
+
         context = self._context_text(perception_text, calls)
 
         # --- Phase 2: Cognitive Planning ------------------------------ #
         reasoning = self.llm.parse(
             system=self.system_prompt,
             prompt=(
-                f"Cognitive Planning phase for {ticker}. Based ONLY on the gathered "
-                f"data below, produce the structured Reasoning State.\n\n{context}"
+                f"Cognitive Planning phase for {ticker} [{profile}]. {directive}\n\n"
+                f"Based ONLY on the gathered data below, produce the structured "
+                f"Reasoning State.\n\n{context}"
             ),
             schema=ReasoningState,
         )
@@ -101,9 +109,9 @@ class CognitiveLoop:
         adversarial = self.llm.parse(
             system=self.system_prompt,
             prompt=(
-                f"Reflection phase for {ticker}. Construct a genuine bull case AND a "
-                f"genuine bear case. Steel-man both. Data and plan:\n\n{context}\n\n"
-                f"Plan summary: {reasoning.summary}"
+                f"Reflection phase for {ticker} [{profile}]. {directive}\n\n"
+                f"Construct a genuine bull case AND a genuine bear case. Steel-man "
+                f"both. Data and plan:\n\n{context}\n\nPlan summary: {reasoning.summary}"
             ),
             schema=AdversarialCheck,
         )
@@ -112,8 +120,9 @@ class CognitiveLoop:
         decision = self.llm.parse(
             system=self.system_prompt,
             prompt=(
-                f"Action phase for {ticker}. Weighing both cases, propose a single "
-                f"decision (BUY/SELL/HOLD). Remember the 5% position cap. "
+                f"Action phase for {ticker} [{profile}]. {directive}\n\n"
+                f"Weighing both cases, propose a single decision (BUY/SELL/HOLD). "
+                f"Remember the 5% position cap. "
                 f"Bull: {adversarial.bull_case}\nBear: {adversarial.bear_case}\n"
                 f"Net: {adversarial.net_assessment}"
             ),
@@ -175,8 +184,84 @@ class CognitiveLoop:
             ticker=ticker, perception=calls, perception_text=perception_text,
             reasoning=reasoning, adversarial=adversarial, decision=decision,
             verdict=verdict, action_result=action_result, degraded=False,
+            profile=profile,
         )
         return CycleResult(ticker, verdict.action, verdict.quantity, False, executed)
+
+    # ------------------------------------------------------------------ #
+    # Multi-tiered research fallback + small/large-cap classification.
+    # ------------------------------------------------------------------ #
+    SMALL_CAP_MAX = 2_000_000_000  # $2B — boundary for small/micro-cap handling
+    MIN_NEWS_ITEMS = 3             # trigger the deep-research fallback below this
+
+    def _enrich_and_classify(self, ticker: str, calls: list[ToolCall]) -> tuple[str, str]:
+        """Run the deep-research fallback when news is sparse, classify the name as
+        small- or large-cap, and return (profile, asymmetric_directive)."""
+        news_count = self._news_count(calls)
+        has_research = self.tools.research is not None
+
+        # Tier 0: fundamentals (cheap) — needed to classify and to weigh small-caps.
+        market_cap = None
+        company_name = ticker
+        if has_research:
+            fcall = self.tools.dispatch("get_fundamentals", {"ticker": ticker})
+            calls.append(fcall)
+            market_cap, company_name = self._fundamentals_facts(fcall, ticker)
+
+        # Tiers 1 & 2 fire only when generic news coverage is thin.
+        if news_count < self.MIN_NEWS_ITEMS and has_research:
+            self.audit.system_event(
+                f"{ticker}: sparse news ({news_count} items) — invoking deep-research "
+                f"fallback (SEC filings, insider activity, web research)."
+            )
+            calls.append(self.tools.dispatch("get_sec_filings", {"ticker": ticker}))      # Tier 1
+            calls.append(self.tools.dispatch("get_insider_activity", {"ticker": ticker}))  # Tier 1
+            calls.append(self.tools.dispatch(                                              # Tier 2
+                "web_research", {"ticker": ticker, "company_name": company_name}))
+
+        # Classification.
+        if market_cap is not None:
+            is_small = market_cap <= self.SMALL_CAP_MAX
+        else:
+            is_small = news_count < self.MIN_NEWS_ITEMS  # sparse coverage as a proxy
+
+        if is_small:
+            profile = "small-cap"
+            directive = (
+                "This is a thinly-covered small/micro-cap. Heavily weigh raw "
+                "FUNDAMENTALS (cash runway, debt-to-equity, current ratio, revenue "
+                "growth) and UNUSUAL VOLUME changes. Mainstream news sentiment is "
+                "expected to be sparse or empty — do NOT treat missing sentiment as a "
+                "reason to fail or to default bearish. If sentiment is empty, rely "
+                "100% on the fundamentals and volume evidence above."
+            )
+        else:
+            profile = "large-cap"
+            directive = (
+                "This is a large-cap with dense coverage. Prioritize broad macro "
+                "trends and high-volume news sentiment, corroborated by price action."
+            )
+        return profile, directive
+
+    @staticmethod
+    def _news_count(calls: list[ToolCall]) -> int:
+        for call in calls:
+            if call.name == "get_company_news" and not call.is_error:
+                try:
+                    return int(json.loads(call.output).get("count", 0))
+                except (json.JSONDecodeError, ValueError, TypeError):
+                    return 0
+        return 0
+
+    @staticmethod
+    def _fundamentals_facts(call: ToolCall, ticker: str) -> tuple[float | None, str]:
+        if call.is_error:
+            return None, ticker
+        try:
+            f = json.loads(call.output).get("fundamentals") or {}
+            return f.get("market_cap"), (f.get("name") or ticker)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return None, ticker
 
     # ------------------------------------------------------------------ #
     # Helpers — interpret the perception tool outputs.

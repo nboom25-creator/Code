@@ -39,7 +39,7 @@ PERCEPTION_TOOL_SCHEMAS: list[dict] = [
         "name": "get_market_bars",
         "description": (
             "Fetch recent OHLCV price history for a ticker. Use this to ground any "
-            "view in current prices, trend, and volume."
+            "view in current prices, trend, and volume (incl. unusual volume)."
         ),
         "input_schema": {
             "type": "object",
@@ -72,6 +72,72 @@ PERCEPTION_TOOL_SCHEMAS: list[dict] = [
     },
 ]
 
+# Deep-research tools for thinly-covered small/micro-caps. Used by the harness's
+# deterministic fallback when generic news is sparse, and available to the model.
+DEEP_RESEARCH_TOOL_SCHEMAS: list[dict] = [
+    {
+        "name": "get_fundamentals",
+        "description": (
+            "Fetch fundamental metrics (market cap, debt-to-equity, current ratio, "
+            "cash, revenue growth). Essential for small-caps where news is sparse."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"ticker": {"type": "string"}},
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_sec_filings",
+        "description": "Fetch recent SEC 10-Q / 10-K filings for a ticker from EDGAR.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"ticker": {"type": "string"}},
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_insider_activity",
+        "description": "Fetch recent insider (Form 4) activity for a ticker from EDGAR.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"ticker": {"type": "string"}},
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "web_research",
+        "description": (
+            "Targeted web search/scrape (markdown) for niche investor blogs and "
+            "regional outlets — for small-caps with no mainstream coverage."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "company_name": {"type": "string"},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "discover_small_caps",
+        "description": (
+            "Screen for small/micro-cap companies in a sector meeting liquidity "
+            "thresholds. Returns candidate tickers."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sector": {"type": "string"},
+                "market_cap_max": {"type": "number"},
+                "min_volume": {"type": "number"},
+            },
+            "required": ["sector"],
+        },
+    },
+]
+
 
 @dataclass
 class ToolCall:
@@ -84,9 +150,11 @@ class ToolCall:
 
 
 class AgentTools:
-    def __init__(self, broker: BrokerPort, data: DataPort, *, default_timeframe: str = "1Day") -> None:
+    def __init__(self, broker: BrokerPort, data: DataPort, *,
+                 research=None, default_timeframe: str = "1Day") -> None:
         self.broker = broker
         self.data = data
+        self.research = research  # ResearchBundle or None
         self.default_timeframe = default_timeframe
 
     # ------------------------------------------------------------------ #
@@ -101,11 +169,16 @@ class AgentTools:
             raise ValueError(f"no bars returned for {ticker}")
         tail = bars.tail(min(limit, len(bars)))
         latest = tail.iloc[-1]
+        avg_volume = float(tail["volume"].mean()) or 1.0
+        latest_volume = float(latest["volume"])
         return json.dumps({
             "ticker": ticker,
             "bars_returned": int(len(bars)),
             "latest_close": round(float(latest["close"]), 4),
-            "latest_volume": int(latest["volume"]),
+            "latest_volume": int(latest_volume),
+            "avg_volume": int(avg_volume),
+            # Unusual-volume signal — small-cap moves often start with a volume spike.
+            "volume_ratio": round(latest_volume / avg_volume, 2),
             "window_high": round(float(tail["high"].max()), 4),
             "window_low": round(float(tail["low"].min()), 4),
             "first_close": round(float(tail.iloc[0]["close"]), 4),
@@ -144,6 +217,49 @@ class AgentTools:
             ],
         })
 
+    # ------------------------------------------------------------------ #
+    # Deep-research tools (small/micro-cap fallbacks)
+    # ------------------------------------------------------------------ #
+    def _require_research(self):
+        if self.research is None:
+            raise ValueError("no research provider configured")
+        return self.research
+
+    def get_fundamentals(self, ticker: str) -> str:
+        f = self._require_research().get_fundamentals(ticker)
+        return json.dumps({"ticker": ticker, "fundamentals": f.as_dict() if f else None})
+
+    def get_sec_filings(self, ticker: str) -> str:
+        filings = self._require_research().get_sec_filings(ticker)
+        return json.dumps({
+            "ticker": ticker, "count": len(filings),
+            "filings": [vars(f) for f in filings],
+        })
+
+    def get_insider_activity(self, ticker: str) -> str:
+        trades = self._require_research().get_insider_activity(ticker)
+        return json.dumps({
+            "ticker": ticker, "count": len(trades),
+            "insider_trades": [vars(t) for t in trades],
+        })
+
+    def web_research(self, ticker: str, company_name: str = "") -> str:
+        name = company_name or ticker
+        query = f"{ticker} stock analysis {name} earnings guidance"
+        results = self._require_research().web_research(query)
+        return json.dumps({"ticker": ticker, "query": query,
+                           "count": len(results), "results": results})
+
+    def discover_small_caps(self, sector: str, market_cap_max: float = 2_000_000_000,
+                            min_volume: float = 100_000) -> str:
+        results = self._require_research().discover_small_caps(
+            sector, market_cap_max, min_volume)
+        return json.dumps({
+            "sector": sector, "market_cap_max": market_cap_max,
+            "min_volume": min_volume, "count": len(results),
+            "candidates": [vars(r) for r in results],
+        })
+
     def dispatch(self, name: str, tool_input: dict) -> ToolCall:
         """Execute a read-only tool by name and capture the result (never raises)."""
         try:
@@ -157,6 +273,21 @@ class AgentTools:
                 out = self.get_company_news(tool_input["ticker"])
             elif name == "get_portfolio_state":
                 out = self.get_portfolio_state()
+            elif name == "get_fundamentals":
+                out = self.get_fundamentals(tool_input["ticker"])
+            elif name == "get_sec_filings":
+                out = self.get_sec_filings(tool_input["ticker"])
+            elif name == "get_insider_activity":
+                out = self.get_insider_activity(tool_input["ticker"])
+            elif name == "web_research":
+                out = self.web_research(tool_input["ticker"],
+                                        tool_input.get("company_name", ""))
+            elif name == "discover_small_caps":
+                out = self.discover_small_caps(
+                    tool_input["sector"],
+                    float(tool_input.get("market_cap_max", 2_000_000_000)),
+                    float(tool_input.get("min_volume", 100_000)),
+                )
             else:
                 return ToolCall(name, tool_input, f"unknown tool {name!r}", True)
             return ToolCall(name, tool_input, out, False)

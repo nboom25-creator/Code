@@ -184,6 +184,23 @@ def _cmd_agent(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_discover(args: argparse.Namespace) -> int:
+    from .agent.research import build_research_bundle
+
+    research = build_research_bundle(sim=args.sim)
+    candidates = research.discover_small_caps(
+        args.sector, args.max_cap, args.min_volume)
+    if not candidates:
+        print("No candidates (set FMP_API_KEY for live screening, or pass --sim).")
+        return 0
+    print(f"Small/micro-cap candidates in '{args.sector}' "
+          f"(cap < ${args.max_cap:,.0f}, vol > {args.min_volume:,.0f}):")
+    for c in candidates:
+        print(f"  {c.ticker:<8} {c.name[:36]:<36} "
+              f"cap=${c.market_cap/1e6:,.0f}M vol={c.volume:,.0f}")
+    return 0
+
+
 def _cmd_status(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     try:
@@ -259,6 +276,16 @@ def build_parser() -> argparse.ArgumentParser:
     agent = sub.add_parser(
         "agent", help="run the autonomous LLM agent (Research-then-Decide loop)")
     agent.set_defaults(func=_cmd_agent)
+
+    disc = sub.add_parser("discover", help="screen for small/micro-cap candidates")
+    disc.add_argument("--sector", required=True, help="e.g. Technology, Healthcare")
+    disc.add_argument("--max-cap", type=float, default=2_000_000_000,
+                      help="max market cap (default $2B)")
+    disc.add_argument("--min-volume", type=float, default=100_000,
+                      help="min average volume (default 100k)")
+    disc.add_argument("--sim", action="store_true",
+                      help="use offline simulated screener (no API key)")
+    disc.set_defaults(func=_cmd_discover)
 
     status = sub.add_parser("status", help="show account + positions")
     status.set_defaults(func=_cmd_status)
