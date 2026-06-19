@@ -358,16 +358,51 @@ class AgentBacktester:
                 continue
             frames[sym] = df.sort_index()
 
-        if benchmark_symbol not in frames:
-            raise ValueError(f"no benchmark data for {benchmark_symbol}; cannot run")
+        return AgentBacktester._align_frames(frames, benchmark_symbol)
 
-        # Align everything to the dates they all share.
+    @staticmethod
+    def load_csv_history(symbols, *, directory, benchmark_symbol="SPY"):
+        """Load historical bars from local CSV files — one per symbol, named
+        ``{SYMBOL}.csv`` (plus the benchmark) in ``directory``.
+
+        Each CSV needs a date column and open/high/low/close/volume columns
+        (case-insensitive). No network required, so this is the way to backtest
+        on real data in a locked-down environment: export prices anywhere, drop
+        the CSVs in, and run.
+        """
+        from pathlib import Path
+
+        directory = Path(directory)
+        frames: dict[str, pd.DataFrame] = {}
+        for sym in [*symbols, benchmark_symbol]:
+            path = directory / f"{sym}.csv"
+            if not path.exists():
+                print(f"  (no CSV for {sym} at {path} — skipping)")
+                continue
+            df = pd.read_csv(path)
+            df.columns = [c.strip().lower() for c in df.columns]
+            date_col = next((c for c in ("date", "timestamp", "time", "datetime")
+                             if c in df.columns), None)
+            if date_col is None:
+                raise ValueError(f"{path}: no date column found")
+            df[date_col] = pd.to_datetime(df[date_col])
+            df = df.set_index(date_col).sort_index()
+            missing = {"open", "high", "low", "close", "volume"} - set(df.columns)
+            if missing:
+                raise ValueError(f"{path}: missing columns {sorted(missing)}")
+            frames[sym] = df[["open", "high", "low", "close", "volume"]]
+        return AgentBacktester._align_frames(frames, benchmark_symbol)
+
+    @staticmethod
+    def _align_frames(frames: dict[str, pd.DataFrame], benchmark_symbol: str):
+        """Align all frames to the dates they share; split off the benchmark."""
+        if benchmark_symbol not in frames:
+            raise ValueError(f"no data for benchmark {benchmark_symbol}; cannot run")
         common = None
         for df in frames.values():
             common = df.index if common is None else common.intersection(df.index)
         if common is None or len(common) == 0:
             raise ValueError("symbols share no common trading dates")
-
         aligned = {sym: df.reindex(common) for sym, df in frames.items()}
         benchmark = aligned.pop(benchmark_symbol)
         return aligned, benchmark

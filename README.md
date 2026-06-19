@@ -287,6 +287,10 @@ python -m trading_bot backtest-agent --symbols AAA,BBB,CCC --days 400 --cadence 
 # Real historical prices (needs network access to the data host):
 python -m trading_bot backtest-agent --real --symbols AAPL,MSFT,NVDA \
     --start 2022-01-01 --end 2023-12-31
+
+# Real prices from local CSV files (no network — works in locked-down envs):
+#   put AAPL.csv, MSFT.csv, NVDA.csv, SPY.csv (date,open,high,low,close,volume) in data/
+python -m trading_bot backtest-agent --csv data/ --symbols AAPL,MSFT,NVDA
 ```
 
 **Real-data backtests turn the research layer OFF by default.** Fundamentals and

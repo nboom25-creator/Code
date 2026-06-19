@@ -126,6 +126,40 @@ def test_fetch_history_drops_empty_symbols():
     assert set(history) == {"A"}  # B had no data and was dropped
 
 
+def test_load_csv_history_and_backtest(tmp_path):
+    # Write OHLCV CSVs (as a user would export from a broker / dataset).
+    hist, bench = AgentBacktester.build_synthetic_history(["AAA", "BBB"], days=180, seed=2)
+    hist["SPY"] = bench
+    for sym, df in hist.items():
+        out = df.copy()
+        out.index.name = "date"
+        out.to_csv(tmp_path / f"{sym}.csv")
+
+    history, benchmark = AgentBacktester.load_csv_history(
+        ["AAA", "BBB"], directory=tmp_path, benchmark_symbol="SPY")
+    assert set(history) == {"AAA", "BBB"}
+    assert len(benchmark) > 0
+    # And it actually backtests on the loaded data.
+    bt = AgentBacktester(history=history, benchmark=benchmark, cadence=10,
+                         ledger_path=str(tmp_path / "csv.jsonl"))
+    result = bt.run()
+    assert result.metrics["end_equity"] > 0
+
+
+def test_load_csv_history_case_insensitive_columns(tmp_path):
+    import pandas as pd
+    idx = pd.date_range("2024-01-01", periods=40, freq="B")
+    for sym in ("AAA", "SPY"):
+        pd.DataFrame({
+            "Date": idx, "Open": 100.0, "High": 101.0, "Low": 99.0,
+            "Close": 100.5, "Volume": 1000,
+        }).to_csv(tmp_path / f"{sym}.csv", index=False)
+    history, benchmark = AgentBacktester.load_csv_history(
+        ["AAA"], directory=tmp_path, benchmark_symbol="SPY")
+    assert list(history["AAA"].columns) == ["open", "high", "low", "close", "volume"]
+    assert len(history["AAA"]) == 40
+
+
 def test_agent_backtest_is_deterministic(tmp_path):
     h1, b1 = AgentBacktester.build_synthetic_history(["AAA", "BBB"], days=150, seed=7)
     h2, b2 = AgentBacktester.build_synthetic_history(["AAA", "BBB"], days=150, seed=7)

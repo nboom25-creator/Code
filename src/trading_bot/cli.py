@@ -210,7 +210,20 @@ def _cmd_backtest_agent(args: argparse.Namespace) -> int:
                if args.symbols else (config.symbols or ["AAA", "BBB", "CCC"]))
     benchmark_symbol = args.benchmark or config.benchmark
 
-    if args.real:
+    if args.csv:
+        print(f"Loading real history from CSVs in {args.csv} for "
+              f"{', '.join(symbols)}...")
+        try:
+            history, benchmark = AgentBacktester.load_csv_history(
+                symbols, directory=args.csv, benchmark_symbol=benchmark_symbol)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Could not load CSVs: {exc}", file=sys.stderr)
+            return 1
+        research = build_research_bundle(sim=True) if args.research else None
+        bars_len = len(next(iter(history.values())))
+        print(f"Backtesting on CSV data: {len(history)} symbols, {bars_len} "
+              f"aligned bars, cadence every {args.cadence}.\n")
+    elif args.real:
         # Real historical prices. Research is OFF by default: fundamentals/news
         # are only available as today's snapshot, which would be look-ahead bias.
         print(f"Fetching real history for {', '.join(symbols)} "
@@ -375,6 +388,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="disable the small-cap research layer (synthetic mode)")
     bta.add_argument("--real", action="store_true",
                      help="use REAL historical prices (needs network + data host)")
+    bta.add_argument("--csv", metavar="DIR",
+                     help="load real history from local CSV files (no network)")
     bta.add_argument("--start", help="real-data start date YYYY-MM-DD")
     bta.add_argument("--end", help="real-data end date YYYY-MM-DD")
     bta.add_argument("--benchmark", help="regime benchmark symbol (default: config)")
