@@ -87,16 +87,16 @@ These are not guidelines. They are validated by the harness after you decide, an
 they will silently veto or resize anything that violates them. They are restated
 here so your proposals stay inside the envelope from the start.
 
-- **Position sizing — 5% cap.** No single trade may allocate more than **5% of
-  total portfolio value**. Propose notionals at or below this. The harness will
-  resize anything larger down to the cap, and reject it entirely if the cap
-  rounds to less than one share.
+- **Position sizing — operator-set cap (currently 8%).** No single trade may
+  allocate more than the configured fraction of total portfolio value. Propose
+  notionals at or below this. The harness will resize anything larger down to the
+  cap, and reject it entirely if the cap rounds to less than one share.
 - **Liquidity cap — 1% of ADV.** A BUY may be at most **1% of the stock's average
   daily volume**, so the position can actually be exited. For thin small/micro-caps
   this often binds tighter than the 5% cap; if it rounds to less than one share the
   name is too illiquid and the trade is rejected (HOLD).
 - **Conviction + volatility sizing.** Within the caps above, the harness sets the
-  dollar size as ``5% × your confidence × calmness`` (calmness = a reference
+  dollar size as ``cap × your confidence × calmness`` (calmness = a reference
   volatility ÷ the stock's ATR, capped at 1). State your confidence honestly: it
   directly scales how much capital the trade gets. You choose direction and
   conviction; the code sizes. This only ever shrinks a position relative to the
@@ -106,9 +106,10 @@ here so your proposals stay inside the envelope from the start.
   in any one sector**, and at most ~**10 open positions**. A new buy is capped by
   the remaining sector/total headroom, and rejected if a sector or the cash buffer
   is full. This stops ten correlated names from becoming one oversized bet.
-- **Daily drawdown — 2% circuit breaker.** If the account's equity falls **2% or
-  more below the day's opening equity**, the harness halts all trading for the
-  day and alerts the operator. Do not attempt to "trade back" a loss.
+- **Daily drawdown — operator-set circuit breaker (currently 3%).** If the
+  account's equity falls that far below the day's opening equity, the harness
+  halts all trading for the day and alerts the operator. Do not attempt to
+  "trade back" a loss.
 - **Market regime gate.** Before any *new* entry, the harness assesses the broad
   market (benchmark vs its long-term trend, and volatility) and scales new-entry
   size: full in risk-on, half in neutral, and **zero in risk-off** (no new

@@ -83,7 +83,9 @@ class AgentRunner:
     ) -> None:
         self.config = config
         self.broker = broker
-        self.guardrails = guardrails or Guardrails()
+        from .guardrails import build_guardrails
+
+        self.guardrails = guardrails or build_guardrails(config.agent_risk)
         self.audit = audit or AuditLog()
         self.notifier = notifier or Notifier()
         self.day_state = day_state or DayState()
@@ -163,7 +165,7 @@ class AgentRunner:
                 "Risk-off regime — skipping all new entries; managing existing "
                 "positions only.")
         else:
-            for ticker in self.watchlist:
+            for ticker in self._entry_universe():
                 if ticker in held:
                     continue
                 if not portfolio.can_open_new(ticker):
@@ -189,6 +191,25 @@ class AgentRunner:
                     self.audit.system_event(f"{ticker}: cycle raised an exception — skipped.")
         return {"halted": False, "results": results, "reviews": reviews,
                 "regime": regime, "portfolio": portfolio}
+
+    def _entry_universe(self) -> list[str]:
+        """The watchlist, optionally extended with freshly-screened small-caps."""
+        universe = list(self.watchlist)
+        disc = getattr(self.config, "discovery", None)
+        research = self.loop.tools.research
+        if disc and disc.enabled and research is not None:
+            found = []
+            for sector in disc.sectors:
+                for c in research.discover_small_caps(
+                        sector, disc.market_cap_max, disc.min_volume)[:disc.max_candidates]:
+                    if c.ticker not in universe and c.ticker not in found:
+                        found.append(c.ticker)
+            if found:
+                universe += found
+                self.audit.system_event(
+                    f"Discovery: added {len(found)} small-cap candidate(s) "
+                    f"{found} across sectors {disc.sectors}.")
+        return universe
 
     def _build_portfolio_risk(self, equity: float):
         """Snapshot current holdings (with sectors, if research is available)."""

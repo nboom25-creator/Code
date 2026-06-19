@@ -251,10 +251,13 @@ def _cmd_backtest_agent(args: argparse.Namespace) -> int:
         print(f"Backtesting the agent over {args.days} synthetic bars on "
               f"{', '.join(symbols)} (cadence every {args.cadence} bars)...\n")
 
+    from .agent.guardrails import build_guardrails
+
     bt = AgentBacktester(
         history=history, benchmark=benchmark, research=research,
         starting_cash=args.cash, cadence=args.cadence,
         portfolio_config=config.portfolio, execution_config=config.execution,
+        guardrails=build_guardrails(config.agent_risk),
         benchmark_symbol=benchmark_symbol,
     )
     result = bt.run()

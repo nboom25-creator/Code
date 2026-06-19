@@ -141,7 +141,7 @@ class CognitiveLoop:
             prompt=(
                 f"Action phase for {ticker} [{p.profile}]. {p.directive}\n\n"
                 f"Weighing both cases, propose a single decision (BUY/SELL/HOLD). "
-                f"Remember the 5% position cap. "
+                f"Remember the {self.guardrails.max_position_pct:.0%} position cap. "
                 f"Bull: {adversarial.bull_case}\nBear: {adversarial.bear_case}\n"
                 f"Net: {adversarial.net_assessment}"
             ),

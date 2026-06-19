@@ -49,6 +49,27 @@ class PortfolioConfig:
 
 
 @dataclass
+class AgentRiskConfig:
+    """The autonomous agent's hard per-trade caps (operator-set rules)."""
+    max_position_pct: float = 0.05        # most of the account one trade may use
+    daily_drawdown_limit_pct: float = 0.02  # halt the day at this loss
+    stop_loss_pct: float = 0.05           # protective stop below entry
+    take_profit_pct: float = 0.10         # take-profit above entry (0 disables)
+    max_adv_participation_pct: float = 0.01  # max % of avg daily volume per buy
+    reference_atr_pct: float = 0.03       # "calm" volatility baseline for sizing
+
+
+@dataclass
+class DiscoveryConfig:
+    """Auto-discovery of small/micro-cap candidates during the agent's run."""
+    enabled: bool = False
+    sectors: list[str] = field(default_factory=list)
+    market_cap_max: float = 2_000_000_000.0
+    min_volume: float = 100_000.0
+    max_candidates: int = 5
+
+
+@dataclass
 class ExecutionConfig:
     # Order placement
     order_type: str = "limit"          # "limit" (marketable) or "market"
@@ -89,6 +110,8 @@ class Config:
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
     risk: RiskConfig = field(default_factory=RiskConfig)
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
+    agent_risk: AgentRiskConfig = field(default_factory=AgentRiskConfig)
+    discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     credentials: Credentials = field(default_factory=Credentials)
@@ -141,6 +164,8 @@ def load_config(path: str | Path = "config.yaml", *, load_env: bool = True) -> C
         }),
         risk=RiskConfig(**(raw.get("risk", {}) or {})),
         portfolio=PortfolioConfig(**(raw.get("portfolio", {}) or {})),
+        agent_risk=AgentRiskConfig(**(raw.get("agent_risk", {}) or {})),
+        discovery=DiscoveryConfig(**(raw.get("discovery", {}) or {})),
         execution=ExecutionConfig(**(raw.get("execution", {}) or {})),
         backtest=BacktestConfig(**(raw.get("backtest", {}) or {})),
         credentials=Credentials(

@@ -35,6 +35,19 @@ class GuardrailVerdict:
     notes: list[str]
 
 
+def build_guardrails(cfg) -> "Guardrails":
+    """Build a Guardrails from an AgentRiskConfig (duck-typed) so the operator's
+    config-file rules drive the agent's hard caps."""
+    return Guardrails(
+        max_position_pct=cfg.max_position_pct,
+        daily_drawdown_limit_pct=cfg.daily_drawdown_limit_pct,
+        stop_loss_pct=cfg.stop_loss_pct,
+        take_profit_pct=cfg.take_profit_pct,
+        max_adv_participation_pct=cfg.max_adv_participation_pct,
+        reference_atr_pct=cfg.reference_atr_pct,
+    )
+
+
 class Guardrails:
     def __init__(
         self,

@@ -4,11 +4,31 @@
 # "paper" (default, safe) or "live" (real money — requires extra confirmation).
 mode: paper
 
-# Tickers the bot will consider.
+# Watchlist: large, liquid names + ETFs (easy to enter/exit).
 symbols:
+  - SPY
+  - QQQ
   - AAPL
   - MSFT
-  - SPY
+
+# The autonomous agent's hard per-trade rules (operator-set).
+agent_risk:
+  max_position_pct: 0.08          # at most 8% of the account in one trade
+  daily_drawdown_limit_pct: 0.03  # halt for the day after a 3% loss
+  stop_loss_pct: 0.05             # 5% protective stop on each position
+  take_profit_pct: 0.10           # 10% take-profit
+  max_adv_participation_pct: 0.01 # never more than 1% of a stock's daily volume
+  reference_atr_pct: 0.03         # volatility baseline for conviction sizing
+
+# Also hunt for small/micro-cap opportunities each run.
+discovery:
+  enabled: true
+  sectors:
+    - Technology
+    - Healthcare
+  market_cap_max: 2000000000      # under $2B = small/micro-cap
+  min_volume: 100000              # liquidity floor
+  max_candidates: 5               # top N per sector
 
 # Bar timeframe for signals: "1Min", "5Min", "15Min", "1Hour", "1Day".
 timeframe: 1Day

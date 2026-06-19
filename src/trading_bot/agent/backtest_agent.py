@@ -224,6 +224,7 @@ class AgentBacktester:
         ledger_path: str = "logs/backtest_ledger.jsonl",
         portfolio_config: PortfolioConfig | None = None,
         execution_config: ExecutionConfig | None = None,
+        guardrails: Guardrails | None = None,
         benchmark_symbol: str = "SPY",
     ) -> None:
         self.history = history
@@ -248,7 +249,8 @@ class AgentBacktester:
         self.data = PointInTimeData(feed)
         self.tools = AgentTools(self.broker, self.data, research=research)
         self.loop = CognitiveLoop(
-            llm=llm or HeuristicLLM(), tools=self.tools, guardrails=Guardrails(),
+            llm=llm or HeuristicLLM(), tools=self.tools,
+            guardrails=guardrails or Guardrails(),
             audit=_SilentAudit(), system_prompt="(backtest)", dry_run=False,
             ledger=self.ledger, mode="backtest", execution=execution,
         )
