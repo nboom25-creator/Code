@@ -159,6 +159,10 @@ hardcoded guardrail layer before the harness — not the model — executes:
 
 - **5% max position size** — buys are resized down to ≤5% of equity, rejected
   if that rounds below one share.
+- **1% ADV liquidity cap** — a buy is also capped at 1% of average daily volume so
+  the position can be exited; if that rounds below one share the name is too
+  illiquid and the trade is rejected. Often binds tighter than the 5% cap on
+  thin small/micro-caps.
 - **2% daily drawdown circuit breaker** — trading halts for the day and alerts.
 - **HOLD on bad data** — if perception fails/returns empty data, the cycle
   short-circuits to HOLD and logs a system exception (no LLM call to decide).

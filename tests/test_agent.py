@@ -145,6 +145,36 @@ def test_drawdown_breached():
     assert not g.drawdown_breached(100_000, 98_500)    # down 1.5% -> ok
 
 
+def test_liquidity_cap_resizes_below_equity_cap():
+    g = Guardrails(max_adv_participation_pct=0.01)
+    # Equity cap: 5% of $1M = $50k / $10 = 5,000 shares. ADV 100k -> 1% = 1,000.
+    v = g.validate_decision(action="BUY", ticker="THIN", target_notional_usd=50_000,
+                            equity=1_000_000, price=10, current_position_qty=0,
+                            avg_daily_volume=100_000)
+    assert v.approved and v.quantity == 1_000  # liquidity cap binds, not equity
+    assert any("Liquidity cap" in n for n in v.notes)
+
+
+def test_liquidity_cap_too_illiquid_forces_hold():
+    g = Guardrails(max_adv_participation_pct=0.01)
+    # ADV 50 shares -> 1% = 0 shares -> too illiquid -> HOLD.
+    v = g.validate_decision(action="BUY", ticker="DUST", target_notional_usd=5_000,
+                            equity=1_000_000, price=10, current_position_qty=0,
+                            avg_daily_volume=50)
+    assert not v.approved and v.action == "HOLD"
+    assert any("too illiquid" in n for n in v.notes)
+
+
+def test_no_adv_means_no_liquidity_cap():
+    g = Guardrails()
+    # avg_daily_volume=0 (unknown) -> liquidity cap skipped, equity cap applies.
+    v = g.validate_decision(action="BUY", ticker="X", target_notional_usd=50_000,
+                            equity=100_000, price=100, current_position_qty=0,
+                            avg_daily_volume=0)
+    assert v.approved and v.quantity == 50  # 5% of 100k / 100
+    assert not any("Liquidity cap" in n for n in v.notes)
+
+
 # --------------------------------------------------------------------------- #
 # Tools
 # --------------------------------------------------------------------------- #

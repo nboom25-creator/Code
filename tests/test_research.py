@@ -117,6 +117,38 @@ def test_small_cap_buys_on_fundamentals_with_empty_news(tmp_path):
     assert result.final_action == "BUY"
 
 
+class _ThinData:
+    """Uptrend but very low average daily volume (illiquid micro-cap)."""
+
+    def get_bars(self, symbol, *, timeframe="1Day", limit=30):
+        idx = pd.date_range("2024-01-01", periods=30, freq="B")
+        close = pd.Series([100 + i for i in range(30)], index=idx, dtype=float)
+        return pd.DataFrame({"open": close, "high": close + 1, "low": close - 1,
+                             "close": close, "volume": 2_000})  # ~2k ADV
+
+    def get_news(self, symbol, *, limit=10):
+        return []
+
+
+def test_liquidity_cap_binds_end_to_end(tmp_path):
+    # Large account so the 5% equity cap is loose; ADV ~2k -> 1% = 20 shares binds.
+    loop = CognitiveLoop(
+        llm=HeuristicLLM(),
+        tools=AgentTools(SimPaperBroker(equity=5_000_000, cash=5_000_000),
+                         _ThinData(), research=SimResearch_bundle()),
+        guardrails=Guardrails(),
+        audit=AuditLog(log_dir=tmp_path),
+        system_prompt="TEST MANUAL",
+        dry_run=True,
+    )
+    result = loop.run_for_ticker("THIN", equity=5_000_000)
+    assert result.final_action == "BUY"
+    assert result.quantity == 20  # 1% of ~2,000 ADV, far below the equity cap
+    import datetime as dt
+    md = (tmp_path / f"{dt.date.today().isoformat()}.md").read_text()
+    assert "Liquidity cap" in md
+
+
 def test_large_cap_path_unaffected(tmp_path):
     """A name with dense news + no research bundle stays on the large-cap path."""
     class _DenseNews:

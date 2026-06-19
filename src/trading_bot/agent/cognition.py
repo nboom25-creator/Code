@@ -137,6 +137,7 @@ class CognitiveLoop:
             equity=equity,
             price=price,
             current_position_qty=position_qty,
+            avg_daily_volume=self._avg_volume(ticker, calls),
         )
 
         # --- Execution (driver only) ---------------------------------- #
@@ -273,6 +274,17 @@ class CognitiveLoop:
                     and call.input.get("ticker") == ticker:
                 try:
                     return float(json.loads(call.output)["latest_close"])
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    continue
+        return 0.0
+
+    @staticmethod
+    def _avg_volume(ticker: str, calls: list[ToolCall]) -> float:
+        for call in calls:
+            if call.name == "get_market_bars" and not call.is_error \
+                    and call.input.get("ticker") == ticker:
+                try:
+                    return float(json.loads(call.output).get("avg_volume", 0.0))
                 except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                     continue
         return 0.0

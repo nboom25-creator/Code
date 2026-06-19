@@ -23,6 +23,7 @@ MAX_POSITION_PCT = 0.05  # 5% of equity per single trade
 DAILY_DRAWDOWN_LIMIT_PCT = 0.02  # halt the day at a 2% drawdown
 STOP_LOSS_PCT = 0.05  # protective stop, 5% below entry
 TAKE_PROFIT_PCT = 0.10  # take-profit, 10% above entry (0 disables)
+MAX_ADV_PARTICIPATION_PCT = 0.01  # a BUY may be at most 1% of avg daily volume
 
 
 @dataclass
@@ -41,11 +42,13 @@ class Guardrails:
         daily_drawdown_limit_pct: float = DAILY_DRAWDOWN_LIMIT_PCT,
         stop_loss_pct: float = STOP_LOSS_PCT,
         take_profit_pct: float = TAKE_PROFIT_PCT,
+        max_adv_participation_pct: float = MAX_ADV_PARTICIPATION_PCT,
     ) -> None:
         self.max_position_pct = max_position_pct
         self.daily_drawdown_limit_pct = daily_drawdown_limit_pct
         self.stop_loss_pct = stop_loss_pct
         self.take_profit_pct = take_profit_pct
+        self.max_adv_participation_pct = max_adv_participation_pct
 
     # ------------------------------------------------------------------ #
     def bracket_prices(self, entry_price: float) -> tuple[float, float | None]:
@@ -75,6 +78,7 @@ class Guardrails:
         equity: float,
         price: float,
         current_position_qty: float,
+        avg_daily_volume: float = 0.0,
     ) -> GuardrailVerdict:
         """Resize/veto a proposed decision against the hard limits."""
         notes: list[str] = []
@@ -111,6 +115,26 @@ class Guardrails:
                 False, "HOLD", 0,
                 notes + [f"Sized to {qty} shares (< 1) under the 5% cap — forcing HOLD."],
             )
+
+        # Liquidity cap — never take more than a small slice of average daily
+        # volume, so the position can actually be exited. Critical for illiquid
+        # small/micro-caps where the 5% equity cap alone is not enough.
+        if avg_daily_volume and avg_daily_volume > 0:
+            adv_cap_qty = int(math.floor(avg_daily_volume * self.max_adv_participation_pct))
+            if qty > adv_cap_qty:
+                notes.append(
+                    f"Liquidity cap: {self.max_adv_participation_pct:.1%} of ADV "
+                    f"({avg_daily_volume:,.0f} sh) = {adv_cap_qty} shares; "
+                    f"resized from {qty}."
+                )
+                qty = adv_cap_qty
+            if qty < 1:
+                return GuardrailVerdict(
+                    False, "HOLD", 0,
+                    notes + ["Liquidity cap rounds to < 1 share — too illiquid; "
+                             "forcing HOLD."],
+                )
+
         notes.append(
             f"BUY approved: {qty} shares (~${qty * price:,.0f}, "
             f"{qty * price / equity:.1%} of equity)."
