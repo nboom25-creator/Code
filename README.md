@@ -281,8 +281,19 @@ agent** — its regime gate, research, reviews, sizing, and every guardrail — 
 historical days:
 
 ```bash
+# Synthetic data (offline, deterministic — proves the machinery):
 python -m trading_bot backtest-agent --symbols AAA,BBB,CCC --days 400 --cadence 5
+
+# Real historical prices (needs network access to the data host):
+python -m trading_bot backtest-agent --real --symbols AAPL,MSFT,NVDA \
+    --start 2022-01-01 --end 2023-12-31
 ```
+
+**Real-data backtests turn the research layer OFF by default.** Fundamentals and
+news are only available as *today's* snapshot — using them for a past decision is
+look-ahead bias. Historical prices are point-in-time clean, so the real backtest
+trades on price/volume/regime only. (`--research` re-enables it but the results
+are then optimistic; the CLI warns you.)
 
 It replays history one bar at a time with a **point-in-time** data feed (the
 agent only ever sees data up to "now" — no look-ahead), fills orders through a

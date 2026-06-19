@@ -337,6 +337,42 @@ class AgentBacktester:
 
     # ------------------------------------------------------------------ #
     @staticmethod
+    def fetch_history(symbols, *, benchmark_symbol="SPY", start=None, end=None,
+                      timeframe="1Day", provider=None):
+        """Fetch real historical bars for ``symbols`` + the benchmark and align
+        them on a common set of dates (so there's no look-ahead from gaps).
+
+        Returns (history, benchmark). Symbols with no data are dropped (with a
+        note). ``provider`` defaults to the free, keyless yfinance provider.
+        """
+        if provider is None:
+            from ..data import YFinanceDataProvider
+
+            provider = YFinanceDataProvider()
+
+        frames: dict[str, pd.DataFrame] = {}
+        for sym in [*symbols, benchmark_symbol]:
+            df = provider.get_bars(sym, timeframe=timeframe, start=start, end=end)
+            if df is None or df.empty:
+                print(f"  (no data for {sym} — skipping)")
+                continue
+            frames[sym] = df.sort_index()
+
+        if benchmark_symbol not in frames:
+            raise ValueError(f"no benchmark data for {benchmark_symbol}; cannot run")
+
+        # Align everything to the dates they all share.
+        common = None
+        for df in frames.values():
+            common = df.index if common is None else common.intersection(df.index)
+        if common is None or len(common) == 0:
+            raise ValueError("symbols share no common trading dates")
+
+        aligned = {sym: df.reindex(common) for sym, df in frames.items()}
+        benchmark = aligned.pop(benchmark_symbol)
+        return aligned, benchmark
+
+    @staticmethod
     def build_synthetic_history(symbols, *, days=400, seed=11):
         """Generate aligned synthetic OHLCV per symbol + a benchmark, for an
         offline, deterministic agent backtest (no network needed)."""

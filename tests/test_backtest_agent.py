@@ -87,6 +87,45 @@ def test_agent_backtest_runs_and_reports(tmp_path):
     assert (result.equity_curve > 0).all()
 
 
+class _FakeProvider:
+    """Returns different date ranges per symbol, to test alignment."""
+
+    def __init__(self, empty_for=()):
+        self.empty_for = set(empty_for)
+
+    def get_bars(self, symbol, *, timeframe="1Day", limit=None, start=None, end=None):
+        if symbol in self.empty_for:
+            return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+        starts = {"A": "2024-01-01", "B": "2024-01-03", "SPY": "2024-01-01"}
+        idx = pd.date_range(starts.get(symbol, "2024-01-01"), periods=12, freq="B")
+        close = pd.Series(range(len(idx)), index=idx, dtype=float)
+        return pd.DataFrame({"open": close, "high": close + 1, "low": close - 1,
+                             "close": close, "volume": [100] * len(idx)})
+
+
+def test_fetch_history_aligns_to_common_dates():
+    history, benchmark = AgentBacktester.fetch_history(
+        ["A", "B"], benchmark_symbol="SPY", provider=_FakeProvider())
+    # All frames share one identical index (the intersection of their dates).
+    idxs = [df.index for df in history.values()] + [benchmark.index]
+    assert all(ix.equals(idxs[0]) for ix in idxs)
+    assert len(idxs[0]) > 0
+    assert set(history) == {"A", "B"}  # benchmark returned separately
+
+
+def test_fetch_history_requires_benchmark():
+    import pytest
+    with pytest.raises(ValueError):
+        AgentBacktester.fetch_history(
+            ["A"], benchmark_symbol="SPY", provider=_FakeProvider(empty_for=["SPY"]))
+
+
+def test_fetch_history_drops_empty_symbols():
+    history, _ = AgentBacktester.fetch_history(
+        ["A", "B"], benchmark_symbol="SPY", provider=_FakeProvider(empty_for=["B"]))
+    assert set(history) == {"A"}  # B had no data and was dropped
+
+
 def test_agent_backtest_is_deterministic(tmp_path):
     h1, b1 = AgentBacktester.build_synthetic_history(["AAA", "BBB"], days=150, seed=7)
     h2, b2 = AgentBacktester.build_synthetic_history(["AAA", "BBB"], days=150, seed=7)

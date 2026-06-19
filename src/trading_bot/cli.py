@@ -208,16 +208,41 @@ def _cmd_backtest_agent(args: argparse.Namespace) -> int:
 
     symbols = ([s.strip().upper() for s in args.symbols.split(",")]
                if args.symbols else (config.symbols or ["AAA", "BBB", "CCC"]))
-    history, benchmark = AgentBacktester.build_synthetic_history(
-        symbols, days=args.days, seed=args.seed)
-    research = build_research_bundle(sim=True) if not args.no_research else None
+    benchmark_symbol = args.benchmark or config.benchmark
 
-    print(f"Backtesting the agent over {args.days} synthetic bars on "
-          f"{', '.join(symbols)} (cadence every {args.cadence} bars)...\n")
+    if args.real:
+        # Real historical prices. Research is OFF by default: fundamentals/news
+        # are only available as today's snapshot, which would be look-ahead bias.
+        print(f"Fetching real history for {', '.join(symbols)} "
+              f"({args.start or 'earliest'} → {args.end or 'latest'})...")
+        try:
+            history, benchmark = AgentBacktester.fetch_history(
+                symbols, benchmark_symbol=benchmark_symbol,
+                start=args.start, end=args.end, timeframe=config.timeframe)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Could not fetch data: {exc}\n"
+                  f"(This environment may block the data host; run where "
+                  f"finance.yahoo.com is reachable.)", file=sys.stderr)
+            return 1
+        research = build_research_bundle(sim=True) if args.research else None
+        if args.research:
+            print("⚠️  --research on real data uses CURRENT fundamentals for past "
+                  "decisions (look-ahead bias). Results are optimistic.")
+        bars_len = len(next(iter(history.values())))
+        print(f"Backtesting the agent on REAL data: {len(history)} symbols, "
+              f"{bars_len} aligned bars, cadence every {args.cadence}.\n")
+    else:
+        history, benchmark = AgentBacktester.build_synthetic_history(
+            symbols, days=args.days, seed=args.seed)
+        research = build_research_bundle(sim=True) if not args.no_research else None
+        print(f"Backtesting the agent over {args.days} synthetic bars on "
+              f"{', '.join(symbols)} (cadence every {args.cadence} bars)...\n")
+
     bt = AgentBacktester(
         history=history, benchmark=benchmark, research=research,
         starting_cash=args.cash, cadence=args.cadence,
         portfolio_config=config.portfolio, execution_config=config.execution,
+        benchmark_symbol=benchmark_symbol,
     )
     result = bt.run()
     print(result.summary())
@@ -342,12 +367,19 @@ def build_parser() -> argparse.ArgumentParser:
     bta = sub.add_parser("backtest-agent",
                          help="backtest the full agent over historical (synthetic) days")
     bta.add_argument("--symbols", help="comma-separated tickers (default: config)")
-    bta.add_argument("--days", type=int, default=400, help="number of bars")
+    bta.add_argument("--days", type=int, default=400, help="number of synthetic bars")
     bta.add_argument("--cadence", type=int, default=5, help="run the agent every N bars")
     bta.add_argument("--cash", type=float, default=100_000.0, help="starting cash")
     bta.add_argument("--seed", type=int, default=11, help="synthetic data seed")
     bta.add_argument("--no-research", action="store_true",
-                     help="disable the small-cap research layer")
+                     help="disable the small-cap research layer (synthetic mode)")
+    bta.add_argument("--real", action="store_true",
+                     help="use REAL historical prices (needs network + data host)")
+    bta.add_argument("--start", help="real-data start date YYYY-MM-DD")
+    bta.add_argument("--end", help="real-data end date YYYY-MM-DD")
+    bta.add_argument("--benchmark", help="regime benchmark symbol (default: config)")
+    bta.add_argument("--research", action="store_true",
+                     help="enable research on real data (WARNING: look-ahead bias)")
     bta.set_defaults(func=_cmd_backtest_agent)
 
     reg = sub.add_parser("regime", help="show the current market regime (entry gate)")

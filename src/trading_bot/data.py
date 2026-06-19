@@ -125,12 +125,16 @@ class YFinanceDataProvider:
     """
 
     def get_bars(self, symbol: str, *, timeframe: str = "1Day",
-                 limit: int | None = None) -> pd.DataFrame:
+                 limit: int | None = None, start=None, end=None) -> pd.DataFrame:
         import yfinance as yf
 
         interval, period = _YF_TIMEFRAME.get(timeframe, ("1d", "1y"))
         ticker = yf.Ticker(symbol)
-        df = ticker.history(period=period, interval=interval, auto_adjust=False)
+        if start is not None or end is not None:
+            df = ticker.history(start=start, end=end, interval=interval,
+                                auto_adjust=False)
+        else:
+            df = ticker.history(period=period, interval=interval, auto_adjust=False)
         if df.empty:
             return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
         df = df.rename(columns={
