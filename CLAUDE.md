@@ -95,6 +95,11 @@ here so your proposals stay inside the envelope from the start.
 - **Daily drawdown — 2% circuit breaker.** If the account's equity falls **2% or
   more below the day's opening equity**, the harness halts all trading for the
   day and alerts the operator. Do not attempt to "trade back" a loss.
+- **Market regime gate.** Before any *new* entry, the harness assesses the broad
+  market (benchmark vs its long-term trend, and volatility) and scales new-entry
+  size: full in risk-on, half in neutral, and **zero in risk-off** (no new
+  entries — manage existing positions only). Exits and trims always run. Do not
+  fight the tape with fresh longs in a downtrend.
 - **No speculation on bad data.** If perception fails or returns empty/corrupted
   data, the decision defaults to **HOLD** and a system exception is logged. Doing
   nothing is always a valid, safe outcome.

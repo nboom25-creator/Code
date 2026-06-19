@@ -13,6 +13,9 @@ symbols:
 # Bar timeframe for signals: "1Min", "5Min", "15Min", "1Hour", "1Day".
 timeframe: 1Day
 
+# Benchmark for the market-regime filter (scales new-entry exposure).
+benchmark: SPY
+
 # How often the live loop wakes up, in seconds.
 poll_interval_seconds: 60
 

@@ -201,6 +201,26 @@ def _cmd_discover(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_regime(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    if args.sim:
+        from .data import SyntheticDataProvider
+
+        data = SyntheticDataProvider()
+    else:
+        from .data import YFinanceDataProvider
+
+        data = YFinanceDataProvider()
+    from .agent.regime import assess_regime
+
+    r = assess_regime(data, benchmark=args.benchmark or config.benchmark)
+    print(f"Regime: {r.regime}  (exposure x{r.exposure_scale:.2f})")
+    print(f"  {r.reason}")
+    for k, v in r.details.items():
+        print(f"  {k}: {v}")
+    return 0
+
+
 def _cmd_performance(args: argparse.Namespace) -> int:
     from .agent.ledger import TradeLedger
     from .agent.performance import format_report
@@ -295,6 +315,11 @@ def build_parser() -> argparse.ArgumentParser:
     disc.add_argument("--sim", action="store_true",
                       help="use offline simulated screener (no API key)")
     disc.set_defaults(func=_cmd_discover)
+
+    reg = sub.add_parser("regime", help="show the current market regime (entry gate)")
+    reg.add_argument("--benchmark", help="benchmark symbol (default: config / SPY)")
+    reg.add_argument("--sim", action="store_true", help="use synthetic data (offline)")
+    reg.set_defaults(func=_cmd_regime)
 
     perf = sub.add_parser("performance",
                           help="performance + attribution from the trade ledger")

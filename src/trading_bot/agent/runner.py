@@ -117,15 +117,27 @@ class AgentRunner:
             self.notifier.send(f"🛑 {msg}")
             return {"halted": True, "reason": "daily_drawdown", "results": []}
 
+        # Market regime gate — scales (or zeroes) NEW exposure; reviews still run.
+        from .regime import assess_regime
+
+        regime = assess_regime(self.loop.tools.data, benchmark=self.config.benchmark)
+        self.audit.system_event(
+            f"Market regime: **{regime.regime}** (exposure x{regime.exposure_scale:.2f}). "
+            f"{regime.reason}")
+        log.info("Regime: %s (x%.2f) — %s", regime.regime, regime.exposure_scale,
+                 regime.reason)
+
         results = []
         reviews = []
 
         # Phase A — manage what we already hold (exits/trims/adds come first).
+        # These run in every regime: in bad tape you especially want to de-risk.
         held = {p.symbol for p in self.broker.get_positions()}
         for ticker in sorted(held):
             log.info("Reviewing open position %s", ticker)
             try:
-                r = self.loop.review_position(ticker, equity=equity)
+                r = self.loop.review_position(ticker, equity=equity,
+                                             exposure_scale=regime.exposure_scale)
                 reviews.append(r)
                 if r.executed:
                     self.notifier.send(f"🤖 review {r.final_action} {ticker} (agent)")
@@ -133,22 +145,29 @@ class AgentRunner:
                 log.exception("Review failed for %s", ticker)
                 self.audit.system_event(f"{ticker}: review raised an exception — skipped.")
 
-        # Phase B — consider new entries for watchlist names we don't already hold.
-        for ticker in self.watchlist:
-            if ticker in held:
-                continue
-            log.info("Running cognitive cycle for %s", ticker)
-            try:
-                result = self.loop.run_for_ticker(ticker, equity=equity)
-                results.append(result)
-                if result.executed:
-                    self.notifier.send(
-                        f"🤖 {result.final_action} {result.quantity} {ticker} (agent)"
-                    )
-            except Exception:  # noqa: BLE001 — one ticker must not kill the run
-                log.exception("Cycle failed for %s", ticker)
-                self.audit.system_event(f"{ticker}: cycle raised an exception — skipped.")
-        return {"halted": False, "results": results, "reviews": reviews}
+        # Phase B — new entries, gated by the regime. In risk-off (scale 0) we skip
+        # entries entirely (and save the LLM calls) — manage-only mode.
+        if regime.exposure_scale <= 0:
+            self.audit.system_event(
+                "Risk-off regime — skipping all new entries; managing existing "
+                "positions only.")
+        else:
+            for ticker in self.watchlist:
+                if ticker in held:
+                    continue
+                log.info("Running cognitive cycle for %s", ticker)
+                try:
+                    result = self.loop.run_for_ticker(
+                        ticker, equity=equity, exposure_scale=regime.exposure_scale)
+                    results.append(result)
+                    if result.executed:
+                        self.notifier.send(
+                            f"🤖 {result.final_action} {result.quantity} {ticker} (agent)")
+                except Exception:  # noqa: BLE001 — one ticker must not kill the run
+                    log.exception("Cycle failed for %s", ticker)
+                    self.audit.system_event(f"{ticker}: cycle raised an exception — skipped.")
+        return {"halted": False, "results": results, "reviews": reviews,
+                "regime": regime}
 
 
 def build_runner(config: Config | None = None) -> AgentRunner:

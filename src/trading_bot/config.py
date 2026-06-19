@@ -62,6 +62,7 @@ class Config:
     symbols: list[str] = field(default_factory=list)
     timeframe: str = "1Day"
     poll_interval_seconds: int = 60
+    benchmark: str = "SPY"  # market-regime benchmark
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
     risk: RiskConfig = field(default_factory=RiskConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
@@ -108,6 +109,7 @@ def load_config(path: str | Path = "config.yaml", *, load_env: bool = True) -> C
         symbols=list(raw.get("symbols", [])),
         timeframe=raw.get("timeframe", "1Day"),
         poll_interval_seconds=int(raw.get("poll_interval_seconds", 60)),
+        benchmark=raw.get("benchmark", "SPY"),
         strategy=StrategyConfig(**{
             "name": raw.get("strategy", {}).get("name", "sma_crossover"),
             "params": raw.get("strategy", {}).get("params", {}),

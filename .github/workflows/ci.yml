@@ -42,5 +42,6 @@ jobs:
           python run_dry_run.py --offline --sim-data --symbols AAPL,MSFT
           # Small-cap discovery + deep-research fallback (all simulated).
           python -m trading_bot discover --sector technology --sim
+          python -m trading_bot regime --sim
           python run_dry_run.py --offline --sim-data --discover healthcare
           python -m trading_bot performance --mode dry_run

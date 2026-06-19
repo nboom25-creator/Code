@@ -78,6 +78,12 @@ def main(argv: list[str] | None = None) -> int:
     if result["halted"]:
         print(f"\n🛑 Trading halted before any cycle: {result['reason']}")
     else:
+        regime = result.get("regime")
+        if regime is not None:
+            print(f"\nMarket regime: {regime.regime} (exposure x{regime.exposure_scale:.2f})"
+                  f" — {regime.reason}")
+        if result.get("reviews"):
+            print(f"Reviewed {len(result['reviews'])} open position(s).")
         print(f"\nCompleted {len(result['results'])} research cycle(s):")
         for r in result["results"]:
             note = ("degraded→HOLD" if r.degraded

@@ -79,6 +79,7 @@ class Guardrails:
         price: float,
         current_position_qty: float,
         avg_daily_volume: float = 0.0,
+        exposure_scale: float = 1.0,
     ) -> GuardrailVerdict:
         """Resize/veto a proposed decision against the hard limits."""
         notes: list[str] = []
@@ -101,11 +102,23 @@ class Guardrails:
                 False, "HOLD", 0, ["Invalid equity/price for sizing — forcing HOLD."]
             )
 
-        cap_notional = equity * self.max_position_pct
+        # Regime gate: scale the equity cap by the market exposure multiplier.
+        exposure_scale = max(0.0, min(1.0, exposure_scale))
+        if exposure_scale <= 0:
+            return GuardrailVerdict(
+                False, "HOLD", 0,
+                ["Risk-off regime (exposure x0) — no new exposure; forcing HOLD."])
+        cap_notional = equity * self.max_position_pct * exposure_scale
+        if exposure_scale < 1.0:
+            notes.append(
+                f"Regime exposure scaled to {exposure_scale:.0%}: effective cap "
+                f"${cap_notional:,.0f} ({self.max_position_pct:.0%} x {exposure_scale:.0%}).")
         notional = max(0.0, float(target_notional_usd))
         if notional > cap_notional:
+            label = (f"{self.max_position_pct:.0%} cap" if exposure_scale >= 1.0
+                     else "regime-scaled cap")
             notes.append(
-                f"Proposed ${notional:,.0f} exceeds 5% cap "
+                f"Proposed ${notional:,.0f} exceeds the {label} "
                 f"(${cap_notional:,.0f}); resized to the cap."
             )
             notional = cap_notional

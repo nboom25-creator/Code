@@ -118,7 +118,8 @@ class CognitiveLoop:
     # ================================================================== #
     # Entry: consider a new position
     # ================================================================== #
-    def run_for_ticker(self, ticker: str, *, equity: float) -> CycleResult:
+    def run_for_ticker(self, ticker: str, *, equity: float,
+                       exposure_scale: float = 1.0) -> CycleResult:
         p = self._perceive(ticker)
         if p.degraded:
             return self._log_degraded(ticker, p)
@@ -141,7 +142,7 @@ class CognitiveLoop:
             action=decision.action, ticker=ticker,
             target_notional_usd=decision.target_notional_usd,
             equity=equity, price=p.price, current_position_qty=p.position_qty,
-            avg_daily_volume=p.avg_volume,
+            avg_daily_volume=p.avg_volume, exposure_scale=exposure_scale,
         )
 
         executed, action_result = self._execute(
@@ -161,7 +162,8 @@ class CognitiveLoop:
     # ================================================================== #
     # Manage: review an open position
     # ================================================================== #
-    def review_position(self, ticker: str, *, equity: float) -> CycleResult:
+    def review_position(self, ticker: str, *, equity: float,
+                        exposure_scale: float = 1.0) -> CycleResult:
         p = self._perceive(ticker)
         if p.degraded:
             return self._log_degraded(ticker, p, review=True)
@@ -190,7 +192,7 @@ class CognitiveLoop:
         )
 
         verdict, executed, action_result = self._apply_review(
-            ticker, review, qty_held, equity, p)
+            ticker, review, qty_held, equity, p, exposure_scale=exposure_scale)
 
         self.audit.write_review(
             ticker=ticker, perception=p.calls, perception_text=p.text,
@@ -200,7 +202,7 @@ class CognitiveLoop:
         )
         return CycleResult(ticker, review.action, executed[1], False, executed[0])
 
-    def _apply_review(self, ticker, review, qty_held, equity, p):
+    def _apply_review(self, ticker, review, qty_held, equity, p, *, exposure_scale=1.0):
         """Translate a PositionReview into a guarded, executed order."""
         notes: list[str] = []
         action = review.action.upper()
@@ -221,7 +223,7 @@ class CognitiveLoop:
             v = self.guardrails.validate_decision(
                 action="BUY", ticker=ticker, target_notional_usd=notional,
                 equity=equity, price=p.price, current_position_qty=qty_held,
-                avg_daily_volume=p.avg_volume)
+                avg_daily_volume=p.avg_volume, exposure_scale=exposure_scale)
             notes += v.notes
             if not v.approved:
                 return notes, (False, 0), f"No order (ADD vetoed: {v.action})."

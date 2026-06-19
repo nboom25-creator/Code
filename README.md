@@ -128,6 +128,7 @@ src/trading_bot/
     cognition.py  #   five-phase driver + entry & position-review loops
     research.py   #   screener + SEC EDGAR + Firecrawl + sim providers
     sentiment.py  #   local lexicon sentiment scorer
+    regime.py     #   market risk-on/off filter (scales new-entry exposure)
     ledger.py     #   persistent trade ledger (FIFO closed-trade matching)
     performance.py#   realized P&L metrics + attribution by profile/confidence
     paper_sim.py  #   in-memory simulated paper broker
@@ -180,6 +181,24 @@ for complete transparency. The agent's permanent operating manual is
 To run it nightly, wire `python -m trading_bot agent` into cron or the project's
 session-start hook. The agent layer is fully unit-tested offline (no API key
 needed) via a scripted LLM and in-memory broker/data fakes.
+
+### Market regime filter (risk-on / risk-off)
+
+Before taking *new* exposure, the agent assesses the broad market (a benchmark vs
+its long-term trend, plus volatility) and scales new-entry size accordingly:
+
+```bash
+python -m trading_bot regime            # live (yfinance)
+python -m trading_bot regime --sim      # offline demo
+```
+
+- **risk_on** (clearly above trend, calm) → full size (×1.0)
+- **neutral** (near trend, or elevated vol) → half size (×0.5)
+- **risk_off** (below trend) → **no new entries** (×0.0) — manage-only mode
+
+The multiplier scales the position-size cap for entries and ADDs; **exits and
+trims always run** so the agent can de-risk in bad tape. Set the benchmark with
+`benchmark:` in `config.yaml` (default `SPY`).
 
 ### Position management + performance attribution
 
