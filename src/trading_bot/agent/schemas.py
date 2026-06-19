@@ -55,3 +55,20 @@ class TradeDecision(BaseModel):
     )
     confidence: float = Field(description="Confidence in the decision, 0.0 to 1.0.")
     rationale: str = Field(description="Why this action, grounded in the data and the adversarial check.")
+
+
+class PositionReview(BaseModel):
+    """Phase 4 for an *open position*. Manage what we already hold."""
+
+    action: Literal["HOLD", "TRIM", "EXIT", "ADD"] = Field(
+        description="HOLD (keep), TRIM (sell part), EXIT (close all), ADD (buy more)."
+    )
+    fraction: float = Field(
+        description=(
+            "For TRIM, the fraction of the current position to sell (0–1). For ADD, "
+            "the fraction of a full 5% position to add (0–1). Ignored for HOLD/EXIT."
+        )
+    )
+    confidence: float = Field(description="Confidence in the review, 0.0 to 1.0.")
+    rationale: str = Field(description="Why — is the thesis intact, broken, or stronger?")
+

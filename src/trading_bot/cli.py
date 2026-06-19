@@ -201,6 +201,15 @@ def _cmd_discover(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_performance(args: argparse.Namespace) -> int:
+    from .agent.ledger import TradeLedger
+    from .agent.performance import format_report
+
+    ledger = TradeLedger(args.ledger)
+    print(format_report(ledger, mode=args.mode))
+    return 0
+
+
 def _cmd_status(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     try:
@@ -286,6 +295,12 @@ def build_parser() -> argparse.ArgumentParser:
     disc.add_argument("--sim", action="store_true",
                       help="use offline simulated screener (no API key)")
     disc.set_defaults(func=_cmd_discover)
+
+    perf = sub.add_parser("performance",
+                          help="performance + attribution from the trade ledger")
+    perf.add_argument("--ledger", default="logs/ledger.jsonl", help="ledger path")
+    perf.add_argument("--mode", help="filter by mode: live | paper | dry_run")
+    perf.set_defaults(func=_cmd_performance)
 
     status = sub.add_parser("status", help="show account + positions")
     status.set_defaults(func=_cmd_status)

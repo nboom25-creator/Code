@@ -79,6 +79,7 @@ class AgentRunner:
         day_state: DayState | None = None,
         watchlist: list[str] | None = None,
         dry_run: bool = False,
+        ledger: "TradeLedger | None" = None,
     ) -> None:
         self.config = config
         self.broker = broker
@@ -88,10 +89,14 @@ class AgentRunner:
         self.day_state = day_state or DayState()
         self.watchlist = watchlist or config.symbols
         self.dry_run = dry_run
+        from .ledger import TradeLedger
+
+        self.ledger = ledger or TradeLedger()
+        mode = "dry_run" if dry_run else config.mode
         self.loop = CognitiveLoop(
             llm=llm, tools=tools, guardrails=self.guardrails,
             audit=self.audit, system_prompt=load_system_manual(),
-            dry_run=dry_run,
+            dry_run=dry_run, ledger=self.ledger, mode=mode,
         )
 
     def run_day(self) -> dict:
@@ -113,7 +118,25 @@ class AgentRunner:
             return {"halted": True, "reason": "daily_drawdown", "results": []}
 
         results = []
+        reviews = []
+
+        # Phase A — manage what we already hold (exits/trims/adds come first).
+        held = {p.symbol for p in self.broker.get_positions()}
+        for ticker in sorted(held):
+            log.info("Reviewing open position %s", ticker)
+            try:
+                r = self.loop.review_position(ticker, equity=equity)
+                reviews.append(r)
+                if r.executed:
+                    self.notifier.send(f"🤖 review {r.final_action} {ticker} (agent)")
+            except Exception:  # noqa: BLE001
+                log.exception("Review failed for %s", ticker)
+                self.audit.system_event(f"{ticker}: review raised an exception — skipped.")
+
+        # Phase B — consider new entries for watchlist names we don't already hold.
         for ticker in self.watchlist:
+            if ticker in held:
+                continue
             log.info("Running cognitive cycle for %s", ticker)
             try:
                 result = self.loop.run_for_ticker(ticker, equity=equity)
@@ -125,7 +148,7 @@ class AgentRunner:
             except Exception:  # noqa: BLE001 — one ticker must not kill the run
                 log.exception("Cycle failed for %s", ticker)
                 self.audit.system_event(f"{ticker}: cycle raised an exception — skipped.")
-        return {"halted": False, "results": results}
+        return {"halted": False, "results": results, "reviews": reviews}
 
 
 def build_runner(config: Config | None = None) -> AgentRunner:

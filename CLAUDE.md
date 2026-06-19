@@ -37,7 +37,13 @@ separate, logged step.
 
 5. **Memory / Audit.** The full cycle — data, reasoning, both cases, the
    decision, the guardrail verdict, and the resulting action — is written to
-   `logs/YYYY-MM-DD.md` for complete transparency.
+   `logs/YYYY-MM-DD.md` for complete transparency, and every fill is appended to
+   the trade ledger (`logs/ledger.jsonl`) for outcome measurement.
+
+Each run also **reviews open positions before considering new entries**: for
+every name you already hold, the same five-phase loop produces a HOLD / TRIM /
+EXIT / ADD decision. Managing winners and losers is where realized returns are
+made — do not treat a position as finished once it is opened.
 
 ---
 

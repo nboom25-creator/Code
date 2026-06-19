@@ -15,7 +15,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .guardrails import GuardrailVerdict
-from .schemas import AdversarialCheck, ReasoningState, TradeDecision
+from .schemas import AdversarialCheck, PositionReview, ReasoningState, TradeDecision
 from .tools import ToolCall
 
 
@@ -115,6 +115,53 @@ class AuditLog:
             lines.append(f"- **Final action:** {verdict.action} · qty={verdict.quantity}")
         lines.append(f"- **Execution:** {action_result}\n")
 
+        lines.append("\n---\n\n")
+        self._append("\n".join(lines))
+
+    def write_review(
+        self,
+        *,
+        ticker: str,
+        perception: list[ToolCall],
+        perception_text: str,
+        reasoning: ReasoningState,
+        adversarial: AdversarialCheck,
+        review: PositionReview,
+        verdict_notes: list[str],
+        action_result: str,
+        profile: str,
+        unrealized_pct: float,
+        qty_held: int,
+    ) -> None:
+        ts = dt.datetime.now().strftime("%H:%M:%S")
+        lines = [
+            f"## {ticker} — POSITION REVIEW — {ts}\n",
+            f"_Profile: **{profile}** · holding {qty_held} shares · "
+            f"unrealized {unrealized_pct:+.1f}%_\n",
+            "### 1. Perception\n",
+        ]
+        for call in perception:
+            flag = "⚠️ ERROR" if call.is_error else "ok"
+            lines.append(f"- `{call.name}({json.dumps(call.input)})` → {flag}: `{call.output}`")
+
+        lines.append("\n### 2. Cognitive plan\n")
+        lines.append(reasoning.summary)
+
+        lines.append("\n### 3. Reflection — hold vs exit\n")
+        lines.append(f"**Hold/add case.** {adversarial.bull_case}")
+        lines.append(f"\n**Exit case.** {adversarial.bear_case}")
+        lines.append(f"\n**Net.** {adversarial.net_assessment}")
+
+        lines.append("\n### 4. Review decision\n")
+        lines.append(f"- **{review.action}** "
+                     + (f"(fraction {review.fraction:.0%}) " if review.action in ("TRIM", "ADD") else "")
+                     + f"· confidence {review.confidence:.0%}")
+        lines.append(f"- _Rationale:_ {review.rationale}")
+
+        lines.append("\n### 5. Guardrails & action\n")
+        for note in verdict_notes:
+            lines.append(f"- {note}")
+        lines.append(f"- **Execution:** {action_result}\n")
         lines.append("\n---\n\n")
         self._append("\n".join(lines))
 

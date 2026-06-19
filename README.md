@@ -125,9 +125,11 @@ src/trading_bot/
     tools.py      #   perception + deep-research tools; driver-only execute_order
     guardrails.py #   hardcoded 5% sizing / 2% drawdown / bracket stops
     llm.py        #   Claude (Opus 4.8) + offline HeuristicLLM (same interface)
-    cognition.py  #   five-phase driver + small-cap fallback & classification
+    cognition.py  #   five-phase driver + entry & position-review loops
     research.py   #   screener + SEC EDGAR + Firecrawl + sim providers
     sentiment.py  #   local lexicon sentiment scorer
+    ledger.py     #   persistent trade ledger (FIFO closed-trade matching)
+    performance.py#   realized P&L metrics + attribution by profile/confidence
     paper_sim.py  #   in-memory simulated paper broker
     audit.py      #   logs/YYYY-MM-DD.md transparency trail
     runner.py     #   daily / cron runner + drawdown circuit breaker
@@ -178,6 +180,24 @@ for complete transparency. The agent's permanent operating manual is
 To run it nightly, wire `python -m trading_bot agent` into cron or the project's
 session-start hook. The agent layer is fully unit-tested offline (no API key
 needed) via a scripted LLM and in-memory broker/data fakes.
+
+### Position management + performance attribution
+
+The agent doesn't just open positions — each run it **reviews what it holds**
+first (HOLD / TRIM / EXIT / ADD), then considers new entries. Every fill is
+written to a persistent **trade ledger** (`logs/ledger.jsonl`) with the cap
+profile and the agent's stated confidence, so outcomes can be measured:
+
+```bash
+python -m trading_bot performance              # all modes
+python -m trading_bot performance --mode paper # paper account only
+```
+
+The report gives realized P&L, win rate, expectancy, profit factor, and max
+drawdown — **broken down by cap profile and by confidence bucket**, so you can
+see whether the small-cap engine adds value and whether the agent's conviction
+actually predicts winners. This is the feedback loop that makes the bot a
+learning system instead of a black box.
 
 ### Safe dry-run (`run_dry_run.py`)
 

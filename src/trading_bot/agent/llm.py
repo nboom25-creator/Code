@@ -20,7 +20,7 @@ from typing import Protocol, TypeVar
 
 from pydantic import BaseModel
 
-from .schemas import AdversarialCheck, ReasoningState, TradeDecision
+from .schemas import AdversarialCheck, PositionReview, ReasoningState, TradeDecision
 from .tools import AgentTools, ToolCall
 
 T = TypeVar("T", bound=BaseModel)
@@ -146,6 +146,11 @@ class HeuristicLLM:
         self._fundamentals: dict = {}
         self._profile = "large-cap"
         self._ticker = ""
+        self._unrealized_pct = 0.0
+
+    def note_position(self, unrealized_pct: float) -> None:
+        """Position context for the review phase."""
+        self._unrealized_pct = unrealized_pct
 
     def run_tool_loop(self, *, system, instruction, tools, schemas):
         match = re.search(r"for (\w+)", instruction)
@@ -323,4 +328,26 @@ class HeuristicLLM:
                 confidence=0.5,
                 rationale="No decisive edge from momentum or sentiment; standing down.",
             )
+        if schema is PositionReview:
+            signal = self._signal()
+            thesis_broken = self._momentum < -2.0 or (
+                self._profile == "small-cap" and self._fundamental_score() < 0)
+            if thesis_broken or self._unrealized_pct <= -8.0:
+                return PositionReview(
+                    action="EXIT", fraction=1.0, confidence=0.7,
+                    rationale=(f"Thesis weakening (momentum {self._momentum:+.2f}%, "
+                               f"unrealized {self._unrealized_pct:+.1f}%); cut the loss/risk."))
+            if self._unrealized_pct >= 15.0 and self._momentum < self.MOMENTUM_BUY:
+                return PositionReview(
+                    action="TRIM", fraction=0.5, confidence=0.6,
+                    rationale=(f"Up {self._unrealized_pct:+.1f}% with fading momentum; "
+                               f"take some off the table."))
+            if signal > 0.8 and self._momentum >= self.MOMENTUM_BUY:
+                return PositionReview(
+                    action="ADD", fraction=0.5, confidence=0.6,
+                    rationale="Thesis strengthening; add within the caps.")
+            return PositionReview(
+                action="HOLD", fraction=0.0, confidence=0.5,
+                rationale=(f"Thesis intact, no action warranted "
+                           f"(unrealized {self._unrealized_pct:+.1f}%)."))
         raise AssertionError(f"unexpected schema {schema}")
