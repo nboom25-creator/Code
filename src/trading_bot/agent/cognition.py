@@ -131,21 +131,38 @@ class CognitiveLoop:
         )
 
         # --- Execution (driver only) ---------------------------------- #
+        # A BUY is placed as a bracket order: a protective stop-loss (and optional
+        # take-profit) are attached at entry so they hold even if the agent is
+        # offline. Levels come from the guardrails, not the model.
         executed = False
+        stop_price = take_profit_price = None
+        if verdict.action == "BUY":
+            stop_price, take_profit_price = self.guardrails.bracket_prices(price)
+        bracket_desc = (
+            f" with stop ${stop_price:,.2f}"
+            + (f" / take-profit ${take_profit_price:,.2f}" if take_profit_price else "")
+            if stop_price else ""
+        )
+
         if verdict.approved and verdict.action in ("BUY", "SELL"):
             if self.dry_run:
                 # Intercept: do NOT send the order. Log the proposed trade only.
                 action_result = (
                     f"DRY RUN — would have executed {verdict.action} "
-                    f"{verdict.quantity} {ticker} (~${verdict.quantity * price:,.0f}). "
-                    f"No order sent to the broker."
+                    f"{verdict.quantity} {ticker} (~${verdict.quantity * price:,.0f})"
+                    f"{bracket_desc}. No order sent to the broker."
                 )
             else:
                 try:
                     self.tools.execute_order(
-                        ticker, verdict.quantity, verdict.action.lower(), "market"
+                        ticker, verdict.quantity, verdict.action.lower(), "market",
+                        stop_loss_price=stop_price,
+                        take_profit_price=take_profit_price,
                     )
-                    action_result = f"Executed {verdict.action} {verdict.quantity} {ticker}."
+                    action_result = (
+                        f"Executed {verdict.action} {verdict.quantity} {ticker}"
+                        f"{bracket_desc}."
+                    )
                     executed = True
                 except Exception as exc:  # noqa: BLE001
                     action_result = f"Execution FAILED: {exc}"

@@ -32,6 +32,7 @@ class SimPaperBroker:
     cash: float = 100_000.0
     positions: dict[str, _SimPosition] = field(default_factory=dict)
     orders: list[tuple] = field(default_factory=list)
+    bracket_orders: list[dict] = field(default_factory=list)
 
     def get_account(self):
         return SimpleNamespace(
@@ -45,6 +46,18 @@ class SimPaperBroker:
         self.orders.append((symbol, quantity, side))
         return SimpleNamespace(id=f"sim-{len(self.orders)}", symbol=symbol,
                                qty=quantity, side=side)
+
+    def submit_bracket_order(self, symbol: str, quantity: int, *,
+                             stop_loss_price: float,
+                             take_profit_price: float | None = None):
+        self.orders.append((symbol, quantity, "buy"))
+        self.bracket_orders.append({
+            "symbol": symbol, "qty": quantity,
+            "stop_loss_price": stop_loss_price,
+            "take_profit_price": take_profit_price,
+        })
+        return SimpleNamespace(id=f"sim-bracket-{len(self.bracket_orders)}",
+                               symbol=symbol, qty=quantity)
 
     def close_position(self, symbol: str):
         self.orders.append((symbol, 0, "close"))

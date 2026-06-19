@@ -21,6 +21,8 @@ from dataclasses import dataclass
 
 MAX_POSITION_PCT = 0.05  # 5% of equity per single trade
 DAILY_DRAWDOWN_LIMIT_PCT = 0.02  # halt the day at a 2% drawdown
+STOP_LOSS_PCT = 0.05  # protective stop, 5% below entry
+TAKE_PROFIT_PCT = 0.10  # take-profit, 10% above entry (0 disables)
 
 
 @dataclass
@@ -37,9 +39,24 @@ class Guardrails:
         *,
         max_position_pct: float = MAX_POSITION_PCT,
         daily_drawdown_limit_pct: float = DAILY_DRAWDOWN_LIMIT_PCT,
+        stop_loss_pct: float = STOP_LOSS_PCT,
+        take_profit_pct: float = TAKE_PROFIT_PCT,
     ) -> None:
         self.max_position_pct = max_position_pct
         self.daily_drawdown_limit_pct = daily_drawdown_limit_pct
+        self.stop_loss_pct = stop_loss_pct
+        self.take_profit_pct = take_profit_pct
+
+    # ------------------------------------------------------------------ #
+    def bracket_prices(self, entry_price: float) -> tuple[float, float | None]:
+        """Return (stop_loss_price, take_profit_price) for a long entry.
+
+        take_profit_price is None when take-profit is disabled (pct == 0).
+        """
+        stop = round(entry_price * (1 - self.stop_loss_pct), 2)
+        take = round(entry_price * (1 + self.take_profit_pct), 2) \
+            if self.take_profit_pct else None
+        return stop, take
 
     # ------------------------------------------------------------------ #
     def drawdown_breached(self, day_start_equity: float, current_equity: float) -> bool:

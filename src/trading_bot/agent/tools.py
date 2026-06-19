@@ -166,10 +166,34 @@ class AgentTools:
     # ------------------------------------------------------------------ #
     # Execution — DRIVER ONLY. Never exposed to the model.
     # ------------------------------------------------------------------ #
-    def execute_order(self, ticker: str, qty: int, side: str, order_type: str = "market") -> Any:
-        """Place an order. Called only by the harness after guardrail validation."""
+    def execute_order(
+        self,
+        ticker: str,
+        qty: int,
+        side: str,
+        order_type: str = "market",
+        *,
+        stop_loss_price: float | None = None,
+        take_profit_price: float | None = None,
+    ) -> Any:
+        """Place an order. Called only by the harness after guardrail validation.
+
+        A BUY with a ``stop_loss_price`` is submitted as a **bracket order** so the
+        protective stop (and optional take-profit) are attached at entry and held
+        broker-side even if the agent goes offline. Falls back to a plain market
+        order if the broker has no bracket support.
+        """
         if order_type != "market":
             raise ValueError("only market orders are supported by this harness")
-        if side == "sell" and qty <= 0:
-            return self.broker.close_position(ticker)
-        return self.broker.submit_market_order(ticker, qty, side)
+        if side == "sell":
+            if qty <= 0:
+                return self.broker.close_position(ticker)
+            return self.broker.submit_market_order(ticker, qty, "sell")
+        # side == "buy"
+        if stop_loss_price and hasattr(self.broker, "submit_bracket_order"):
+            return self.broker.submit_bracket_order(
+                ticker, qty,
+                stop_loss_price=stop_loss_price,
+                take_profit_price=take_profit_price,
+            )
+        return self.broker.submit_market_order(ticker, qty, "buy")

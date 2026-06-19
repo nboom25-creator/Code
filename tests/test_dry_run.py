@@ -126,3 +126,60 @@ def test_live_mode_would_execute(tmp_path):
     result = loop.run_for_ticker("AAPL", equity=100_000)
     assert result.executed
     assert broker.orders and broker.orders[0][2] == "buy"
+
+
+# --------------------------------------------------------------------------- #
+# Bracket orders — protective stop + take-profit attached at entry
+# --------------------------------------------------------------------------- #
+def test_guardrails_bracket_prices():
+    g = Guardrails(stop_loss_pct=0.05, take_profit_pct=0.10)
+    stop, take = g.bracket_prices(100.0)
+    assert stop == 95.0 and take == 110.0
+    # Take-profit can be disabled.
+    g2 = Guardrails(stop_loss_pct=0.04, take_profit_pct=0.0)
+    stop2, take2 = g2.bracket_prices(200.0)
+    assert stop2 == 192.0 and take2 is None
+
+
+def test_agent_buy_executes_as_bracket_order(tmp_path):
+    broker = SimPaperBroker(equity=100_000, cash=100_000)
+    loop = CognitiveLoop(
+        llm=HeuristicLLM(),
+        tools=AgentTools(broker, _UpData()),
+        guardrails=Guardrails(stop_loss_pct=0.05, take_profit_pct=0.10),
+        audit=AuditLog(log_dir=tmp_path),
+        system_prompt="TEST MANUAL",
+        dry_run=False,
+    )
+    result = loop.run_for_ticker("AAPL", equity=100_000)
+    assert result.executed and result.final_action == "BUY"
+    # A bracket order was placed with a stop below and a take-profit above entry.
+    assert len(broker.bracket_orders) == 1
+    bracket = broker.bracket_orders[0]
+    entry = 100 + 29  # _UpData close at bar 30 (100 + i)
+    assert bracket["stop_loss_price"] < entry < bracket["take_profit_price"]
+
+
+def test_dry_run_logs_bracket_levels(tmp_path):
+    broker = SimPaperBroker(equity=100_000, cash=100_000)
+    loop = CognitiveLoop(
+        llm=HeuristicLLM(),
+        tools=AgentTools(broker, _UpData()),
+        guardrails=Guardrails(),
+        audit=AuditLog(log_dir=tmp_path),
+        system_prompt="TEST MANUAL",
+        dry_run=True,
+    )
+    loop.run_for_ticker("AAPL", equity=100_000)
+    assert broker.bracket_orders == []  # still intercepted
+    import datetime as dt
+    md = (tmp_path / f"{dt.date.today().isoformat()}.md").read_text()
+    assert "stop $" in md and "take-profit $" in md
+
+
+def test_execute_order_sell_does_not_bracket():
+    broker = SimPaperBroker()
+    tools = AgentTools(broker, _UpData())
+    tools.execute_order("AAPL", 5, "sell", "market")
+    assert broker.orders == [("AAPL", 5, "sell")]
+    assert broker.bracket_orders == []
