@@ -24,6 +24,9 @@ from .config import Config
 # Map each capability the bot needs to the real MCP tool name Robinhood exposes.
 # They are ``None`` until known; any method that needs an unset one refuses to
 # run (see ``_tool``), so the bot can never fire an order at a guessed endpoint.
+# Robinhood's published MCP endpoint (Agentic trading, Beta), HTTP transport.
+DEFAULT_MCP_URL = "https://agent.robinhood.com/mcp/trading"
+
 _TOOLS: dict[str, str | None] = {
     "get_account": None,    # e.g. "get_account" / "account_details"
     "get_positions": None,  # e.g. "list_positions"
@@ -37,13 +40,12 @@ class RobinhoodMCPBroker:
     def __init__(self, config: Config) -> None:
         self.config = config
         creds = config.credentials
-        if not creds.rh_mcp_url or not creds.rh_mcp_token:
-            raise ValueError(
-                "Robinhood MCP credentials are required. Set ROBINHOOD_MCP_URL "
-                "and ROBINHOOD_MCP_TOKEN in your environment/.env (from the "
-                "'Connect your agent' flow in the Robinhood app)."
-            )
-        self._url = creds.rh_mcp_url
+        # URL is known/published; override only if Robinhood changes it.
+        self._url = creds.rh_mcp_url or DEFAULT_MCP_URL
+        # Auth is an interactive OAuth flow (per Robinhood's "authenticate" step),
+        # handled by the MCP client's OAuth provider — there is no static API
+        # token to paste. ``rh_mcp_token`` is kept only as an optional override
+        # if Robinhood later issues long-lived tokens.
         self._token = creds.rh_mcp_token
 
     @property
@@ -70,8 +72,10 @@ class RobinhoodMCPBroker:
     def _call_tool(self, name: str, arguments: dict) -> dict:
         """Open an MCP session, call ``name`` with ``arguments``, return the result.
 
-        Uses the streamable-HTTP transport with a bearer token. Robinhood's exact
-        transport (HTTP/SSE vs streamable) should be confirmed from their docs.
+        Uses the HTTP transport Robinhood documents. Authentication is OAuth: the
+        MCP SDK's auth provider runs the browser login on first use and caches
+        the token. Plumbed here as ``auth=`` once we wire the OAuth provider;
+        a static bearer ``self._token`` is supported only as a fallback override.
         """
         import asyncio
 
@@ -85,8 +89,11 @@ class RobinhoodMCPBroker:
                     "`pip install mcp`."
                 ) from exc
 
-            headers = {"Authorization": f"Bearer {self._token}"}
-            async with streamablehttp_client(self._url, headers=headers) as (r, w, _):
+            kwargs = {}
+            if self._token:  # optional static-token fallback
+                kwargs["headers"] = {"Authorization": f"Bearer {self._token}"}
+            # TODO(auth): pass the MCP OAuth provider here for the interactive flow.
+            async with streamablehttp_client(self._url, **kwargs) as (r, w, _):
                 async with ClientSession(r, w) as session:
                     await session.initialize()
                     result = await session.call_tool(name, arguments)

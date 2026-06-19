@@ -14,9 +14,7 @@ from trading_bot.robinhood import RobinhoodMCPBroker
 
 
 def _rh_config():
-    return Config(broker="robinhood", symbols=["AAPL"],
-                  credentials=Credentials(rh_mcp_url="https://rh.example/mcp",
-                                          rh_mcp_token="tok-123"))
+    return Config(broker="robinhood", symbols=["AAPL"], credentials=Credentials())
 
 
 def test_factory_defaults_to_alpaca():
@@ -29,10 +27,12 @@ def test_factory_selects_robinhood():
     assert isinstance(build_broker(_rh_config()), RobinhoodMCPBroker)
 
 
-def test_robinhood_requires_mcp_credentials():
-    cfg = Config(broker="robinhood", symbols=["AAPL"], credentials=Credentials())
-    with pytest.raises(ValueError, match="ROBINHOOD_MCP_URL"):
-        RobinhoodMCPBroker(cfg)
+def test_robinhood_defaults_to_published_url():
+    from trading_bot.robinhood import DEFAULT_MCP_URL
+
+    broker = RobinhoodMCPBroker(Config(broker="robinhood", symbols=["AAPL"],
+                                       credentials=Credentials()))
+    assert broker._url == DEFAULT_MCP_URL == "https://agent.robinhood.com/mcp/trading"
 
 
 def test_robinhood_not_reported_as_paper():
