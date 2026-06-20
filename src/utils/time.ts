@@ -78,3 +78,22 @@ export function relativeDayLabel(date: Date): string {
 export function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/**
+ * Advances a date to the next occurrence for a given recurrence rule,
+ * preserving the time of day. Returns null for non-repeating tasks.
+ */
+export function nextOccurrence(
+  from: Date,
+  recurrence: 'none' | 'daily' | 'weekdays' | 'weekly',
+): Date | null {
+  if (recurrence === 'none') return null;
+  if (recurrence === 'weekly') return addDays(from, 7);
+  if (recurrence === 'daily') return addDays(from, 1);
+  // weekdays: skip Saturday (6) and Sunday (0)
+  let next = addDays(from, 1);
+  while (next.getDay() === 0 || next.getDay() === 6) {
+    next = addDays(next, 1);
+  }
+  return next;
+}

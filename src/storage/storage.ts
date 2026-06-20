@@ -25,4 +25,5 @@ export const STORAGE_KEYS = {
   timeEntries: 'timeflow.timeEntries',
   activeTimer: 'timeflow.activeTimer',
   pomodoro: 'timeflow.pomodoroSettings',
+  theme: 'timeflow.theme',
 } as const;

@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -11,20 +12,36 @@ import {
   DEFAULT_POMODORO,
   PomodoroSettings,
   Priority,
+  Recurrence,
   Task,
   TimeEntry,
   TimeEntrySource,
 } from '../types';
 import { loadJSON, saveJSON, STORAGE_KEYS } from '../storage/storage';
-import { generateId } from '../utils/time';
+import { generateId, nextOccurrence } from '../utils/time';
+import {
+  cancelReminder,
+  scheduleReminder,
+} from '../utils/notifications';
 
 interface NewTaskInput {
   title: string;
   notes?: string;
   priority?: Priority;
+  dueDate?: string;
+  recurrence?: Recurrence;
   scheduledStart?: string;
   scheduledEnd?: string;
   estimatedMinutes?: number;
+}
+
+export interface ExportData {
+  app: 'timeflow';
+  version: number;
+  exportedAt: string;
+  tasks: Task[];
+  timeEntries: TimeEntry[];
+  pomodoro: PomodoroSettings;
 }
 
 interface AppContextValue {
@@ -52,9 +69,32 @@ interface AppContextValue {
   // Pomodoro
   pomodoro: PomodoroSettings;
   updatePomodoro: (patch: Partial<PomodoroSettings>) => void;
+  // Data management
+  exportData: () => ExportData;
+  importData: (data: ExportData) => void;
+  clearAllData: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+/** Backfills fields for tasks saved by older versions of the app. */
+function normalizeTask(t: Partial<Task>): Task {
+  return {
+    id: t.id ?? generateId(),
+    title: t.title ?? 'Untitled',
+    notes: t.notes,
+    priority: t.priority ?? 'medium',
+    completed: t.completed ?? false,
+    createdAt: t.createdAt ?? new Date().toISOString(),
+    completedAt: t.completedAt,
+    dueDate: t.dueDate,
+    recurrence: t.recurrence ?? 'none',
+    notificationId: t.notificationId,
+    scheduledStart: t.scheduledStart,
+    scheduledEnd: t.scheduledEnd,
+    estimatedMinutes: t.estimatedMinutes,
+  };
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -63,17 +103,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [pomodoro, setPomodoro] = useState<PomodoroSettings>(DEFAULT_POMODORO);
 
+  // Mirror of tasks for reading the latest state inside callbacks.
+  const tasksRef = useRef<Task[]>(tasks);
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
   // Hydrate from storage once on mount.
   useEffect(() => {
     (async () => {
       const [storedTasks, storedEntries, storedTimer, storedPomodoro] =
         await Promise.all([
-          loadJSON<Task[]>(STORAGE_KEYS.tasks, []),
+          loadJSON<Partial<Task>[]>(STORAGE_KEYS.tasks, []),
           loadJSON<TimeEntry[]>(STORAGE_KEYS.timeEntries, []),
           loadJSON<ActiveTimer | null>(STORAGE_KEYS.activeTimer, null),
           loadJSON<PomodoroSettings>(STORAGE_KEYS.pomodoro, DEFAULT_POMODORO),
         ]);
-      setTasks(storedTasks);
+      setTasks(storedTasks.map(normalizeTask));
       setTimeEntries(storedEntries);
       setActiveTimer(storedTimer);
       setPomodoro(storedPomodoro);
@@ -95,43 +141,134 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (ready) saveJSON(STORAGE_KEYS.pomodoro, pomodoro);
   }, [pomodoro, ready]);
 
-  const addTask = useCallback((input: NewTaskInput): Task => {
-    const task: Task = {
-      id: generateId(),
-      title: input.title.trim(),
-      notes: input.notes?.trim() || undefined,
-      priority: input.priority ?? 'medium',
-      completed: false,
-      createdAt: new Date().toISOString(),
-      scheduledStart: input.scheduledStart,
-      scheduledEnd: input.scheduledEnd,
-      estimatedMinutes: input.estimatedMinutes,
-    };
-    setTasks((prev) => [task, ...prev]);
-    return task;
-  }, []);
-
-  const updateTask = useCallback((id: string, patch: Partial<Task>) => {
+  /** Cancels any existing reminder for a task and schedules a fresh one. */
+  const applyReminder = useCallback(async (task: Task) => {
+    await cancelReminder(task.notificationId);
+    let notificationId: string | undefined;
+    if (task.dueDate && !task.completed) {
+      notificationId = await scheduleReminder(
+        'Task due',
+        task.title,
+        new Date(task.dueDate),
+      );
+    }
     setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      prev.map((t) => (t.id === task.id ? { ...t, notificationId } : t)),
     );
   }, []);
 
-  const toggleTask = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              completed: !t.completed,
-              completedAt: !t.completed ? new Date().toISOString() : undefined,
-            }
-          : t,
-      ),
-    );
-  }, []);
+  const addTask = useCallback(
+    (input: NewTaskInput): Task => {
+      const task: Task = normalizeTask({
+        id: generateId(),
+        title: input.title.trim(),
+        notes: input.notes?.trim() || undefined,
+        priority: input.priority ?? 'medium',
+        completed: false,
+        createdAt: new Date().toISOString(),
+        dueDate: input.dueDate,
+        recurrence: input.recurrence ?? 'none',
+        scheduledStart: input.scheduledStart,
+        scheduledEnd: input.scheduledEnd,
+        estimatedMinutes: input.estimatedMinutes,
+      });
+      setTasks((prev) => [task, ...prev]);
+      if (task.dueDate) applyReminder(task);
+      return task;
+    },
+    [applyReminder],
+  );
+
+  const updateTask = useCallback(
+    (id: string, patch: Partial<Task>) => {
+      const existing = tasksRef.current.find((t) => t.id === id);
+      setTasks((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      );
+      if (
+        existing &&
+        ('dueDate' in patch || 'completed' in patch || 'title' in patch)
+      ) {
+        applyReminder({ ...existing, ...patch });
+      }
+    },
+    [applyReminder],
+  );
+
+  /** Creates the next instance of a recurring task. */
+  const spawnNext = useCallback(
+    (task: Task) => {
+      const anchor = task.dueDate
+        ? new Date(task.dueDate)
+        : task.scheduledStart
+          ? new Date(task.scheduledStart)
+          : new Date();
+      const nextDue = nextOccurrence(anchor, task.recurrence);
+      if (!nextDue) return;
+
+      let scheduledStart: string | undefined;
+      let scheduledEnd: string | undefined;
+      if (task.scheduledStart && task.scheduledEnd) {
+        const ns = nextOccurrence(new Date(task.scheduledStart), task.recurrence);
+        if (ns) {
+          const duration =
+            new Date(task.scheduledEnd).getTime() -
+            new Date(task.scheduledStart).getTime();
+          scheduledStart = ns.toISOString();
+          scheduledEnd = new Date(ns.getTime() + duration).toISOString();
+        }
+      }
+
+      const next: Task = {
+        ...task,
+        id: generateId(),
+        completed: false,
+        completedAt: undefined,
+        createdAt: new Date().toISOString(),
+        dueDate: task.dueDate ? nextDue.toISOString() : undefined,
+        scheduledStart,
+        scheduledEnd,
+        notificationId: undefined,
+      };
+      setTasks((prev) => [next, ...prev]);
+      if (next.dueDate) applyReminder(next);
+    },
+    [applyReminder],
+  );
+
+  const toggleTask = useCallback(
+    (id: string) => {
+      const existing = tasksRef.current.find((t) => t.id === id);
+      if (!existing) return;
+      const willComplete = !existing.completed;
+
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                completed: willComplete,
+                completedAt: willComplete ? new Date().toISOString() : undefined,
+                notificationId: willComplete ? undefined : t.notificationId,
+              }
+            : t,
+        ),
+      );
+
+      if (willComplete) {
+        cancelReminder(existing.notificationId);
+        if (existing.recurrence !== 'none') spawnNext(existing);
+      } else {
+        // Re-opened: restore the reminder if it's still in the future.
+        applyReminder({ ...existing, completed: false, notificationId: undefined });
+      }
+    },
+    [applyReminder, spawnNext],
+  );
 
   const deleteTask = useCallback((id: string) => {
+    const existing = tasksRef.current.find((t) => t.id === id);
+    if (existing?.notificationId) cancelReminder(existing.notificationId);
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
@@ -157,7 +294,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         0,
         Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
       );
-      // Ignore accidental sub-second taps.
       if (durationSeconds >= 1) {
         created = {
           id: generateId(),
@@ -215,6 +351,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPomodoro((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  const exportData = useCallback(
+    (): ExportData => ({
+      app: 'timeflow',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      tasks,
+      timeEntries,
+      pomodoro,
+    }),
+    [tasks, timeEntries, pomodoro],
+  );
+
+  const importData = useCallback(
+    (data: ExportData) => {
+      // Drop reminders from current tasks before replacing them.
+      tasksRef.current.forEach((t) => cancelReminder(t.notificationId));
+      const imported = (data.tasks ?? []).map(normalizeTask).map((t) => ({
+        ...t,
+        notificationId: undefined,
+      }));
+      setTasks(imported);
+      setTimeEntries(data.timeEntries ?? []);
+      if (data.pomodoro) setPomodoro(data.pomodoro);
+      // Reschedule reminders for imported, still-open, future tasks.
+      imported.forEach((t) => {
+        if (t.dueDate && !t.completed) applyReminder(t);
+      });
+    },
+    [applyReminder],
+  );
+
+  const clearAllData = useCallback(() => {
+    tasksRef.current.forEach((t) => cancelReminder(t.notificationId));
+    setTasks([]);
+    setTimeEntries([]);
+    setActiveTimer(null);
+    setPomodoro(DEFAULT_POMODORO);
+  }, []);
+
   const value = useMemo<AppContextValue>(
     () => ({
       ready,
@@ -232,6 +407,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       deleteEntry,
       pomodoro,
       updatePomodoro,
+      exportData,
+      importData,
+      clearAllData,
     }),
     [
       ready,
@@ -249,6 +427,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       deleteEntry,
       pomodoro,
       updatePomodoro,
+      exportData,
+      importData,
+      clearAllData,
     ],
   );
 

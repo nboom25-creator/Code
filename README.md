@@ -5,14 +5,19 @@ All data is stored **locally on your device** — no account, no backend, fully 
 
 ## Features
 
-- **✅ Tasks** — capture to-dos with priorities, filter active/completed, and jump
-  straight into a focus session for any task.
+- **✅ Tasks** — capture to-dos with priorities, **due dates**, and **recurrence**
+  (daily / weekdays / weekly). Completing a repeating task automatically spawns the
+  next occurrence. Filter active/completed and jump straight into a focus session.
+- **🔔 Reminders** — set a due date and get a local notification when a task is due.
 - **📅 Calendar** — plan your day by scheduling tasks into time blocks; browse day
   by day and see how many hours you've planned.
 - **🍅 Focus** — a customizable Pomodoro timer (focus / short break / long break)
   that automatically logs your focus time.
 - **📊 Reports** — see where your time goes: totals, tasks completed, a 7-day
-  activity chart, and a per-activity breakdown.
+  activity chart, a per-activity breakdown, plus **manual time logging** for work
+  you forgot to track.
+- **⚙️ Settings** — switch between **light / dark / system** themes, manage
+  notification permissions, **export/import a JSON backup**, and erase all data.
 
 ## Running the app
 
@@ -41,19 +46,34 @@ app/                      # expo-router screens (file-based routing)
   _layout.tsx             # root providers (state, gestures, safe area)
   (tabs)/
     _layout.tsx           # bottom tab bar
-    index.tsx             # Tasks
+    index.tsx             # Tasks (due dates, recurrence)
     calendar.tsx          # Calendar / scheduling
     focus.tsx             # Pomodoro focus timer
-    reports.tsx           # Time-tracking reports
+    reports.tsx           # Time-tracking reports + manual logging
+    settings.tsx          # Theme, notifications, backup/restore
 src/
   store/AppContext.tsx    # central state, persisted to AsyncStorage
   storage/storage.ts      # AsyncStorage JSON wrapper
-  components/ui.tsx        # shared UI primitives
+  components/ui.tsx        # shared themed UI primitives
   hooks/useNow.ts         # ticking clock hook
-  utils/time.ts           # date / duration helpers
+  utils/time.ts           # date / duration / recurrence helpers
+  utils/notifications.ts  # local notification scheduling
   types.ts                # data models
-  theme.ts                # colors, spacing, radius
+  theme.tsx               # light/dark palettes + ThemeProvider
 ```
+
+## Themes
+
+The app ships with light and dark palettes and a `system` option that follows the
+OS appearance. Your choice is persisted. Styles are built through a `makeStyles`
+hook so they rebuild instantly when you switch themes.
+
+## Notifications
+
+Setting a due date schedules a local notification via `expo-notifications`.
+Grant the permission from the **Settings** tab (or when first prompted). Local
+notifications work in a development build; in Expo Go support can be limited
+depending on platform/SDK, but the rest of the app is unaffected.
 
 ## How data is stored
 

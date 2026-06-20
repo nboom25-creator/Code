@@ -1,16 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../../src/store/AppContext';
 import { Task } from '../../src/types';
-import { colors, priorityColor, radius, spacing } from '../../src/theme';
+import {
+  makeStyles,
+  priorityColor,
+  radius,
+  spacing,
+  useTheme,
+} from '../../src/theme';
 import { Card, Chip, EmptyState, SectionTitle } from '../../src/components/ui';
 import {
   addDays,
@@ -25,6 +25,8 @@ const DURATIONS = [15, 30, 45, 60, 90, 120];
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { tasks, updateTask } = useApp();
 
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
@@ -222,7 +224,7 @@ export default function CalendarScreen() {
                     style={styles.scheduleButton}
                     onPress={() => confirmSchedule(task)}
                   >
-                    <Ionicons name="calendar" size={18} color="#0F1115" />
+                    <Ionicons name="calendar" size={18} color={colors.onColor} />
                     <Text style={styles.scheduleButtonText}>
                       Schedule for {relativeDayLabel(selectedDate)} at{' '}
                       {labelForHour(pickHour)}
@@ -245,7 +247,7 @@ function labelForHour(h: number): string {
   return `${display} ${period}`;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   flex: { flex: 1 },
   navRow: {
     flexDirection: 'row',
@@ -330,5 +332,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     marginTop: spacing.xs,
   },
-  scheduleButtonText: { color: '#0F1115', fontSize: 15, fontWeight: '700' },
-});
+  scheduleButtonText: { color: colors.onColor, fontSize: 15, fontWeight: '700' },
+}));

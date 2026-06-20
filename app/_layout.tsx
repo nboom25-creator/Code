@@ -5,23 +5,34 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider } from '../src/store/AppContext';
-import { colors } from '../src/theme';
+import { ThemeProvider, useTheme } from '../src/theme';
+
+function ThemedApp() {
+  const { colors, scheme } = useTheme();
+  return (
+    <>
+      <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+    </>
+  );
+}
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppProvider>
-          <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.background },
-            }}
-          >
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </AppProvider>
+        <ThemeProvider>
+          <AppProvider>
+            <ThemedApp />
+          </AppProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

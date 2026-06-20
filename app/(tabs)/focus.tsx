@@ -1,28 +1,25 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../../src/store/AppContext';
-import { colors, radius, spacing } from '../../src/theme';
+import { Colors, makeStyles, radius, spacing, useTheme } from '../../src/theme';
 import { Card, SectionTitle } from '../../src/components/ui';
 import { formatDuration } from '../../src/utils/time';
 
 type Phase = 'focus' | 'shortBreak' | 'longBreak';
 
-const PHASE_META: Record<Phase, { label: string; color: string }> = {
-  focus: { label: 'Focus', color: colors.focus },
-  shortBreak: { label: 'Short break', color: colors.break },
-  longBreak: { label: 'Long break', color: colors.accent },
+const PHASE_META: Record<Phase, { label: string; colorKey: keyof Colors }> = {
+  focus: { label: 'Focus', colorKey: 'focus' },
+  shortBreak: { label: 'Short break', colorKey: 'break' },
+  longBreak: { label: 'Long break', colorKey: 'accent' },
 };
+const PHASES: Phase[] = ['focus', 'shortBreak', 'longBreak'];
 
 export default function FocusScreen() {
   const insets = useSafeAreaInsets();
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { pomodoro, updatePomodoro, activeTimer, cancelTimer, addManualEntry } =
     useApp();
 
@@ -61,6 +58,7 @@ export default function FocusScreen() {
   const total = phaseDuration(phase);
   const elapsed = total - secondsLeft;
   const progress = total > 0 ? Math.min(1, elapsed / total) : 0;
+  const phaseColor = colors[PHASE_META[phase].colorKey];
 
   // Keep the displayed time in sync if settings change while idle.
   useEffect(() => {
@@ -140,8 +138,6 @@ export default function FocusScreen() {
     setSecondsLeft(phaseDuration(p));
   };
 
-  const meta = PHASE_META[phase];
-
   const dots = useMemo(
     () =>
       Array.from({ length: pomodoro.roundsBeforeLongBreak }).map(
@@ -156,19 +152,19 @@ export default function FocusScreen() {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}
     >
       <View style={styles.phaseTabs}>
-        {(Object.keys(PHASE_META) as Phase[]).map((p) => (
+        {PHASES.map((p) => (
           <Pressable
             key={p}
             onPress={() => switchPhase(p)}
             style={[
               styles.phaseTab,
-              phase === p && { backgroundColor: PHASE_META[p].color },
+              phase === p && { backgroundColor: colors[PHASE_META[p].colorKey] },
             ]}
           >
             <Text
               style={[
                 styles.phaseTabText,
-                phase === p && { color: '#0F1115' },
+                phase === p && { color: colors.onColor },
               ]}
             >
               {PHASE_META[p].label}
@@ -178,25 +174,20 @@ export default function FocusScreen() {
       </View>
 
       <View style={styles.timerWrap}>
-        <View
-          style={[
-            styles.ring,
-            { borderColor: colors.border },
-          ]}
-        >
+        <View style={styles.ring}>
           <View
             style={[
               styles.ringFill,
               {
-                borderColor: meta.color,
+                borderColor: phaseColor,
                 transform: [{ rotate: `${progress * 360}deg` }],
                 opacity: 0.18 + progress * 0.5,
               },
             ]}
           />
           <Text style={styles.timeText}>{formatDuration(secondsLeft)}</Text>
-          <Text style={[styles.phaseLabel, { color: meta.color }]}>
-            {meta.label}
+          <Text style={[styles.phaseLabel, { color: phaseColor }]}>
+            {PHASE_META[phase].label}
           </Text>
         </View>
       </View>
@@ -224,12 +215,12 @@ export default function FocusScreen() {
 
         <Pressable
           onPress={toggleRun}
-          style={[styles.playControl, { backgroundColor: meta.color }]}
+          style={[styles.playControl, { backgroundColor: phaseColor }]}
         >
           <Ionicons
             name={running ? 'pause' : 'play'}
             size={38}
-            color="#0F1115"
+            color={colors.onColor}
           />
         </Pressable>
 
@@ -291,6 +282,7 @@ export default function FocusScreen() {
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <Card style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>
@@ -316,6 +308,8 @@ function Stepper({
   max: number;
   onChange: (v: number) => void;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <View style={styles.stepper}>
       <Text style={styles.stepperLabel}>{label}</Text>
@@ -345,7 +339,7 @@ function Stepper({
 
 const RING = 260;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   flex: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: spacing.lg },
   phaseTabs: {
@@ -369,6 +363,7 @@ const styles = StyleSheet.create({
     height: RING,
     borderRadius: RING / 2,
     borderWidth: 12,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
@@ -458,4 +453,4 @@ const styles = StyleSheet.create({
     minWidth: 64,
     textAlign: 'center',
   },
-});
+}));

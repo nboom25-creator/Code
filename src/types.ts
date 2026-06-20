@@ -2,6 +2,16 @@ export type Priority = 'low' | 'medium' | 'high';
 
 export type TimeEntrySource = 'focus' | 'timer' | 'manual';
 
+/** How a task repeats after it is completed. */
+export type Recurrence = 'none' | 'daily' | 'weekdays' | 'weekly';
+
+export const RECURRENCE_LABEL: Record<Recurrence, string> = {
+  none: 'Once',
+  daily: 'Daily',
+  weekdays: 'Weekdays',
+  weekly: 'Weekly',
+};
+
 export interface Task {
   id: string;
   title: string;
@@ -10,6 +20,12 @@ export interface Task {
   completed: boolean;
   createdAt: string; // ISO timestamp
   completedAt?: string; // ISO timestamp
+  /** ISO datetime the task is due; powers reminders. */
+  dueDate?: string;
+  /** How the task repeats once completed. */
+  recurrence: Recurrence;
+  /** id of the scheduled local notification, so it can be cancelled. */
+  notificationId?: string;
   /** ISO datetime the task is scheduled to start (calendar) */
   scheduledStart?: string;
   /** ISO datetime the task is scheduled to end (calendar) */

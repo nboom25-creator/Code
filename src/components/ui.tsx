@@ -2,13 +2,12 @@ import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   View,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, spacing } from '../theme';
+import { makeStyles, radius, spacing, useTheme } from '../theme';
 
 export function Card({
   children,
@@ -17,10 +16,12 @@ export function Card({
   children: React.ReactNode;
   style?: ViewStyle;
 }) {
+  const styles = useStyles();
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
 export function SectionTitle({ children }: { children: React.ReactNode }) {
+  const styles = useStyles();
   return <Text style={styles.sectionTitle}>{children}</Text>;
 }
 
@@ -31,6 +32,7 @@ export function ScreenTitle({
   title: string;
   subtitle?: string;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.header}>
       <Text style={styles.screenTitle}>{title}</Text>
@@ -56,6 +58,8 @@ export function Button({
   loading?: boolean;
   style?: ViewStyle;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const bg = {
     primary: colors.primary,
     secondary: colors.surfaceAlt,
@@ -63,7 +67,7 @@ export function Button({
     danger: colors.danger,
   }[variant];
   const fg =
-    variant === 'primary' || variant === 'danger' ? '#0F1115' : colors.text;
+    variant === 'primary' || variant === 'danger' ? colors.onColor : colors.text;
   return (
     <Pressable
       onPress={onPress}
@@ -98,6 +102,8 @@ export function Chip({
   color?: string;
   onPress?: () => void;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const accent = color ?? colors.primary;
   return (
     <Pressable
@@ -113,7 +119,7 @@ export function Chip({
       <Text
         style={[
           styles.chipText,
-          { color: active ? '#0F1115' : colors.textMuted },
+          { color: active ? colors.onColor : colors.textMuted },
         ]}
       >
         {label}
@@ -131,6 +137,8 @@ export function EmptyState({
   title: string;
   message: string;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <View style={styles.empty}>
       <Ionicons name={icon} size={42} color={colors.textFaint} />
@@ -140,7 +148,7 @@ export function EmptyState({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -221,4 +229,4 @@ const styles = StyleSheet.create({
     maxWidth: 260,
     lineHeight: 20,
   },
-});
+}));

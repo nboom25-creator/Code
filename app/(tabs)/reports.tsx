@@ -1,10 +1,22 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../../src/store/AppContext';
-import { colors, radius, spacing } from '../../src/theme';
-import { Card, EmptyState, ScreenTitle, SectionTitle } from '../../src/components/ui';
+import { makeStyles, radius, spacing, useTheme } from '../../src/theme';
+import {
+  Card,
+  Chip,
+  EmptyState,
+  ScreenTitle,
+  SectionTitle,
+} from '../../src/components/ui';
 import {
   addDays,
   formatDurationLong,
@@ -14,10 +26,28 @@ import {
 
 type Range = 'today' | 'week' | 'all';
 
+const LOG_DAYS = [
+  { label: 'Today', offset: 0 },
+  { label: 'Yesterday', offset: -1 },
+  { label: '2 days ago', offset: -2 },
+  { label: '3 days ago', offset: -3 },
+];
+const LOG_HOURS = [6, 8, 9, 10, 12, 14, 16, 18, 20];
+const LOG_DURATIONS = [15, 30, 45, 60, 90, 120];
+
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
-  const { timeEntries, tasks, deleteEntry } = useApp();
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const { timeEntries, tasks, deleteEntry, addManualEntry } = useApp();
   const [range, setRange] = useState<Range>('week');
+
+  // Manual log form state.
+  const [showLog, setShowLog] = useState(false);
+  const [logLabel, setLogLabel] = useState('');
+  const [logDay, setLogDay] = useState(0);
+  const [logHour, setLogHour] = useState(9);
+  const [logDuration, setLogDuration] = useState(30);
 
   const now = new Date();
   const rangeStart = useMemo(() => {
@@ -46,7 +76,6 @@ export default function ReportsScreen() {
     [tasks, rangeStart],
   );
 
-  // Last 7 days bar chart (always last 7 days regardless of range filter).
   const dailyTotals = useMemo(() => {
     const days: { date: Date; seconds: number }[] = [];
     for (let i = 6; i >= 0; i--) {
@@ -61,7 +90,6 @@ export default function ReportsScreen() {
   }, [timeEntries]);
   const maxDaily = Math.max(1, ...dailyTotals.map((d) => d.seconds));
 
-  // Breakdown by label.
   const byLabel = useMemo(() => {
     const map = new Map<string, number>();
     for (const e of entriesInRange) {
@@ -81,6 +109,22 @@ export default function ReportsScreen() {
         .slice(0, 12),
     [entriesInRange],
   );
+
+  const submitLog = () => {
+    const label = logLabel.trim() || 'Untitled';
+    const start = startOfDay(addDays(now, logDay));
+    start.setHours(logHour, 0, 0, 0);
+    const end = new Date(start.getTime() + logDuration * 60000);
+    addManualEntry({
+      label,
+      startedAt: start.toISOString(),
+      endedAt: end.toISOString(),
+      source: 'manual',
+    });
+    setLogLabel('');
+    setLogDuration(30);
+    setShowLog(false);
+  };
 
   return (
     <ScrollView
@@ -129,6 +173,83 @@ export default function ReportsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Pressable
+          onPress={() => setShowLog((s) => !s)}
+          style={styles.logToggle}
+        >
+          <Ionicons
+            name={showLog ? 'chevron-up' : 'add-circle-outline'}
+            size={20}
+            color={colors.primary}
+          />
+          <Text style={styles.logToggleText}>Log time manually</Text>
+        </Pressable>
+
+        {showLog && (
+          <Card style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+            <TextInput
+              value={logLabel}
+              onChangeText={setLogLabel}
+              placeholder="What did you work on?"
+              placeholderTextColor={colors.textFaint}
+              style={styles.logInput}
+            />
+            <Text style={styles.logLabel}>Day</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.logScroll}
+            >
+              {LOG_DAYS.map((d) => (
+                <Chip
+                  key={d.offset}
+                  label={d.label}
+                  active={logDay === d.offset}
+                  onPress={() => setLogDay(d.offset)}
+                />
+              ))}
+            </ScrollView>
+            <Text style={styles.logLabel}>Start time</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.logScroll}
+            >
+              {LOG_HOURS.map((h) => (
+                <Chip
+                  key={h}
+                  label={labelForHour(h)}
+                  active={logHour === h}
+                  color={colors.accent}
+                  onPress={() => setLogHour(h)}
+                />
+              ))}
+            </ScrollView>
+            <Text style={styles.logLabel}>Duration</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.logScroll}
+            >
+              {LOG_DURATIONS.map((d) => (
+                <Chip
+                  key={d}
+                  label={d < 60 ? `${d}m` : `${d / 60}h`}
+                  active={logDuration === d}
+                  color={colors.success}
+                  onPress={() => setLogDuration(d)}
+                />
+              ))}
+            </ScrollView>
+            <Pressable style={styles.logSubmit} onPress={submitLog}>
+              <Ionicons name="checkmark" size={18} color={colors.onColor} />
+              <Text style={styles.logSubmitText}>Add entry</Text>
+            </Pressable>
+          </Card>
+        )}
+      </View>
+
+      <View style={styles.section}>
         <SectionTitle>Last 7 days</SectionTitle>
         <Card>
           <View style={styles.chart}>
@@ -166,7 +287,7 @@ export default function ReportsScreen() {
           <EmptyState
             icon="pie-chart-outline"
             title="No time tracked yet"
-            message="Run a focus session or track time on a task to see your breakdown."
+            message="Run a focus session or log time to see your breakdown."
           />
         ) : (
           <Card style={{ gap: spacing.md }}>
@@ -229,6 +350,12 @@ export default function ReportsScreen() {
   );
 }
 
+function labelForHour(h: number): string {
+  const period = h >= 12 ? 'PM' : 'AM';
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return `${display} ${period}`;
+}
+
 function SummaryCard({
   icon,
   value,
@@ -240,6 +367,7 @@ function SummaryCard({
   label: string;
   color: string;
 }) {
+  const styles = useStyles();
   return (
     <Card style={styles.summaryCard}>
       <Ionicons name={icon} size={20} color={color} />
@@ -249,7 +377,7 @@ function SummaryCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   flex: { flex: 1, backgroundColor: colors.background },
   rangeRow: {
     flexDirection: 'row',
@@ -268,7 +396,7 @@ const styles = StyleSheet.create({
   },
   rangeTabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   rangeText: { color: colors.textMuted, fontWeight: '700', fontSize: 14 },
-  rangeTextActive: { color: '#0F1115' },
+  rangeTextActive: { color: colors.onColor },
   statGrid: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -278,6 +406,35 @@ const styles = StyleSheet.create({
   summaryValue: { color: colors.text, fontSize: 20, fontWeight: '800' },
   summaryLabel: { color: colors.textMuted, fontSize: 11, textAlign: 'center' },
   section: { paddingHorizontal: spacing.lg, marginTop: spacing.xl },
+  logToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  logToggleText: { color: colors.primary, fontSize: 15, fontWeight: '700' },
+  logInput: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    color: colors.text,
+    fontSize: 15,
+  },
+  logLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  logScroll: { gap: spacing.sm, paddingVertical: 2 },
+  logSubmit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    marginTop: spacing.xs,
+  },
+  logSubmitText: { color: colors.onColor, fontSize: 15, fontWeight: '700' },
   chart: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -311,4 +468,4 @@ const styles = StyleSheet.create({
   entryRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   entryLabel: { color: colors.text, fontSize: 15, fontWeight: '600' },
   entryMeta: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
-});
+}));
