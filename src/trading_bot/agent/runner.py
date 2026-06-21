@@ -265,7 +265,7 @@ def build_runner(config: Config | None = None) -> AgentRunner:
     data = DataProvider(config.credentials)
     research = build_research_bundle(sim=False)
     tools = AgentTools(broker, data, research=research, default_timeframe=config.timeframe)
-    llm = AnthropicLLM()
+    llm = AnthropicLLM(model=config.agent_model)
     return AgentRunner(config=config, llm=llm, tools=tools, broker=broker)
 
 

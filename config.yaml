@@ -4,6 +4,12 @@
 # "paper" (default, safe) or "live" (real money — requires extra confirmation).
 mode: paper
 
+# Claude model for the agent's reasoning. Sonnet is far cheaper than Opus and
+# very capable — a sensible default for a small account. Switch to
+# claude-opus-4-8 for maximum reasoning (and higher cost), or
+# claude-haiku-4-5-20251001 for the cheapest runs.
+agent_model: claude-sonnet-4-6
+
 # Watchlist: large, liquid names + ETFs (easy to enter/exit).
 symbols:
   - SPY
