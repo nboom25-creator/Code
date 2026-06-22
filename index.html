@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  3D EARTH NEWS GLOBE  —  single self-contained file
+  ============================================================================
+
+  HOW TO ADD YOUR NEWSAPI KEY
+  ---------------------------
+  1. Get a FREE API key at https://newsapi.org  (sign up, copy your key).
+  2. Find the constant NEWS_API_KEY a few lines below in the <script> block.
+  3. Replace the placeholder string 'YOUR_KEY' with your real key.
+
+     const NEWS_API_KEY = 'abc123yourrealkeyhere';
+
+  NOTE ON CORS: newsapi.org's free "developer" tier only allows requests
+  from localhost. If you open this file directly (file://) or host it on a
+  real domain, NewsAPI may block the browser request with a CORS error.
+  When that happens, this app automatically falls back to a bundled set of
+  sample headlines so the globe is still fully interactive for demos.
+  ============================================================================
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3D Earth News Globe</title>
+<style>
+  :root {
+    --space:#080b14;
+    --panel-bg:rgba(12,17,28,0.72);
+    --panel-border:rgba(120,160,220,0.18);
+    --text:#dde6f5;
+    --muted:#7e8aa3;
+  }
+  * { box-sizing:border-box; }
+  html, body {
+    margin:0; padding:0; height:100%; width:100%;
+    background:var(--space); color:var(--text);
+    font-family:"SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    overflow:hidden;
+  }
+  #globe-canvas { position:fixed; inset:0; display:block; z-index:0; }
+
+  /* ---------- News panel ---------- */
+  #panel {
+    position:fixed; top:0; left:0; z-index:5;
+    width:360px; max-width:80vw; height:100%;
+    background:var(--panel-bg);
+    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    border-right:1px solid var(--panel-border);
+    display:flex; flex-direction:column;
+    box-shadow:6px 0 40px rgba(0,0,0,0.45);
+  }
+  #panel header {
+    padding:18px 20px 14px;
+    border-bottom:1px solid var(--panel-border);
+  }
+  #panel header h1 {
+    margin:0; font-size:15px; letter-spacing:2px; font-weight:600;
+    text-transform:uppercase; color:#eaf1ff;
+  }
+  #panel header .sub {
+    margin-top:5px; font-size:11px; color:var(--muted); letter-spacing:.5px;
+  }
+  #status { font-size:11px; color:var(--muted); }
+  #list {
+    flex:1; overflow-y:auto; padding:8px 10px 24px;
+    scrollbar-width:thin; scrollbar-color:rgba(120,160,220,.4) transparent;
+  }
+  #list::-webkit-scrollbar { width:8px; }
+  #list::-webkit-scrollbar-thumb { background:rgba(120,160,220,.35); border-radius:4px; }
+
+  .item {
+    position:relative;
+    padding:11px 12px 11px 18px;
+    margin:6px 4px; border-radius:9px;
+    cursor:pointer;
+    border:1px solid transparent;
+    transition:background .15s, border-color .15s, transform .15s;
+  }
+  .item:hover, .item.active {
+    background:rgba(90,130,200,.13);
+    border-color:rgba(120,170,255,.35);
+    transform:translateX(2px);
+  }
+  .item::before {
+    content:""; position:absolute; left:6px; top:14px;
+    width:7px; height:7px; border-radius:50%;
+    background:var(--dot, #4aa3ff);
+    box-shadow:0 0 8px var(--dot, #4aa3ff);
+  }
+  .item .src {
+    font-size:10px; letter-spacing:1px; text-transform:uppercase;
+    color:var(--dot,#7fb0ff); display:flex; justify-content:space-between;
+  }
+  .item .src .ago { color:var(--muted); letter-spacing:.5px; }
+  .item .ttl {
+    margin-top:5px; font-size:12.5px; line-height:1.45; color:var(--text);
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+
+  /* ---------- Tooltip ---------- */
+  #tooltip {
+    position:fixed; z-index:10; pointer-events:none;
+    max-width:260px; padding:10px 12px; border-radius:8px;
+    background:rgba(8,12,22,0.92); border:1px solid rgba(120,170,255,.4);
+    box-shadow:0 6px 24px rgba(0,0,0,.55);
+    font-size:12px; line-height:1.4; opacity:0; transition:opacity .12s;
+    transform:translate(-50%, -120%);
+  }
+  #tooltip .t-src { font-size:10px; letter-spacing:1px; text-transform:uppercase; color:#7fb0ff; }
+  #tooltip .t-ttl { margin-top:4px; color:var(--text); }
+
+  /* ---------- Legend / hint ---------- */
+  #legend {
+    position:fixed; bottom:16px; right:18px; z-index:5;
+    background:var(--panel-bg); border:1px solid var(--panel-border);
+    border-radius:10px; padding:12px 14px; font-size:11px;
+    -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  }
+  #legend .row { display:flex; align-items:center; gap:8px; margin:3px 0; color:var(--muted); }
+  #legend .swatch { width:9px; height:9px; border-radius:50%; box-shadow:0 0 7px currentColor; }
+  #hint {
+    position:fixed; bottom:16px; left:380px; z-index:5;
+    font-size:11px; color:var(--muted); letter-spacing:.5px;
+  }
+  @media (max-width:640px){ #hint{ display:none; } #legend{ bottom:auto; top:12px; right:12px; } }
+
+  #loader {
+    position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+    background:var(--space); transition:opacity .6s; font-size:13px; letter-spacing:2px; color:var(--muted);
+  }
+  #loader.hide { opacity:0; pointer-events:none; }
+  .spin { display:inline-block; width:14px; height:14px; margin-right:10px;
+    border:2px solid rgba(120,170,255,.25); border-top-color:#7fb0ff; border-radius:50%;
+    animation:sp 0.8s linear infinite; vertical-align:middle; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+  <canvas id="globe-canvas"></canvas>
+
+  <aside id="panel">
+    <header>
+      <h1>◍ Live News Globe</h1>
+      <div class="sub" id="status"><span class="spin"></span>Fetching headlines…</div>
+    </header>
+    <div id="list"></div>
+  </aside>
+
+  <div id="tooltip"><div class="t-src"></div><div class="t-ttl"></div></div>
+
+  <div id="legend">
+    <div class="row"><span class="swatch" style="color:#ff3b3b;background:#ff3b3b"></span>Breaking / Politics</div>
+    <div class="row"><span class="swatch" style="color:#ff9d2e;background:#ff9d2e"></span>Technology</div>
+    <div class="row"><span class="swatch" style="color:#4aa3ff;background:#4aa3ff"></span>World</div>
+    <div class="row"><span class="swatch" style="color:#36d399;background:#36d399"></span>Business</div>
+    <div class="row"><span class="swatch" style="color:#c084fc;background:#c084fc"></span>Other</div>
+  </div>
+
+  <div id="hint">drag to orbit · scroll to zoom · hover a headline to fly there</div>
+
+  <div id="loader"><span class="spin"></span>Initializing globe…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===========================================================================
+   CONFIG
+   =========================================================================== */
+const NEWS_API_KEY = 'YOUR_KEY';   // <-- swap in your free key from newsapi.org
+const NEWS_ENDPOINT = `https://newsapi.org/v2/top-headlines?language=en&pageSize=30&apiKey=${NEWS_API_KEY}`;
+
+const GLOBE_RADIUS = 100;
+// High-res NASA Blue Marble day map (served over https, CORS-friendly).
+const EARTH_TEXTURE = 'https://unpkg.com/three-globe@2.24.10/example/img/earth-blue-marble.jpg';
+
+/* ===========================================================================
+   CATEGORY COLOR CODING
+   =========================================================================== */
+const CATEGORY_COLORS = {
+  breaking: 0xff3b3b, politics: 0xff3b3b,
+  tech:     0xff9d2e, technology: 0xff9d2e,
+  world:    0x4aa3ff, general: 0x4aa3ff,
+  business: 0x36d399, finance: 0x36d399,
+  other:    0xc084fc
+};
+function colorForCategory(cat){ return CATEGORY_COLORS[cat] || CATEGORY_COLORS.other; }
+function hexCss(n){ return '#' + n.toString(16).padStart(6,'0'); }
+
+// Keyword-based category guesser (NewsAPI top-headlines doesn't always tag category).
+function guessCategory(text){
+  const t = (text||'').toLowerCase();
+  if (/(breaking|election|president|senate|parliament|war|strike|protest|government|minister|vote)/.test(t)) return 'politics';
+  if (/(tech|ai\b|artificial intelligence|software|chip|google|apple|microsoft|startup|app\b|robot|cyber|crypto)/.test(t)) return 'tech';
+  if (/(market|stock|economy|earnings|trade|bank|inflation|business|revenue|ipo|merger)/.test(t)) return 'business';
+  if (/(world|global|nation|country|un\b|summit|border|climate)/.test(t)) return 'world';
+  return 'other';
+}
+
+/* ===========================================================================
+   SOURCE -> LOCATION LOOKUP TABLE  (approximate lat/long, hand-curated)
+   =========================================================================== */
+const SOURCE_LOCATIONS = {
+  'bbc-news':            { lat:51.51,  lon:-0.12,   city:'London' },
+  'bbc':                 { lat:51.51,  lon:-0.12,   city:'London' },
+  'cnn':                 { lat:33.75,  lon:-84.39,  city:'Atlanta' },
+  'al-jazeera-english':  { lat:25.29,  lon:51.53,   city:'Doha' },
+  'reuters':             { lat:51.51,  lon:-0.10,   city:'London' },
+  'associated-press':    { lat:40.71,  lon:-74.01,  city:'New York' },
+  'the-new-york-times':  { lat:40.71,  lon:-73.99,  city:'New York' },
+  'the-wall-street-journal':{ lat:40.71,lon:-74.01, city:'New York' },
+  'bloomberg':           { lat:40.76,  lon:-73.98,  city:'New York' },
+  'business-insider':    { lat:40.74,  lon:-73.99,  city:'New York' },
+  'the-washington-post': { lat:38.90,  lon:-77.03,  city:'Washington' },
+  'politico':            { lat:38.90,  lon:-77.03,  city:'Washington' },
+  'usa-today':           { lat:38.84,  lon:-77.06,  city:'Washington' },
+  'nbc-news':            { lat:40.76,  lon:-73.98,  city:'New York' },
+  'abc-news':            { lat:40.76,  lon:-73.98,  city:'New York' },
+  'cbs-news':            { lat:40.76,  lon:-73.98,  city:'New York' },
+  'fox-news':            { lat:40.76,  lon:-73.98,  city:'New York' },
+  'the-verge':           { lat:40.71,  lon:-74.01,  city:'New York' },
+  'techcrunch':          { lat:37.77,  lon:-122.42, city:'San Francisco' },
+  'wired':               { lat:37.77,  lon:-122.42, city:'San Francisco' },
+  'engadget':            { lat:37.77,  lon:-122.42, city:'San Francisco' },
+  'ars-technica':        { lat:37.77,  lon:-122.42, city:'San Francisco' },
+  'recode':              { lat:37.77,  lon:-122.42, city:'San Francisco' },
+  'the-times-of-india':  { lat:28.61,  lon:77.21,   city:'New Delhi' },
+  'the-hindu':           { lat:13.08,  lon:80.27,   city:'Chennai' },
+  'google-news-in':      { lat:28.61,  lon:77.21,   city:'New Delhi' },
+  'rt':                  { lat:55.75,  lon:37.62,   city:'Moscow' },
+  'der-tagesspiegel':    { lat:52.52,  lon:13.40,   city:'Berlin' },
+  'die-zeit':            { lat:53.55,  lon:9.99,     city:'Hamburg' },
+  'spiegel-online':      { lat:53.55,  lon:9.99,     city:'Hamburg' },
+  'le-monde':            { lat:48.86,  lon:2.35,     city:'Paris' },
+  'lequipe':             { lat:48.86,  lon:2.35,     city:'Paris' },
+  'abc-news-au':         { lat:-33.87, lon:151.21,   city:'Sydney' },
+  'news-com-au':         { lat:-33.87, lon:151.21,   city:'Sydney' },
+  'australian-financial-review':{ lat:-33.87,lon:151.21, city:'Sydney' },
+  'cbc-news':            { lat:43.65,  lon:-79.38,   city:'Toronto' },
+  'the-globe-and-mail':  { lat:43.65,  lon:-79.38,   city:'Toronto' },
+  'the-irish-times':     { lat:53.35,  lon:-6.26,    city:'Dublin' },
+  'the-jerusalem-post':  { lat:31.77,  lon:35.21,    city:'Jerusalem' },
+  'ynet':                { lat:32.08,  lon:34.78,    city:'Tel Aviv' },
+  'xinhua-net':          { lat:39.90,  lon:116.40,   city:'Beijing' },
+  'the-times-of-china':  { lat:39.90,  lon:116.40,   city:'Beijing' },
+  'argaam':              { lat:24.71,  lon:46.68,    city:'Riyadh' },
+  'el-mundo':            { lat:40.42,  lon:-3.70,    city:'Madrid' },
+  'la-repubblica':       { lat:41.90,  lon:12.50,    city:'Rome' },
+  'ansa':                { lat:41.90,  lon:12.50,    city:'Rome' },
+  'globo':               { lat:-22.91, lon:-43.17,   city:'Rio de Janeiro' },
+  'info-money':          { lat:-23.55, lon:-46.63,   city:'São Paulo' },
+  'nrk':                 { lat:59.91,  lon:10.75,    city:'Oslo' },
+  'svt':                 { lat:59.33,  lon:18.07,    city:'Stockholm' }
+};
+// Fallback by source-name substring when the NewsAPI source id isn't in the table.
+const NAME_HINTS = [
+  ['bbc',{lat:51.51,lon:-0.12,city:'London'}],
+  ['cnn',{lat:33.75,lon:-84.39,city:'Atlanta'}],
+  ['al jazeera',{lat:25.29,lon:51.53,city:'Doha'}],
+  ['reuters',{lat:51.51,lon:-0.10,city:'London'}],
+  ['guardian',{lat:51.53,lon:-0.12,city:'London'}],
+  ['telegraph',{lat:51.51,lon:-0.12,city:'London'}],
+  ['independent',{lat:51.51,lon:-0.12,city:'London'}],
+  ['new york',{lat:40.71,lon:-74.01,city:'New York'}],
+  ['washington',{lat:38.90,lon:-77.03,city:'Washington'}],
+  ['techcrunch',{lat:37.77,lon:-122.42,city:'San Francisco'}],
+  ['verge',{lat:40.71,lon:-74.01,city:'New York'}],
+  ['wired',{lat:37.77,lon:-122.42,city:'San Francisco'}],
+  ['bloomberg',{lat:40.76,lon:-73.98,city:'New York'}],
+  ['times of india',{lat:28.61,lon:77.21,city:'New Delhi'}],
+  ['hindu',{lat:13.08,lon:80.27,city:'Chennai'}],
+  ['xinhua',{lat:39.90,lon:116.40,city:'Beijing'}],
+  ['moscow',{lat:55.75,lon:37.62,city:'Moscow'}],
+  ['jerusalem',{lat:31.77,lon:35.21,city:'Jerusalem'}],
+  ['sydney',{lat:-33.87,lon:151.21,city:'Sydney'}],
+  ['australia',{lat:-33.87,lon:151.21,city:'Sydney'}],
+  ['cbc',{lat:43.65,lon:-79.38,city:'Toronto'}],
+  ['globe and mail',{lat:43.65,lon:-79.38,city:'Toronto'}],
+  ['le monde',{lat:48.86,lon:2.35,city:'Paris'}],
+  ['spiegel',{lat:53.55,lon:9.99,city:'Hamburg'}],
+  ['zeit',{lat:53.55,lon:9.99,city:'Hamburg'}]
+];
+function locateSource(srcId, srcName){
+  if (srcId && SOURCE_LOCATIONS[srcId]) return SOURCE_LOCATIONS[srcId];
+  const key = (srcId||'').toLowerCase();
+  if (SOURCE_LOCATIONS[key]) return SOURCE_LOCATIONS[key];
+  const name = (srcName||'').toLowerCase();
+  for (const [hint, loc] of NAME_HINTS){
+    if (name.includes(hint) || key.includes(hint)) return loc;
+  }
+  return null;
+}
+
+/* ===========================================================================
+   SAMPLE DATA  (used when the API is unreachable / CORS-blocked)
+   =========================================================================== */
+const SAMPLE_ARTICLES = [
+  { source:{id:'bbc-news',name:'BBC News'}, title:'World leaders gather for emergency climate summit as temperatures break records', url:'https://www.bbc.com/news', publishedAt:isoAgo(35) },
+  { source:{id:'cnn',name:'CNN'}, title:'Senate debate intensifies ahead of pivotal vote on landmark spending bill', url:'https://www.cnn.com', publishedAt:isoAgo(72) },
+  { source:{id:'techcrunch',name:'TechCrunch'}, title:'Startup unveils new AI chip that promises tenfold efficiency gains', url:'https://techcrunch.com', publishedAt:isoAgo(18) },
+  { source:{id:'al-jazeera-english',name:'Al Jazeera English'}, title:'Diplomats push for ceasefire as regional tensions escalate', url:'https://www.aljazeera.com', publishedAt:isoAgo(120) },
+  { source:{id:'bloomberg',name:'Bloomberg'}, title:'Global markets rally as inflation data comes in softer than expected', url:'https://www.bloomberg.com', publishedAt:isoAgo(55) },
+  { source:{id:'the-verge',name:'The Verge'}, title:'New foldable phone reviewed: the hinge finally feels right', url:'https://www.theverge.com', publishedAt:isoAgo(200) },
+  { source:{id:'reuters',name:'Reuters'}, title:'Central bank holds rates steady, signals caution on economic outlook', url:'https://www.reuters.com', publishedAt:isoAgo(90) },
+  { source:{id:'the-times-of-india',name:'The Times of India'}, title:'Monsoon arrives early across southern states, farmers welcome rains', url:'https://timesofindia.indiatimes.com', publishedAt:isoAgo(310) },
+  { source:{id:'abc-news-au',name:'ABC News (AU)'}, title:'Great Barrier Reef survey finds signs of coral recovery in northern zones', url:'https://www.abc.net.au/news', publishedAt:isoAgo(420) },
+  { source:{id:'le-monde',name:'Le Monde'}, title:'European leaders reach agreement on joint energy strategy', url:'https://www.lemonde.fr', publishedAt:isoAgo(150) },
+  { source:{id:'cbc-news',name:'CBC News'}, title:'Wildfire crews make progress as cooler weather moves in', url:'https://www.cbc.ca/news', publishedAt:isoAgo(260) },
+  { source:{id:'spiegel-online',name:'Der Spiegel'}, title:'Manufacturing orders rebound, easing recession fears', url:'https://www.spiegel.de', publishedAt:isoAgo(175) },
+  { source:{id:'xinhua-net',name:'Xinhua'}, title:'High-speed rail network expands with new cross-province line', url:'http://www.xinhuanet.com/english', publishedAt:isoAgo(500) },
+  { source:{id:'the-jerusalem-post',name:'The Jerusalem Post'}, title:'Tech sector exports hit record high in latest quarter', url:'https://www.jpost.com', publishedAt:isoAgo(330) },
+  { source:{id:'wired',name:'Wired'}, title:'Researchers demonstrate quantum error correction breakthrough', url:'https://www.wired.com', publishedAt:isoAgo(80) }
+];
+function isoAgo(mins){ return new Date(Date.now() - mins*60000).toISOString(); }
+
+/* ===========================================================================
+   HELPERS
+   =========================================================================== */
+function timeAgo(iso){
+  if(!iso) return '';
+  const s = Math.max(1, Math.floor((Date.now()-new Date(iso).getTime())/1000));
+  if (s<60) return s+'s ago';
+  const m=Math.floor(s/60); if(m<60) return m+'m ago';
+  const h=Math.floor(m/60); if(h<24) return h+'h ago';
+  return Math.floor(h/24)+'d ago';
+}
+function truncate(t,n){ t=t||''; return t.length>n ? t.slice(0,n-1)+'…' : t; }
+
+// Convert lat/lon to a 3D position on the sphere.
+function latLonToVec3(lat, lon, r){
+  const phi = (90-lat)*Math.PI/180;
+  const theta = (lon+180)*Math.PI/180;
+  return new THREE.Vector3(
+    -r*Math.sin(phi)*Math.cos(theta),
+     r*Math.cos(phi),
+     r*Math.sin(phi)*Math.sin(theta)
+  );
+}
+
+/* ===========================================================================
+   THREE.JS SCENE SETUP
+   =========================================================================== */
+const canvas = document.getElementById('globe-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080b14);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 5000);
+camera.position.set(0, 60, 320);
+
+// Lights
+scene.add(new THREE.AmbientLight(0x99aacc, 0.55));
+const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(-1, 0.5, 1);
+scene.add(sun);
+
+// Group we rotate (globe + atmosphere + markers ride along).
+const worldGroup = new THREE.Group();
+scene.add(worldGroup);
+
+/* ---------- Star field (static points) ---------- */
+(function addStars(){
+  const N=2200, pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){
+    // place stars on a far shell
+    const r=1400+Math.random()*900;
+    const t=Math.random()*Math.PI*2, p=Math.acos(2*Math.random()-1);
+    pos[i*3]  = r*Math.sin(p)*Math.cos(t);
+    pos[i*3+1]= r*Math.sin(p)*Math.sin(t);
+    pos[i*3+2]= r*Math.cos(p);
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const m=new THREE.PointsMaterial({ color:0xffffff, size:1.4, sizeAttenuation:true, transparent:true, opacity:0.85 });
+  scene.add(new THREE.Points(g,m));
+})();
+
+/* ---------- Earth sphere ---------- */
+const earthGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 96, 96);
+const earthMat = new THREE.MeshPhongMaterial({ color:0x223355, shininess:8 });
+const earth = new THREE.Mesh(earthGeo, earthMat);
+worldGroup.add(earth);
+
+new THREE.TextureLoader().load(
+  EARTH_TEXTURE,
+  (tex)=>{ earthMat.map = tex; earthMat.color.set(0xffffff); earthMat.needsUpdate = true; },
+  undefined,
+  ()=>{ /* texture failed: keep the solid blue fallback sphere */ }
+);
+
+/* ---------- Atmosphere glow (back-side shader shell) ---------- */
+const atmoMat = new THREE.ShaderMaterial({
+  side:THREE.BackSide, blending:THREE.AdditiveBlending, transparent:true,
+  vertexShader:`
+    varying vec3 vN;
+    void main(){
+      vN = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+    }`,
+  fragmentShader:`
+    varying vec3 vN;
+    void main(){
+      float i = pow(0.62 - dot(vN, vec3(0.0,0.0,1.0)), 2.2);
+      gl_FragColor = vec4(0.30,0.58,1.0,1.0) * i;
+    }`
+});
+const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_RADIUS*1.16, 64, 64), atmoMat);
+worldGroup.add(atmosphere);
+
+/* ===========================================================================
+   PING MARKERS
+   =========================================================================== */
+const markersGroup = new THREE.Group();
+worldGroup.add(markersGroup);
+const markers = [];   // { mesh(core), rings:[{mesh,phase}], data, hitMesh }
+
+// shared ring geometry, oriented to lie flat on the surface
+function makeMarker(article){
+  const pos = latLonToVec3(article.loc.lat, article.loc.lon, GLOBE_RADIUS+0.5);
+  const colorHex = colorForCategory(article.category);
+  const group = new THREE.Group();
+  group.position.copy(pos);
+  // orient so local +Z points away from globe center (rings face outward)
+  group.lookAt(pos.clone().multiplyScalar(2));
+
+  // solid core dot
+  const core = new THREE.Mesh(
+    new THREE.CircleGeometry(1.7, 24),
+    new THREE.MeshBasicMaterial({ color:colorHex, transparent:true, opacity:0.95, side:THREE.DoubleSide })
+  );
+  core.position.z = 0.1;
+  group.add(core);
+
+  // expanding sonar rings
+  const rings = [];
+  for(let k=0;k<2;k++){
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(2.0, 2.7, 32),
+      new THREE.MeshBasicMaterial({ color:colorHex, transparent:true, opacity:0.7, side:THREE.DoubleSide, depthWrite:false })
+    );
+    ring.position.z = 0.05;
+    group.add(ring);
+    rings.push({ mesh:ring, phase:k*0.5 });
+  }
+
+  // invisible larger hit target for easy hovering via raycaster
+  const hit = new THREE.Mesh(
+    new THREE.CircleGeometry(6, 16),
+    new THREE.MeshBasicMaterial({ visible:false, side:THREE.DoubleSide })
+  );
+  hit.position.z = 0.1;
+  group.add(hit);
+
+  markersGroup.add(group);
+  const m = { group, core, rings, hit, data:article, color:colorHex, baseScale:1, listHover:false };
+  hit.userData.marker = m;
+  markers.push(m);
+  return m;
+}
+
+/* ===========================================================================
+   ORBIT CONTROLS  (hand-rolled, no extra dependency)
+   =========================================================================== */
+const controls = {
+  azimuth: 0.6, polar: 1.15, distance: 320,
+  targetAzimuth: 0.6, targetPolar: 1.15, targetDistance: 320,
+  dragging:false, lastX:0, lastY:0, userActive:false, idleTimer:null
+};
+const MIN_DIST=150, MAX_DIST=520, MIN_POLAR=0.25, MAX_POLAR=Math.PI-0.25;
+
+function markUserActive(){
+  controls.userActive = true;
+  clearTimeout(controls.idleTimer);
+  controls.idleTimer = setTimeout(()=>{ controls.userActive=false; }, 2600);
+}
+canvas.addEventListener('pointerdown', e=>{
+  controls.dragging=true; controls.lastX=e.clientX; controls.lastY=e.clientY; markUserActive();
+});
+window.addEventListener('pointerup', ()=>{ controls.dragging=false; });
+window.addEventListener('pointermove', e=>{
+  handleHover(e);
+  if(!controls.dragging) return;
+  const dx=e.clientX-controls.lastX, dy=e.clientY-controls.lastY;
+  controls.lastX=e.clientX; controls.lastY=e.clientY;
+  controls.targetAzimuth -= dx*0.005;
+  controls.targetPolar   = Math.max(MIN_POLAR, Math.min(MAX_POLAR, controls.targetPolar - dy*0.005));
+  markUserActive();
+});
+canvas.addEventListener('wheel', e=>{
+  e.preventDefault();
+  controls.targetDistance = Math.max(MIN_DIST, Math.min(MAX_DIST, controls.targetDistance + e.deltaY*0.18));
+  markUserActive();
+}, { passive:false });
+
+// Fly the camera to a lat/lon (used on headline hover).
+function flyTo(lat, lon){
+  controls.targetAzimuth = -(lon+180)*Math.PI/180 - Math.PI/2;
+  controls.targetPolar   = Math.max(MIN_POLAR, Math.min(MAX_POLAR, (90-lat)*Math.PI/180));
+  controls.targetDistance = 230;
+  markUserActive();
+}
+
+function updateCamera(){
+  // smooth (lerp) toward target orbit params
+  controls.azimuth  += (controls.targetAzimuth  - controls.azimuth)*0.08;
+  controls.polar    += (controls.targetPolar    - controls.polar)*0.08;
+  controls.distance += (controls.targetDistance - controls.distance)*0.08;
+  const d=controls.distance, p=controls.polar, a=controls.azimuth;
+  camera.position.set(
+    d*Math.sin(p)*Math.sin(a),
+    d*Math.cos(p),
+    d*Math.sin(p)*Math.cos(a)
+  );
+  camera.lookAt(0,0,0);
+}
+
+/* ===========================================================================
+   RAYCASTING / HOVER INTERACTION
+   =========================================================================== */
+const raycaster = new THREE.Raycaster();
+const mouseNDC = new THREE.Vector2();
+let hoveredMarker = null;
+const tooltip = document.getElementById('tooltip');
+
+function handleHover(e){
+  mouseNDC.x = (e.clientX/window.innerWidth)*2 - 1;
+  mouseNDC.y = -(e.clientY/window.innerHeight)*2 + 1;
+  raycaster.setFromCamera(mouseNDC, camera);
+  const hits = raycaster.intersectObjects(markers.map(m=>m.hit), false);
+
+  // Only count a marker if it's on the near-facing hemisphere (not occluded by globe).
+  let found=null;
+  for(const h of hits){
+    const m=h.object.userData.marker;
+    const worldPos=new THREE.Vector3(); m.group.getWorldPosition(worldPos);
+    const toCam=camera.position.clone().sub(worldPos).normalize();
+    const normal=worldPos.clone().normalize();
+    if(normal.dot(toCam) > 0.05){ found=m; break; }
+  }
+
+  if(found!==hoveredMarker){
+    setHoveredMarker(found);
+  }
+  if(found){
+    tooltip.style.left = e.clientX+'px';
+    tooltip.style.top  = e.clientY+'px';
+  }
+}
+
+function setHoveredMarker(m){
+  hoveredMarker = m;
+  // reset list highlight
+  document.querySelectorAll('.item.active').forEach(el=>{
+    if(!el.dataset.kept) el.classList.remove('active');
+  });
+  if(m){
+    tooltip.querySelector('.t-src').textContent = m.data.source.name;
+    tooltip.querySelector('.t-ttl').textContent = truncate(m.data.title, 90);
+    tooltip.style.opacity = 1;
+    const el = document.querySelector(`.item[data-id="${m.data._id}"]`);
+    if(el){ el.classList.add('active'); el.scrollIntoView({block:'nearest', behavior:'smooth'}); }
+    canvas.style.cursor='pointer';
+  } else {
+    tooltip.style.opacity = 0;
+    canvas.style.cursor='grab';
+  }
+}
+
+/* ===========================================================================
+   BUILD NEWS PANEL + MARKERS
+   =========================================================================== */
+const listEl = document.getElementById('list');
+const statusEl = document.getElementById('status');
+
+function highlightMarker(m, on){
+  m.listHover = on;
+}
+
+function render(articles){
+  listEl.innerHTML='';
+  articles.forEach(a=>{
+    const catColor = hexCss(colorForCategory(a.category));
+    const item = document.createElement('div');
+    item.className='item';
+    item.dataset.id=a._id;
+    item.style.setProperty('--dot', catColor);
+    item.innerHTML =
+      `<div class="src"><span>${a.source.name}</span><span class="ago">${timeAgo(a.publishedAt)}</span></div>
+       <div class="ttl">${truncate(a.title||'(untitled)', 120)}</div>`;
+
+    item.addEventListener('mouseenter', ()=>{
+      highlightMarker(a._marker, true);
+      flyTo(a.loc.lat, a.loc.lon);
+    });
+    item.addEventListener('mouseleave', ()=>{ highlightMarker(a._marker, false); });
+    item.addEventListener('click', ()=>{ if(a.url) window.open(a.url,'_blank','noopener'); });
+
+    listEl.appendChild(item);
+  });
+}
+
+/* ===========================================================================
+   DATA PIPELINE
+   =========================================================================== */
+function processArticles(raw){
+  const out=[];
+  raw.forEach((a, i)=>{
+    const srcId = a.source && a.source.id;
+    const srcName = a.source && a.source.name;
+    const loc = locateSource(srcId, srcName);
+    if(!loc) return;                       // skip articles we can't place
+    const category = guessCategory((a.title||'')+' '+(a.description||''));
+    out.push(Object.assign({}, a, {
+      _id:'a'+i,
+      loc, category,
+      source:{ id:srcId, name:srcName||loc.city }
+    }));
+  });
+  return out;
+}
+
+function build(articles){
+  // de-cluster: nudge markers that share the exact same coordinates
+  const seen={};
+  articles.forEach(a=>{
+    const key=a.loc.lat.toFixed(2)+','+a.loc.lon.toFixed(2);
+    seen[key]=(seen[key]||0);
+    if(seen[key]>0){
+      a.loc = { lat:a.loc.lat + seen[key]*0.9, lon:a.loc.lon + seen[key]*0.9, city:a.loc.city };
+    }
+    seen[key]++;
+    a._marker = makeMarker(a);
+    a._marker.hit.userData.articleId=a._id;
+  });
+  render(articles);
+  statusEl.innerHTML = `${articles.length} headlines · ${Object.keys(seen).length} locations`;
+}
+
+async function loadNews(){
+  let articles=[];
+  try{
+    if(NEWS_API_KEY && NEWS_API_KEY!=='YOUR_KEY'){
+      const res = await fetch(NEWS_ENDPOINT);
+      const json = await res.json();
+      if(json.status==='ok' && json.articles) articles = json.articles;
+      else throw new Error(json.message||'API error');
+    } else {
+      throw new Error('no key');
+    }
+  }catch(err){
+    console.warn('NewsAPI unavailable, using sample data:', err.message);
+  }
+  if(!articles.length) articles = SAMPLE_ARTICLES;
+
+  const processed = processArticles(articles);
+  if(!processed.length){
+    statusEl.textContent='No locatable headlines.';
+    return;
+  }
+  build(processed);
+}
+
+/* ===========================================================================
+   ANIMATION LOOP
+   =========================================================================== */
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const t  = clock.elapsedTime;
+
+  // slow auto-rotation, paused while the user interacts
+  if(!controls.userActive && !controls.dragging){
+    worldGroup.rotation.y += dt*0.05;
+  }
+
+  // animate sonar rings + marker scale
+  markers.forEach(m=>{
+    const targetScale = (m===hoveredMarker || m.listHover) ? 1.9 : 1.0;
+    m.baseScale += (targetScale - m.baseScale)*0.15;
+    m.core.scale.setScalar(m.baseScale);
+    m.rings.forEach(r=>{
+      let f = (t*0.6 + r.phase) % 1;          // 0..1 progress
+      const s = (1 + f*3.5) * m.baseScale;
+      r.mesh.scale.setScalar(s);
+      r.mesh.material.opacity = (1-f)*0.7;
+    });
+  });
+
+  updateCamera();
+  renderer.render(scene, camera);
+}
+
+/* ===========================================================================
+   BOOT
+   =========================================================================== */
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+canvas.style.cursor='grab';
+animate();
+loadNews().finally(()=>{
+  setTimeout(()=>document.getElementById('loader').classList.add('hide'), 400);
+});
+</script>
+</body>
+</html>
