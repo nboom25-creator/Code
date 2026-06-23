@@ -1,15 +1,13 @@
 # 🍽️ Weekly Dinner Plan
 
-> 💡 **There's now an interactive app** — open [`index.html`](./index.html) for a live serving-size slider, a 🎲 swap button (meals never repeat), and an auto-scaling shopping list. This file is the static starter plan.
+> 💡 **There's an interactive app** — open [`index.html`](./index.html) for a live serving-size slider, a 🎲 swap button (meals never repeat), and an auto-scaling shopping list. This file is the static starter plan, generated from `meals.js`.
 
 **Baseline servings:** 2 (every recipe scales — see the [Scaling Matrix](#-scaling-matrix)).
 
 ### Dietary rules applied to every recipe
-- 🚫 **No fish or seafood** of any kind — this also rules out **fish sauce** and **shrimp paste**, so the Thai dishes use **soy sauce / coconut aminos** instead.
-- 🚫 **No alliums** — no onions, scallions, chives, shallots, or leeks. Because the brief says "all alliums," **garlic is also excluded** (it's an allium). Depth comes from **ginger, lemongrass, fennel seed, smoked paprika, cumin, herbs, and celery/carrot**.
+- 🚫 **No fish or seafood** — including **fish sauce, shrimp paste, and oyster sauce**; Thai dishes use **soy sauce / coconut aminos** and oyster-free stir-fry sauce.
+- 🚫 **No onion family** — no onions, scallions, shallots, leeks, or chives. ✅ **Garlic is used** for savory depth, alongside ginger, lemongrass, fennel, and spices.
 - ✅ Cuisines lean **Italian-American, traditional American, Tex-Mex/Mexican, and Thai**.
-
-> **Note:** If garlic *is* acceptable for you, say so and I'll fold it back in — it would noticeably boost the savory depth of several dishes.
 
 ---
 
@@ -20,276 +18,252 @@
 | **Monday** | Tuscan Tomato-Basil Rigatoni with Herb Chicken | Italian-American |
 | **Tuesday** | Sheet-Pan Chili-Lime Chicken Fajita Bowls | Tex-Mex |
 | **Wednesday** | Thai Basil Chicken (Pad Krapow) over Jasmine Rice | Thai |
-| **Thursday** | Classic Glazed Meatloaf, Mashed Potatoes & Green Beans | American |
+| **Thursday** | Classic Glazed Meatloaf with Mashed Potatoes & Green Beans | American |
 | **Friday** | Beef & Black Bean Enchiladas with Red Chili Sauce | Mexican |
 | **Saturday** | Eggplant Parmesan with Spaghetti | Italian-American |
 | **Sunday** | Thai Coconut Chicken Curry with Potatoes | Thai |
 
+> This is one of **50** recipes in the pool. Use the app's 🎲 swap to rotate in any of the others.
+
 ---
 
 ## Monday
-### 🍝 Tuscan Tomato-Basil Rigatoni with Herb Chicken
+### Tuscan Tomato-Basil Rigatoni with Herb Chicken
 *Italian-American • ~35 min • Baseline: 2 servings*
 
 **Ingredients**
 
 *Produce*
-- 2 cups fresh basil leaves, loosely packed (½ chopped for sauce, ½ torn to finish)
-- 1 medium carrot, finely grated (¼ cup) — sweet aromatic base in place of onion
-- 1 stalk celery, finely minced (¼ cup)
+- 2 cup fresh basil leaves
+- 1 medium carrot, finely grated
+- 3 clove garlic, minced
 
 *Proteins*
-- 12 oz boneless, skinless chicken breast, cut into 1-inch pieces
+- 12 oz chicken breast
 
 *Pantry*
 - 8 oz rigatoni
-- 1 (14.5 oz) can crushed tomatoes
+- 14 ½ oz can crushed tomatoes
 - 2 tbsp tomato paste
 - ⅓ cup heavy cream
-- ¼ cup grated Parmesan, plus more to serve
+- ¼ cup grated Parmesan
 - 2 tbsp olive oil
-- 1 tsp fennel seed, lightly crushed
+- 1 tsp fennel seed
 - 1 tsp dried oregano
-- ½ tsp red pepper flakes
 - ¾ tsp kosher salt
-- ½ tsp black pepper
 
 **Instructions**
-1. Bring a large pot of salted water to a boil. Cook rigatoni to al dente per package (about 11 min). Reserve ½ cup pasta water, then drain.
-2. Pat chicken dry; season with ¼ tsp salt and the black pepper. Heat 1 tbsp olive oil in a large skillet over medium-high. Sear chicken 5–6 min until golden and cooked through (165°F). Remove to a plate.
-3. Lower heat to medium. Add remaining 1 tbsp oil, the grated carrot, minced celery, fennel seed, and oregano. Cook 3–4 min until softened and fragrant.
-4. Stir in tomato paste and red pepper flakes; cook 1 min. Add crushed tomatoes and ½ tsp salt. Simmer 8 min.
-5. Stir in heavy cream and Parmesan until smooth. Return chicken and any juices to the pan. Add the drained pasta and chopped basil, tossing with splashes of reserved pasta water until the sauce coats every piece.
-6. Finish with torn basil and extra Parmesan.
+1. Cook rigatoni to al dente (~11 min); reserve ½ cup water, drain.
+2. Sear seasoned chicken in 1 tbsp oil 5–6 min to 165°F; remove.
+3. Cook carrot, garlic, fennel, oregano in remaining oil 2–3 min.
+4. Add tomato paste 1 min, crushed tomatoes + salt; simmer 8 min.
+5. Stir in cream and Parmesan; return chicken, add pasta and basil, loosen with pasta water.
 
 ---
 
 ## Tuesday
-### 🌶️ Sheet-Pan Chili-Lime Chicken Fajita Bowls
+### Sheet-Pan Chili-Lime Chicken Fajita Bowls
 *Tex-Mex • ~30 min • Baseline: 2 servings*
 
 **Ingredients**
 
 *Produce*
-- 1 red bell pepper, sliced
-- 1 yellow bell pepper, sliced
-- 1 zucchini, sliced into half-moons
-- 1 lime (juice + zest)
-- 1 ripe avocado, sliced
-- 2 tbsp chopped fresh cilantro
+- 1 whole red bell pepper
+- 1 whole yellow bell pepper
+- 1 whole zucchini
+- 3 clove garlic, minced
+- 1 whole lime
+- 1 whole avocado
 
 *Proteins*
-- 12 oz boneless, skinless chicken thighs, sliced
+- 12 oz chicken thighs, sliced
 
 *Pantry*
-- ¾ cup white or brown rice (dry)
+- ¾ cup rice (dry)
 - 2 tbsp olive oil
-- 1½ tsp ground cumin
-- 1½ tsp smoked paprika
+- 1 ½ tsp ground cumin
+- 1 ½ tsp smoked paprika
 - 1 tsp chili powder
-- ½ tsp dried oregano
 - ¾ tsp kosher salt
-- ¼ tsp black pepper
 
 **Instructions**
-1. Preheat oven to 425°F. Cook rice per package instructions.
-2. In a large bowl, whisk olive oil, cumin, smoked paprika, chili powder, oregano, salt, pepper, lime zest, and half the lime juice.
-3. Add chicken, bell peppers, and zucchini; toss to coat. Spread in a single layer on a sheet pan.
-4. Roast 20–22 min, tossing once, until chicken reaches 165°F and vegetables are charred at the edges.
-5. Build bowls: rice, then the roasted chicken and peppers. Top with avocado, cilantro, and a squeeze of the remaining lime juice.
+1. Heat oven to 425°F. Cook rice.
+2. Whisk oil, garlic, cumin, paprika, chili powder, salt, lime zest + half the juice.
+3. Toss chicken, peppers, zucchini; roast on a sheet pan 20–22 min to 165°F.
+4. Build bowls over rice; top with avocado and remaining lime.
 
 ---
 
 ## Wednesday
-### 🌿 Thai Basil Chicken (Pad Krapow) over Jasmine Rice
+### Thai Basil Chicken (Pad Krapow) over Jasmine Rice
 *Thai • ~25 min • Baseline: 2 servings*
 
 **Ingredients**
 
 *Produce*
-- 1 cup Thai (or sweet) basil leaves, loosely packed
+- 1 cup Thai basil leaves
+- 4 clove garlic, minced
 - 1 tbsp fresh ginger, minced
-- 1 stalk lemongrass, tender core minced (1 tbsp)
-- 1–2 fresh Thai chilies, minced (to taste)
-- 1 red bell pepper, diced
+- 1 ½ whole Thai chili, minced
+- 1 whole red bell pepper, diced
 
 *Proteins*
 - 12 oz ground chicken
-- 2 large eggs (for crispy fried eggs to top)
+- 2 whole eggs
 
 *Pantry*
 - ¾ cup jasmine rice (dry)
-- 2 tbsp soy sauce *(replaces fish sauce)*
-- 1 tbsp coconut aminos or extra soy sauce
-- 1 tsp dark soy sauce (for color, optional)
+- 2 tbsp soy sauce
+- 1 tbsp coconut aminos
 - 1 tsp brown sugar
-- 2 tbsp neutral oil (divided)
+- 2 tbsp neutral oil
 
 **Instructions**
-1. Cook jasmine rice per package and keep warm.
-2. In a small bowl, stir together soy sauce, coconut aminos, dark soy, and brown sugar.
-3. Heat 1 tbsp oil in a wok/skillet over high. Add ginger, lemongrass, and chilies; stir-fry 30 sec until fragrant.
-4. Add ground chicken; break apart and stir-fry 5–6 min until cooked and lightly browned. Add bell pepper; cook 2 min.
-5. Pour in the sauce; toss 1 min until glossy. Kill the heat and fold in basil until just wilted.
-6. In a separate pan, heat remaining 1 tbsp oil over medium-high and fry eggs until edges are crispy and yolks still runny.
-7. Serve chicken over rice, each bowl topped with a fried egg.
+1. Cook jasmine rice.
+2. Stir-fry garlic, ginger, chili in 1 tbsp oil over high 30 sec.
+3. Add chicken; stir-fry 5–6 min. Add bell pepper 2 min; add soy, aminos, sugar 1 min; fold in basil off heat.
+4. Fry eggs crispy in remaining oil; serve chicken over rice, topped with an egg.
 
 ---
 
 ## Thursday
-### 🥩 Classic Glazed Meatloaf with Mashed Potatoes & Green Beans
-*American • ~1 hr • Baseline: 2 servings*
+### Classic Glazed Meatloaf with Mashed Potatoes & Green Beans
+*American • ~60 min • Baseline: 2 servings*
 
 **Ingredients**
 
 *Produce*
-- 1 medium carrot, finely grated (for moisture/flavor in place of onion)
-- 1 stalk celery, finely minced
-- 1 lb Yukon Gold potatoes, peeled and cubed
-- 8 oz fresh green beans, trimmed
+- 1 medium carrot, finely grated
+- 2 clove garlic, minced
+- 1 lb Yukon Gold potatoes
+- 8 oz green beans, trimmed
 
 *Proteins*
 - 12 oz ground beef (80/20)
-- 1 large egg
+- 1 whole egg
 
 *Pantry*
 - ⅓ cup breadcrumbs
-- 2 tbsp milk
-- 3 tbsp ketchup (for glaze)
+- 3 tbsp ketchup
 - 1 tbsp brown sugar
-- 1 tsp yellow mustard
-- 1 tsp Worcestershire sauce *(check label — anchovy-free brand required)*
+- 1 tsp Worcestershire (anchovy-free)
 - ½ tsp smoked paprika
 - 3 tbsp butter
-- ¼ cup milk (for potatoes)
+- ⅓ cup milk
 - ¾ tsp kosher salt
-- ½ tsp black pepper
 
 **Instructions**
-1. Preheat oven to 375°F. Line a small sheet pan with foil.
-2. In a bowl, combine breadcrumbs and 2 tbsp milk; let sit 2 min. Add ground beef, egg, grated carrot, minced celery, smoked paprika, Worcestershire, ½ tsp salt, and ¼ tsp pepper. Mix gently until just combined.
-3. Shape into a loaf on the pan. Stir ketchup, brown sugar, and mustard together; brush over the top.
-4. Bake 40–45 min until internal temp reaches 160°F. Rest 5 min before slicing.
-5. Meanwhile, boil potatoes in salted water 15 min until fork-tender. Drain; mash with butter, ¼ cup milk, ¼ tsp salt, and ¼ tsp pepper.
-6. Steam or boil green beans 4–5 min until crisp-tender; toss with a pat of butter and a pinch of salt.
+1. Heat oven to 375°F. Mix beef, egg, carrot, garlic, breadcrumbs, 2 tbsp milk, paprika, Worcestershire, salt; shape into a loaf.
+2. Brush with ketchup + brown sugar; bake 40–45 min to 160°F; rest 5 min.
+3. Boil potatoes 15 min; mash with butter, remaining milk, salt.
+4. Steam green beans 4–5 min; toss with butter.
 
 ---
 
 ## Friday
-### 🌯 Beef & Black Bean Enchiladas with Red Chili Sauce
+### Beef & Black Bean Enchiladas with Red Chili Sauce
 *Mexican • ~45 min • Baseline: 2 servings*
 
 **Ingredients**
 
 *Produce*
-- 2 tbsp chopped fresh cilantro
-- 1 lime, cut into wedges
+- 3 clove garlic, minced
+- 2 tbsp fresh cilantro, chopped
+- 1 whole lime
 
 *Proteins*
 - 10 oz ground beef
-- 1 (15 oz) can black beans, drained and rinsed (use half)
+- ¾ cup black beans (canned)
 
 *Pantry*
-- 6 corn tortillas
-- 1½ cups crushed tomatoes (for sauce)
+- 6 whole corn tortillas
+- 1 ½ cup crushed tomatoes
 - 2 tbsp tomato paste
 - 1 tbsp chili powder
 - 1 tsp ground cumin
-- 1 tsp smoked paprika
-- ½ tsp dried oregano
-- 1 cup shredded Monterey Jack or cheddar
+- 1 cup shredded cheese
 - 2 tbsp olive oil
 - 1 cup vegetable broth
 - ¾ tsp kosher salt
 
 **Instructions**
-1. Preheat oven to 375°F. Make the sauce: heat 1 tbsp oil over medium, stir in tomato paste, chili powder, cumin, paprika, and oregano; toast 1 min. Add crushed tomatoes, broth, and ½ tsp salt. Simmer 10 min until thickened. 
-2. Brown ground beef in 1 tbsp oil over medium-high, 6–7 min; season with ¼ tsp salt. Stir in ¾ cup black beans and ⅓ cup of the red sauce.
-3. Warm tortillas (15 sec in microwave under a damp towel) so they roll without cracking. Fill each with the beef mixture and a little cheese; roll and place seam-down in a baking dish.
-4. Pour remaining sauce over the top; scatter with remaining cheese.
-5. Bake 18–20 min until bubbly. Finish with cilantro and lime wedges.
+1. Heat oven to 375°F. Toast garlic, paste, spices in oil 1 min; add tomatoes, broth, salt; simmer 10 min.
+2. Brown beef 6–7 min; stir in beans and ⅓ cup sauce.
+3. Fill warmed tortillas with beef and cheese; roll seam-down in a dish.
+4. Top with sauce and cheese; bake 18–20 min. Finish with cilantro and lime.
 
 ---
 
 ## Saturday
-### 🍆 Eggplant Parmesan with Spaghetti
+### Eggplant Parmesan with Spaghetti
 *Italian-American • ~50 min • Baseline: 2 servings*
 
 **Ingredients**
 
 *Produce*
-- 1 large eggplant (about 1 lb), sliced into ½-inch rounds
+- 1 lb eggplant
 - 1 cup fresh basil leaves
-- 1 medium carrot, finely grated (for the sauce)
+- 3 clove garlic, minced
 
 *Proteins*
-- 2 large eggs (for breading)
+- 2 whole eggs
 
 *Pantry*
 - 8 oz spaghetti
-- 1 cup breadcrumbs (Italian-seasoned)
-- ½ cup grated Parmesan (divided)
+- 1 cup Italian breadcrumbs
+- ½ cup grated Parmesan
 - 1 cup shredded mozzarella
-- 1 (14.5 oz) can crushed tomatoes
+- 14 ½ oz can crushed tomatoes
 - 2 tbsp tomato paste
 - 3 tbsp olive oil
 - 1 tsp dried oregano
-- ½ tsp fennel seed, crushed
 - ¾ tsp kosher salt
-- ½ tsp black pepper
 
 **Instructions**
-1. Salt eggplant slices and rest on paper towels 15 min; pat dry (draws out bitterness and moisture).
-2. Preheat oven to 400°F. Set up breading: beaten eggs in one dish; breadcrumbs mixed with ¼ cup Parmesan in another. Dip each slice in egg, then crumbs.
-3. Arrange breaded eggplant on an oiled sheet pan; drizzle with 2 tbsp oil. Bake 20 min, flipping once, until golden.
-4. Sauce: heat 1 tbsp oil over medium, add grated carrot, oregano, and fennel; cook 3 min. Stir in tomato paste 1 min, then crushed tomatoes and ½ tsp salt. Simmer 10 min; stir in half the basil.
-5. Spoon a layer of sauce in a baking dish, layer eggplant, sauce, and mozzarella. Bake 12–15 min until melted and bubbling.
-6. Meanwhile cook spaghetti to al dente; toss with a ladle of sauce. Serve eggplant over pasta, topped with remaining Parmesan and torn basil.
+1. Salt eggplant rounds, rest 15 min, pat dry. Heat oven to 400°F.
+2. Bread slices (egg, then crumbs + ¼ cup Parmesan); bake on oiled pan 20 min, flipping once.
+3. Sauce: cook garlic + oregano in oil 1 min, add paste 1 min, tomatoes + salt; simmer 10 min with half the basil.
+4. Layer sauce, eggplant, mozzarella; bake 12–15 min.
+5. Serve over spaghetti with remaining Parmesan and basil.
 
 ---
 
 ## Sunday
-### 🍛 Thai Coconut Chicken Curry with Potatoes
+### Thai Coconut Chicken Curry with Potatoes
 *Thai • ~40 min • Baseline: 2 servings*
-
-> Most jarred curry pastes contain **shrimp paste and shallots** — both off-limits here — so this build uses pantry spices, ginger, and lemongrass for a clean, allium- and seafood-free curry.
 
 **Ingredients**
 
 *Produce*
+- 3 clove garlic, minced
 - 1 tbsp fresh ginger, minced
-- 1 stalk lemongrass, tender core minced
+- 1 stalk lemongrass, minced
 - 2 medium Yukon Gold potatoes, cubed
-- 1 red bell pepper, sliced
-- 1 lime (juice)
-- 2 tbsp chopped fresh cilantro
+- 1 whole red bell pepper, sliced
+- 1 whole lime
 
 *Proteins*
-- 12 oz boneless, skinless chicken thighs, cut into chunks
+- 12 oz chicken thighs, cubed
 
 *Pantry*
 - ¾ cup jasmine rice (dry)
-- 1 (13.5 oz) can full-fat coconut milk
-- 1 tbsp red curry powder (or 2 tsp curry powder + ½ tsp cayenne)
-- 1 tsp ground coriander
+- 13 ½ oz can full-fat coconut milk
+- 1 tbsp red curry powder
 - 1 tsp ground turmeric
-- 2 tbsp soy sauce *(replaces fish sauce)*
-- 1 tsp brown sugar
+- 2 tbsp soy sauce
 - 2 tbsp neutral oil
-- ½ tsp kosher salt
 
 **Instructions**
-1. Cook jasmine rice per package and keep warm.
-2. Heat oil in a deep skillet/pot over medium. Add ginger and lemongrass; stir 1 min. Add curry powder, coriander, and turmeric; toast 30 sec until fragrant.
-3. Add chicken; brown 4–5 min. Pour in coconut milk, soy sauce, brown sugar, and salt; stir to combine.
-4. Add potatoes; simmer covered 15 min. Add bell pepper; simmer uncovered 8–10 min more until potatoes are tender and sauce thickens slightly (chicken at 165°F).
-5. Off heat, stir in lime juice. Serve over rice, topped with cilantro.
+1. Cook jasmine rice.
+2. Bloom garlic, ginger, lemongrass in oil 1 min; add curry powder, turmeric 30 sec.
+3. Brown chicken 4–5 min; add coconut milk, soy; add potatoes, simmer covered 15 min.
+4. Add pepper, simmer 8–10 min to 165°F; finish with lime. Serve over rice.
 
 ---
 
 ## 📊 Scaling Matrix
 
-Every quantity above is for the **baseline of 2 servings**. To scale, multiply each numeric quantity by:
+Every quantity is the **baseline for 2 servings**. To scale, multiply by:
 
 ```
 multiplier = desired_servings / 2
@@ -298,19 +272,14 @@ multiplier = desired_servings / 2
 | Desired servings | Multiplier |
 |------------------|------------|
 | 2 (baseline) | × 1.0 |
+| 3 | × 1.5 |
 | 4 | × 2.0 |
 | 6 | × 3.0 |
-| 3 | × 1.5 |
 | 8 | × 4.0 |
 
-**Practical scaling notes**
-- **Eggs, cans, and tortillas** are discrete — round to whole units (e.g., 2 eggs × 1.5 = 3 eggs; 1 can × 1.5 → use 1½ cans or round to 2).
-- **Salt and strong spices** (cayenne, chili) scale slightly *under* linear — start at ~0.8× the math and adjust to taste.
-- **Cooking times** stay roughly the same; only increase pan size / use multiple sheet pans so food roasts instead of steams.
+**Notes**
+- Discrete items (eggs, cans, tortillas) round to whole units.
+- Salt and hot spices scale slightly sub-linearly — start at ~0.8× the math and adjust.
+- Cooking times stay roughly constant; scale pan/sheet count to avoid steaming.
 
-A complete, machine-readable version of every ingredient with categories and baseline quantities lives in **[`meal-plan.json`](./meal-plan.json)** — feed it `desired_servings` and multiply `baseline_qty` to drive a UI or shopping-list generator.
-
----
-
-## 🔄 Want to swap a night?
-Tell me which night you don't want (e.g., *"I don't want the Tuesday option"*) and I'll drop in a distinct, fully-detailed alternative that follows every dietary rule — while keeping the rest of the week intact.
+The full machine-readable dataset for all 50 recipes lives in [`meals.js`](./meals.js); the starter week is mirrored in [`meal-plan.json`](./meal-plan.json).

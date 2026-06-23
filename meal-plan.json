@@ -1,21 +1,32 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "meta": {
     "title": "Weekly Dinner Plan",
     "baseline_servings": 2,
+    "pool_size": 50,
     "scaling_rule": "adjusted_qty = baseline_qty * (desired_servings / baseline_servings)",
     "dietary_constraints": {
       "no_fish_or_seafood": true,
-      "no_fish_sauce_or_shrimp_paste": true,
-      "no_alliums": true,
-      "excluded_alliums": ["onion", "scallion", "chive", "shallot", "leek", "garlic"],
-      "preferred_cuisines": ["Italian-American", "American", "Tex-Mex", "Mexican", "Thai"],
-      "allium_free_aromatics": ["ginger", "lemongrass", "fennel seed", "smoked paprika", "cumin", "celery", "carrot", "fresh herbs"]
+      "no_fish_sauce_shrimp_paste_oyster_sauce": true,
+      "garlic_allowed": true,
+      "excluded_alliums": [
+        "onion",
+        "scallion",
+        "shallot",
+        "leek",
+        "chive"
+      ],
+      "preferred_cuisines": [
+        "Italian-American",
+        "American",
+        "Tex-Mex",
+        "Mexican",
+        "Thai"
+      ]
     },
     "scaling_notes": [
-      "Discrete items (eggs, cans, tortillas) should be rounded to whole units.",
-      "Salt and hot spices scale slightly sub-linearly (~0.8x the math); adjust to taste.",
-      "Cooking times stay roughly constant; increase pan/sheet count to avoid steaming."
+      "Discrete items (eggs, cans, tortillas) round to whole units.",
+      "Salt and hot spices scale slightly sub-linearly (~0.8x).",
+      "Cooking times stay roughly constant; scale pan/sheet count."
     ]
   },
   "days": [
@@ -25,21 +36,97 @@
       "cuisine": "Italian-American",
       "active_minutes": 35,
       "ingredients": [
-        { "name": "fresh basil leaves", "baseline_qty": 2, "unit": "cup", "category": "Produce", "discrete": false },
-        { "name": "carrot, finely grated", "baseline_qty": 1, "unit": "medium", "category": "Produce", "discrete": true },
-        { "name": "celery, finely minced", "baseline_qty": 1, "unit": "stalk", "category": "Produce", "discrete": true },
-        { "name": "chicken breast", "baseline_qty": 12, "unit": "oz", "category": "Proteins", "discrete": false },
-        { "name": "rigatoni", "baseline_qty": 8, "unit": "oz", "category": "Pantry", "discrete": false },
-        { "name": "crushed tomatoes", "baseline_qty": 14.5, "unit": "oz can", "category": "Pantry", "discrete": true },
-        { "name": "tomato paste", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "heavy cream", "baseline_qty": 0.333, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "grated Parmesan", "baseline_qty": 0.25, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "olive oil", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "fennel seed", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "dried oregano", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "red pepper flakes", "baseline_qty": 0.5, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "kosher salt", "baseline_qty": 0.75, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "black pepper", "baseline_qty": 0.5, "unit": "tsp", "category": "Pantry", "discrete": false }
+        {
+          "name": "fresh basil leaves",
+          "baseline_qty": 2,
+          "unit": "cup",
+          "category": "Produce",
+          "discrete": false
+        },
+        {
+          "name": "carrot, finely grated",
+          "baseline_qty": 1,
+          "unit": "medium",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "garlic, minced",
+          "baseline_qty": 3,
+          "unit": "clove",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "chicken breast",
+          "baseline_qty": 12,
+          "unit": "oz",
+          "category": "Proteins",
+          "discrete": false
+        },
+        {
+          "name": "rigatoni",
+          "baseline_qty": 8,
+          "unit": "oz",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "crushed tomatoes",
+          "baseline_qty": 14.5,
+          "unit": "oz can",
+          "category": "Pantry",
+          "discrete": true
+        },
+        {
+          "name": "tomato paste",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "heavy cream",
+          "baseline_qty": 0.333,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "grated Parmesan",
+          "baseline_qty": 0.25,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "olive oil",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "fennel seed",
+          "baseline_qty": 1,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "dried oregano",
+          "baseline_qty": 1,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "kosher salt",
+          "baseline_qty": 0.75,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        }
       ]
     },
     {
@@ -48,21 +135,97 @@
       "cuisine": "Tex-Mex",
       "active_minutes": 30,
       "ingredients": [
-        { "name": "red bell pepper", "baseline_qty": 1, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "yellow bell pepper", "baseline_qty": 1, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "zucchini", "baseline_qty": 1, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "lime", "baseline_qty": 1, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "avocado", "baseline_qty": 1, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "fresh cilantro, chopped", "baseline_qty": 2, "unit": "tbsp", "category": "Produce", "discrete": false },
-        { "name": "chicken thighs, sliced", "baseline_qty": 12, "unit": "oz", "category": "Proteins", "discrete": false },
-        { "name": "rice (dry)", "baseline_qty": 0.75, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "olive oil", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "ground cumin", "baseline_qty": 1.5, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "smoked paprika", "baseline_qty": 1.5, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "chili powder", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "dried oregano", "baseline_qty": 0.5, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "kosher salt", "baseline_qty": 0.75, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "black pepper", "baseline_qty": 0.25, "unit": "tsp", "category": "Pantry", "discrete": false }
+        {
+          "name": "red bell pepper",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "yellow bell pepper",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "zucchini",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "garlic, minced",
+          "baseline_qty": 3,
+          "unit": "clove",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "lime",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "avocado",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "chicken thighs, sliced",
+          "baseline_qty": 12,
+          "unit": "oz",
+          "category": "Proteins",
+          "discrete": false
+        },
+        {
+          "name": "rice (dry)",
+          "baseline_qty": 0.75,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "olive oil",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "ground cumin",
+          "baseline_qty": 1.5,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "smoked paprika",
+          "baseline_qty": 1.5,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "chili powder",
+          "baseline_qty": 1,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "kosher salt",
+          "baseline_qty": 0.75,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        }
       ]
     },
     {
@@ -71,19 +234,90 @@
       "cuisine": "Thai",
       "active_minutes": 25,
       "ingredients": [
-        { "name": "Thai basil leaves", "baseline_qty": 1, "unit": "cup", "category": "Produce", "discrete": false },
-        { "name": "fresh ginger, minced", "baseline_qty": 1, "unit": "tbsp", "category": "Produce", "discrete": false },
-        { "name": "lemongrass, minced", "baseline_qty": 1, "unit": "tbsp", "category": "Produce", "discrete": false },
-        { "name": "Thai chili, minced", "baseline_qty": 1.5, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "red bell pepper, diced", "baseline_qty": 1, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "ground chicken", "baseline_qty": 12, "unit": "oz", "category": "Proteins", "discrete": false },
-        { "name": "eggs", "baseline_qty": 2, "unit": "whole", "category": "Proteins", "discrete": true },
-        { "name": "jasmine rice (dry)", "baseline_qty": 0.75, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "soy sauce", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "coconut aminos", "baseline_qty": 1, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "dark soy sauce", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "brown sugar", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "neutral oil", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false }
+        {
+          "name": "Thai basil leaves",
+          "baseline_qty": 1,
+          "unit": "cup",
+          "category": "Produce",
+          "discrete": false
+        },
+        {
+          "name": "garlic, minced",
+          "baseline_qty": 4,
+          "unit": "clove",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "fresh ginger, minced",
+          "baseline_qty": 1,
+          "unit": "tbsp",
+          "category": "Produce",
+          "discrete": false
+        },
+        {
+          "name": "Thai chili, minced",
+          "baseline_qty": 1.5,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "red bell pepper, diced",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "ground chicken",
+          "baseline_qty": 12,
+          "unit": "oz",
+          "category": "Proteins",
+          "discrete": false
+        },
+        {
+          "name": "eggs",
+          "baseline_qty": 2,
+          "unit": "whole",
+          "category": "Proteins",
+          "discrete": true
+        },
+        {
+          "name": "jasmine rice (dry)",
+          "baseline_qty": 0.75,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "soy sauce",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "coconut aminos",
+          "baseline_qty": 1,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "brown sugar",
+          "baseline_qty": 1,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "neutral oil",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        }
       ]
     },
     {
@@ -92,23 +326,104 @@
       "cuisine": "American",
       "active_minutes": 60,
       "ingredients": [
-        { "name": "carrot, finely grated", "baseline_qty": 1, "unit": "medium", "category": "Produce", "discrete": true },
-        { "name": "celery, finely minced", "baseline_qty": 1, "unit": "stalk", "category": "Produce", "discrete": true },
-        { "name": "Yukon Gold potatoes", "baseline_qty": 1, "unit": "lb", "category": "Produce", "discrete": false },
-        { "name": "green beans, trimmed", "baseline_qty": 8, "unit": "oz", "category": "Produce", "discrete": false },
-        { "name": "ground beef (80/20)", "baseline_qty": 12, "unit": "oz", "category": "Proteins", "discrete": false },
-        { "name": "egg", "baseline_qty": 1, "unit": "whole", "category": "Proteins", "discrete": true },
-        { "name": "breadcrumbs", "baseline_qty": 0.333, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "milk (for loaf)", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "ketchup", "baseline_qty": 3, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "brown sugar", "baseline_qty": 1, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "yellow mustard", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "Worcestershire sauce (anchovy-free)", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "smoked paprika", "baseline_qty": 0.5, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "butter", "baseline_qty": 3, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "milk (for potatoes)", "baseline_qty": 0.25, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "kosher salt", "baseline_qty": 0.75, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "black pepper", "baseline_qty": 0.5, "unit": "tsp", "category": "Pantry", "discrete": false }
+        {
+          "name": "carrot, finely grated",
+          "baseline_qty": 1,
+          "unit": "medium",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "garlic, minced",
+          "baseline_qty": 2,
+          "unit": "clove",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "Yukon Gold potatoes",
+          "baseline_qty": 1,
+          "unit": "lb",
+          "category": "Produce",
+          "discrete": false
+        },
+        {
+          "name": "green beans, trimmed",
+          "baseline_qty": 8,
+          "unit": "oz",
+          "category": "Produce",
+          "discrete": false
+        },
+        {
+          "name": "ground beef (80/20)",
+          "baseline_qty": 12,
+          "unit": "oz",
+          "category": "Proteins",
+          "discrete": false
+        },
+        {
+          "name": "egg",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Proteins",
+          "discrete": true
+        },
+        {
+          "name": "breadcrumbs",
+          "baseline_qty": 0.333,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "ketchup",
+          "baseline_qty": 3,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "brown sugar",
+          "baseline_qty": 1,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "Worcestershire (anchovy-free)",
+          "baseline_qty": 1,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "smoked paprika",
+          "baseline_qty": 0.5,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "butter",
+          "baseline_qty": 3,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "milk",
+          "baseline_qty": 0.333,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "kosher salt",
+          "baseline_qty": 0.75,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        }
       ]
     },
     {
@@ -117,21 +432,104 @@
       "cuisine": "Mexican",
       "active_minutes": 45,
       "ingredients": [
-        { "name": "fresh cilantro, chopped", "baseline_qty": 2, "unit": "tbsp", "category": "Produce", "discrete": false },
-        { "name": "lime", "baseline_qty": 1, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "ground beef", "baseline_qty": 10, "unit": "oz", "category": "Proteins", "discrete": false },
-        { "name": "black beans (canned)", "baseline_qty": 0.75, "unit": "cup", "category": "Proteins", "discrete": false },
-        { "name": "corn tortillas", "baseline_qty": 6, "unit": "whole", "category": "Pantry", "discrete": true },
-        { "name": "crushed tomatoes", "baseline_qty": 1.5, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "tomato paste", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "chili powder", "baseline_qty": 1, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "ground cumin", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "smoked paprika", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "dried oregano", "baseline_qty": 0.5, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "shredded cheese", "baseline_qty": 1, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "olive oil", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "vegetable broth", "baseline_qty": 1, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "kosher salt", "baseline_qty": 0.75, "unit": "tsp", "category": "Pantry", "discrete": false }
+        {
+          "name": "garlic, minced",
+          "baseline_qty": 3,
+          "unit": "clove",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "fresh cilantro, chopped",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Produce",
+          "discrete": false
+        },
+        {
+          "name": "lime",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "ground beef",
+          "baseline_qty": 10,
+          "unit": "oz",
+          "category": "Proteins",
+          "discrete": false
+        },
+        {
+          "name": "black beans (canned)",
+          "baseline_qty": 0.75,
+          "unit": "cup",
+          "category": "Proteins",
+          "discrete": false
+        },
+        {
+          "name": "corn tortillas",
+          "baseline_qty": 6,
+          "unit": "whole",
+          "category": "Pantry",
+          "discrete": true
+        },
+        {
+          "name": "crushed tomatoes",
+          "baseline_qty": 1.5,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "tomato paste",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "chili powder",
+          "baseline_qty": 1,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "ground cumin",
+          "baseline_qty": 1,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "shredded cheese",
+          "baseline_qty": 1,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "olive oil",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "vegetable broth",
+          "baseline_qty": 1,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "kosher salt",
+          "baseline_qty": 0.75,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        }
       ]
     },
     {
@@ -140,21 +538,97 @@
       "cuisine": "Italian-American",
       "active_minutes": 50,
       "ingredients": [
-        { "name": "eggplant", "baseline_qty": 1, "unit": "lb", "category": "Produce", "discrete": false },
-        { "name": "fresh basil leaves", "baseline_qty": 1, "unit": "cup", "category": "Produce", "discrete": false },
-        { "name": "carrot, finely grated", "baseline_qty": 1, "unit": "medium", "category": "Produce", "discrete": true },
-        { "name": "eggs", "baseline_qty": 2, "unit": "whole", "category": "Proteins", "discrete": true },
-        { "name": "spaghetti", "baseline_qty": 8, "unit": "oz", "category": "Pantry", "discrete": false },
-        { "name": "Italian breadcrumbs", "baseline_qty": 1, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "grated Parmesan", "baseline_qty": 0.5, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "shredded mozzarella", "baseline_qty": 1, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "crushed tomatoes", "baseline_qty": 14.5, "unit": "oz can", "category": "Pantry", "discrete": true },
-        { "name": "tomato paste", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "olive oil", "baseline_qty": 3, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "dried oregano", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "fennel seed", "baseline_qty": 0.5, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "kosher salt", "baseline_qty": 0.75, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "black pepper", "baseline_qty": 0.5, "unit": "tsp", "category": "Pantry", "discrete": false }
+        {
+          "name": "eggplant",
+          "baseline_qty": 1,
+          "unit": "lb",
+          "category": "Produce",
+          "discrete": false
+        },
+        {
+          "name": "fresh basil leaves",
+          "baseline_qty": 1,
+          "unit": "cup",
+          "category": "Produce",
+          "discrete": false
+        },
+        {
+          "name": "garlic, minced",
+          "baseline_qty": 3,
+          "unit": "clove",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "eggs",
+          "baseline_qty": 2,
+          "unit": "whole",
+          "category": "Proteins",
+          "discrete": true
+        },
+        {
+          "name": "spaghetti",
+          "baseline_qty": 8,
+          "unit": "oz",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "Italian breadcrumbs",
+          "baseline_qty": 1,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "grated Parmesan",
+          "baseline_qty": 0.5,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "shredded mozzarella",
+          "baseline_qty": 1,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "crushed tomatoes",
+          "baseline_qty": 14.5,
+          "unit": "oz can",
+          "category": "Pantry",
+          "discrete": true
+        },
+        {
+          "name": "tomato paste",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "olive oil",
+          "baseline_qty": 3,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "dried oregano",
+          "baseline_qty": 1,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "kosher salt",
+          "baseline_qty": 0.75,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        }
       ]
     },
     {
@@ -163,22 +637,97 @@
       "cuisine": "Thai",
       "active_minutes": 40,
       "ingredients": [
-        { "name": "fresh ginger, minced", "baseline_qty": 1, "unit": "tbsp", "category": "Produce", "discrete": false },
-        { "name": "lemongrass, minced", "baseline_qty": 1, "unit": "stalk", "category": "Produce", "discrete": true },
-        { "name": "Yukon Gold potatoes, cubed", "baseline_qty": 2, "unit": "medium", "category": "Produce", "discrete": true },
-        { "name": "red bell pepper, sliced", "baseline_qty": 1, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "lime", "baseline_qty": 1, "unit": "whole", "category": "Produce", "discrete": true },
-        { "name": "fresh cilantro, chopped", "baseline_qty": 2, "unit": "tbsp", "category": "Produce", "discrete": false },
-        { "name": "chicken thighs, cubed", "baseline_qty": 12, "unit": "oz", "category": "Proteins", "discrete": false },
-        { "name": "jasmine rice (dry)", "baseline_qty": 0.75, "unit": "cup", "category": "Pantry", "discrete": false },
-        { "name": "full-fat coconut milk", "baseline_qty": 13.5, "unit": "oz can", "category": "Pantry", "discrete": true },
-        { "name": "red curry powder", "baseline_qty": 1, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "ground coriander", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "ground turmeric", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "soy sauce", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "brown sugar", "baseline_qty": 1, "unit": "tsp", "category": "Pantry", "discrete": false },
-        { "name": "neutral oil", "baseline_qty": 2, "unit": "tbsp", "category": "Pantry", "discrete": false },
-        { "name": "kosher salt", "baseline_qty": 0.5, "unit": "tsp", "category": "Pantry", "discrete": false }
+        {
+          "name": "garlic, minced",
+          "baseline_qty": 3,
+          "unit": "clove",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "fresh ginger, minced",
+          "baseline_qty": 1,
+          "unit": "tbsp",
+          "category": "Produce",
+          "discrete": false
+        },
+        {
+          "name": "lemongrass, minced",
+          "baseline_qty": 1,
+          "unit": "stalk",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "Yukon Gold potatoes, cubed",
+          "baseline_qty": 2,
+          "unit": "medium",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "red bell pepper, sliced",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "lime",
+          "baseline_qty": 1,
+          "unit": "whole",
+          "category": "Produce",
+          "discrete": true
+        },
+        {
+          "name": "chicken thighs, cubed",
+          "baseline_qty": 12,
+          "unit": "oz",
+          "category": "Proteins",
+          "discrete": false
+        },
+        {
+          "name": "jasmine rice (dry)",
+          "baseline_qty": 0.75,
+          "unit": "cup",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "full-fat coconut milk",
+          "baseline_qty": 13.5,
+          "unit": "oz can",
+          "category": "Pantry",
+          "discrete": true
+        },
+        {
+          "name": "red curry powder",
+          "baseline_qty": 1,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "ground turmeric",
+          "baseline_qty": 1,
+          "unit": "tsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "soy sauce",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        },
+        {
+          "name": "neutral oil",
+          "baseline_qty": 2,
+          "unit": "tbsp",
+          "category": "Pantry",
+          "discrete": false
+        }
       ]
     }
   ]
