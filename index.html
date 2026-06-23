@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Weekly Dinner Planner</title>
+<style>
+  :root {
+    --bg: #faf7f2; --card: #fff; --ink: #2b2724; --muted: #8a7f76;
+    --line: #ece5dc; --accent: #c4622d; --accent-soft: #f4e7df;
+    --produce: #4a8c54; --proteins: #b3522e; --pantry: #9a7b3f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header.top {
+    position: sticky; top: 0; z-index: 10; background: rgba(250,247,242,.92);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 16px 20px;
+  }
+  .top-inner { max-width: 1100px; margin: 0 auto; display: flex; flex-wrap: wrap;
+    gap: 16px 24px; align-items: center; justify-content: space-between; }
+  h1 { font-size: 20px; margin: 0; }
+  h1 small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+  .controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .scale { display: flex; align-items: center; gap: 10px; }
+  .scale label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  input[type=range] { accent-color: var(--accent); width: 160px; }
+  .pill { background: var(--accent-soft); color: var(--accent); font-weight: 600;
+    border-radius: 999px; padding: 3px 10px; font-size: 13px; min-width: 92px; text-align: center; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); border-radius: 8px; padding: 7px 12px; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { filter: brightness(1.05); color: #fff; }
+
+  main { max-width: 1100px; margin: 24px auto; padding: 0 20px 60px; }
+  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .card header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .day { font-weight: 700; font-size: 15px; }
+  .badge { display: inline-block; margin-left: 8px; font-size: 11px; color: var(--muted);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+  .swap { font-size: 13px; padding: 5px 10px; white-space: nowrap; }
+  .card h3 { font-size: 17px; margin: 10px 0 12px; line-height: 1.3; }
+  .cat { margin-bottom: 10px; }
+  .cat h5 { margin: 0 0 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  .cat:nth-of-type(1) h5 { color: var(--produce); }
+  .cat:nth-of-type(2) h5 { color: var(--proteins); }
+  .cat:nth-of-type(3) h5 { color: var(--pantry); }
+  .cat ul { margin: 0; padding: 0; list-style: none; }
+  .cat li { font-size: 14px; padding: 1px 0; color: #4b443e; }
+  .qty { font-weight: 600; color: var(--ink); }
+  details { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--accent); font-weight: 600; }
+  details ol { margin: 8px 0 0; padding-left: 20px; font-size: 14px; color: #4b443e; }
+  details li { margin-bottom: 5px; }
+
+  /* Shopping list drawer */
+  #shoppingWrap { display: none; margin-top: 26px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  body.show-shopping #shoppingWrap { display: block; }
+  body.show-shopping #toggleShopping { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #shoppingWrap h2 { font-size: 18px; margin: 0 0 4px; }
+  #shoppingWrap p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  #shopping { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+
+  .note { max-width: 1100px; margin: 0 auto 8px; padding: 0 20px; color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <h1>🍽️ Weekly Dinner Planner
+        <small>Fish-free · allium-free (incl. garlic) · Italian-American · American · Tex-Mex · Thai</small>
+      </h1>
+      <div class="controls">
+        <div class="scale">
+          <label for="servings">Servings: <strong id="servingsVal">2</strong></label>
+          <input type="range" id="servings" min="1" max="12" step="1" value="2" />
+          <span class="pill" id="mult">×1</span>
+        </div>
+        <button id="randomizeAll" title="Randomize the whole week">🎲 Randomize week</button>
+        <button id="toggleShopping" class="primary">🛒 Shopping list</button>
+      </div>
+    </div>
+  </header>
+
+  <p class="note">Drag the slider to scale every quantity live. Hit <strong>🎲 Swap</strong> on any night for a new meal you haven't been served — meals never repeat until the whole recipe pool is used up.</p>
+
+  <main>
+    <div class="grid" id="week"></div>
+
+    <section id="shoppingWrap">
+      <h2>🛒 Consolidated Shopping List</h2>
+      <p>Every ingredient across the 7 nights, combined and scaled to your serving size.</p>
+      <div id="shopping"></div>
+    </section>
+  </main>
+
+  <script src="meals.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

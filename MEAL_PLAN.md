@@ -1,5 +1,7 @@
 # 🍽️ Weekly Dinner Plan
 
+> 💡 **There's now an interactive app** — open [`index.html`](./index.html) for a live serving-size slider, a 🎲 swap button (meals never repeat), and an auto-scaling shopping list. This file is the static starter plan.
+
 **Baseline servings:** 2 (every recipe scales — see the [Scaling Matrix](#-scaling-matrix)).
 
 ### Dietary rules applied to every recipe
