@@ -1,0 +1,15 @@
+# Autonomous trading agent — run once per US-market weekday.
+#
+# Install with:   crontab deploy/trading-bot.cron
+# Inspect with:   crontab -l
+#
+# Times below are interpreted in America/New_York so they track the US session
+# regardless of the host's clock. CRON_TZ is honored by the default cron on
+# Debian/Ubuntu (Vixie cron). If your cron ignores it, convert the time to the
+# host's timezone yourself (10:00 ET = 14:00 UTC during EDT, 15:00 UTC in EST).
+CRON_TZ=America/New_York
+
+# Run at 10:00 ET, Mon-Fri (market opens 09:30 ET). Adjust the path to your repo.
+# This skips weekends automatically; US market holidays are handled gracefully
+# (no fills on a closed market) but you can add a holiday guard if you like.
+0 10 * * 1-5 /home/USER/Code/deploy/run_daily.sh
