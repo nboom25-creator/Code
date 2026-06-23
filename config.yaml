@@ -10,6 +10,12 @@ mode: paper
 # claude-haiku-4-5-20251001 for the cheapest runs.
 agent_model: claude-sonnet-4-6
 
+# Market-data source for the live agent. "yfinance" is free, keyless, and gives
+# full daily history (so the regime gate reads correctly); "alpaca" uses your
+# broker feed, which on the free plan returns only a thin recent slice.
+# Execution always goes through the broker above regardless of this setting.
+market_data: yfinance
+
 # Watchlist: large, liquid names + ETFs (easy to enter/exit).
 symbols:
   - SPY

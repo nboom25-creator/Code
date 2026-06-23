@@ -256,13 +256,23 @@ def build_runner(config: Config | None = None) -> AgentRunner:
     """Wire the agent to the real Alpaca broker, data provider, Claude, and the
     real research pipeline (FMP/EDGAR/Firecrawl per the keys present)."""
     from ..broker import build_broker
-    from ..data import DataProvider
     from .research import build_research_bundle
 
     config = config or load_config()
     config.validate()
     broker = build_broker(config)
-    data = DataProvider(config.credentials)
+    # Market data source is independent of the execution broker. yfinance gives
+    # free, keyless, full-history daily bars (so the regime gate and volume/ATR
+    # math see real history), while Alpaca's free data feed returns only a thin
+    # recent slice. Execution still goes through the configured broker.
+    if config.market_data == "yfinance":
+        from ..data import YFinanceDataProvider
+
+        data = YFinanceDataProvider()
+    else:
+        from ..data import DataProvider
+
+        data = DataProvider(config.credentials)
     research = build_research_bundle(sim=False)
     tools = AgentTools(broker, data, research=research, default_timeframe=config.timeframe)
     llm = AnthropicLLM(model=config.agent_model)

@@ -121,6 +121,7 @@ class Config:
     mode: str = "paper"
     broker: str = "alpaca"  # which execution venue: "alpaca" or "robinhood"
     agent_model: str = "claude-opus-4-8"  # Claude model for the agent's reasoning
+    market_data: str = "alpaca"  # bar/news source: "alpaca" or "yfinance"
     symbols: list[str] = field(default_factory=list)
     timeframe: str = "1Day"
     poll_interval_seconds: int = 60
@@ -178,6 +179,7 @@ def load_config(path: str | Path = "config.yaml", *, load_env: bool = True) -> C
         mode=raw.get("mode", "paper"),
         broker=str(raw.get("broker", "alpaca")).lower(),
         agent_model=raw.get("agent_model", "claude-opus-4-8"),
+        market_data=str(raw.get("market_data", "alpaca")).lower(),
         symbols=list(raw.get("symbols", [])),
         timeframe=raw.get("timeframe", "1Day"),
         poll_interval_seconds=int(raw.get("poll_interval_seconds", 60)),
