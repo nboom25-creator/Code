@@ -42,14 +42,12 @@ rules:
 # Also hunt for small/micro-cap opportunities each run.
 discovery:
   enabled: true
-  sectors:
-    - Technology
+  sectors:                        # start small; add Financial Services / Energy
+    - Technology                  # back once you've seen real per-run cost/time
     - Healthcare
-    - Financial Services
-    - Energy
   market_cap_max: 2000000000      # under $2B = small/micro-cap
   min_volume: 100000              # liquidity floor
-  max_candidates: 5               # top N per sector
+  max_candidates: 3               # top N per sector (~6 extra names total)
 
 # Bar timeframe for signals: "1Min", "5Min", "15Min", "1Hour", "1Day".
 timeframe: 1Day
