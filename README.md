@@ -174,8 +174,9 @@ uvicorn app.main:app --port 8000      # run the service
   attribute access / `eval`, Celsius & pressure warnings, ΔT conversion.
   `cd calc && pytest -q`
 
-Current status: **37 Vitest**, **16 pytest**, **12 Playwright** tests passing;
-`typecheck`, `lint`, and `build` clean.
+Current status: **37 Vitest**, **16 pytest**, and **8 Playwright specs**
+(run on desktop + mobile = 16 checks) passing; `typecheck`, `lint`, and
+production `build` all clean.
 
 ---
 
