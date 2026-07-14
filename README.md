@@ -212,9 +212,16 @@ Once `ANTHROPIC_API_KEY` is set, try these across disciplines:
 
 ## Deployment
 
+**See [`DEPLOY.md`](./DEPLOY.md) for a step-by-step Vercel guide** (≈5 minutes,
+makes it phone-installable).
+
 - **Web** — deploys to any Node host or Vercel (`npm run build` / `npm start`).
-  Set env vars in the host's dashboard. For multi-instance deploys, replace the
-  in-memory rate limiter (`web/src/lib/rateLimit.ts`) with Redis.
+  On Vercel, set the project **Root Directory to `web`** and add your API keys as
+  environment variables. For multi-instance deploys, replace the in-memory rate
+  limiter (`web/src/lib/rateLimit.ts`) with Redis.
+- **Installable (PWA)** — the app ships a web manifest + generated icons, so on a
+  phone you can **Add to Home Screen** (iOS Safari) or **Install app** (Android
+  Chrome) and it runs full-screen like a native app.
 - **Calc service** — containerize `calc/` (`uvicorn app.main:app`) and set
   `CALC_SERVICE_URL` to its internal URL. It holds no secrets.
 - **Database (optional)** — switch the Prisma datasource to `postgresql`, set

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { ThemeScript } from "@/components/ThemeScript";
@@ -7,6 +7,17 @@ export const metadata: Metadata = {
   title: "EngineerTutor — learn any engineering subject",
   description:
     "An interactive engineering tutor: structured lessons, step-by-step problem solving, quizzes, deterministic calculations, and real instructional videos.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "EngineerTutor", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#1a5fed" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1115" },
+  ],
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
