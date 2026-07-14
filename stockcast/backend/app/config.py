@@ -23,10 +23,11 @@ class Settings(BaseSettings):
     )
 
     # ---- Data provider selection -------------------------------------------
-    # One of: "stooq" (keyless), "alphavantage", "finnhub", "demo".
+    # One of: "twelvedata", "stooq" (keyless), "alphavantage", "finnhub", "demo".
     provider: str = "stooq"
 
     # Optional API keys (server-side only).
+    twelvedata_api_key: str | None = None
     alphavantage_api_key: str | None = None
     finnhub_api_key: str | None = None
 

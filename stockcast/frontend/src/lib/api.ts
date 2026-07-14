@@ -48,8 +48,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface Diagnostics {
+  provider: string;
+  symbol: string;
+  reachable: boolean | null;
+  configured: boolean;
+  is_demo?: boolean;
+  detail: string;
+  live_price?: number;
+  as_of?: string;
+  source?: string;
+  error_code?: string;
+  likely_network_policy?: boolean;
+  hint?: string | null;
+  setup_hint?: string | null;
+}
+
 export const api = {
   health: () => request<HealthInfo>("/api/health"),
+  diagnostics: () => request<Diagnostics>("/api/diagnostics"),
   search: (q: string) => request<SearchResult[]>(`/api/search?q=${encodeURIComponent(q)}`),
   quote: (ticker: string) => request<Quote>(`/api/quote/${encodeURIComponent(ticker)}`),
   random: () => request<{ ticker: string }>("/api/random"),

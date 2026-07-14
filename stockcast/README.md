@@ -79,7 +79,8 @@ with one env var and no code changes.
 
 | Provider       | Key needed | History | Quote | Fundamentals | News | Notes |
 |----------------|:---------:|:-------:|:-----:|:------------:|:----:|-------|
-| **stooq** (default) | No | ✅ | ✅ | — | — | Real end-of-day data, works out of the box |
+| **twelvedata** | Yes (free) | ✅ | ✅ **real-time** | ✅ | — | Recommended for live data; one key does everything |
+| **stooq** (default) | No | ✅ | ✅ (EOD) | — | — | Real end-of-day data, works out of the box |
 | **alphavantage** | Yes (free) | ✅ | ✅ | ✅ | ✅ | Free tier ~25 req/day, 5/min |
 | **finnhub** | Yes (free) | paid* | ✅ | ✅ | ✅ | *free tier lacks candles → history falls back to Stooq |
 | **demo** | No | ✅ | ✅ | ✅ | ✅ | **Synthetic DEMO DATA**, clearly labelled, fully offline |
@@ -153,6 +154,48 @@ Open **http://localhost:3000**, type a ticker (e.g. `AAPL`) and click **Analyze*
 ### Run fully offline (synthetic DEMO DATA)
 Set `PROVIDER=demo` in `backend/.env`. Everything works without network or keys and is
 clearly labelled **DEMO DATA** throughout.
+
+---
+
+## Enabling live / real-time data
+
+StockCast is built to run online with real data — you just need (1) a provider that serves
+it and (2) network access to that provider's host.
+
+### 1) Pick a provider and add its key (`backend/.env`)
+
+For **real-time quotes**, use **Twelve Data** — one free key covers real-time price, 5y of
+history and fundamentals:
+```
+PROVIDER=twelvedata
+TWELVEDATA_API_KEY=your_free_key      # https://twelvedata.com/pricing (Basic/free)
+```
+Restart the backend. The dashboard's **price card shows a pulsing “LIVE” badge** and
+**auto-refreshes every 20 seconds** while the market is open. Other options:
+`stooq` (real, keyless, end-of-day — not real-time), `alphavantage`, `finnhub`.
+
+### 2) Make sure the provider host is reachable
+
+Click **“Test live connection”** on the dashboard (or `GET /api/diagnostics`). It performs a
+real quote fetch and tells you exactly what's happening:
+- ✅ *Live data is flowing* — you're done.
+- ❌ *host likely blocked* — the network is refusing the outbound request.
+
+**If you run StockCast locally**, a blocked host means a local firewall/proxy — allow the
+provider domain (e.g. `api.twelvedata.com`).
+
+**If you run StockCast inside a Claude Code (web) environment**, outbound access is governed
+by the **environment's network policy**, and market-data hosts are blocked by default. To
+enable live data, set that environment's network policy to allow the provider host(s) you
+use — e.g. `api.twelvedata.com`, `finnhub.io`, `www.alphavantage.co`, or `stooq.com`. See the
+network-policy docs: https://code.claude.com/docs/en/claude-code-on-the-web. Until the host
+is allowed, StockCast falls back to clearly-labelled **DEMO DATA** (with the reason shown) so
+the app still runs — it never presents synthetic data as real.
+
+> Provider hosts to allow-list, by provider:
+> `twelvedata` → `api.twelvedata.com` · `stooq` → `stooq.com` ·
+> `alphavantage` → `www.alphavantage.co` · `finnhub` → `finnhub.io`
+> (S&P 500 benchmark uses the `SPY` ETF via the same host, or `^spx` on Stooq.)
 
 ### Tests
 ```bash

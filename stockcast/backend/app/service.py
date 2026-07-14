@@ -22,8 +22,13 @@ from app.providers.base import (
     ProviderNotConfigured,
     SymbolNotFound,
 )
-from app.providers.demo import BENCHMARK_TICKER, DemoProvider
-from app.providers.factory import build_provider, demo_provider, get_history_provider
+from app.providers.demo import DemoProvider
+from app.providers.factory import (
+    benchmark_symbol,
+    build_provider,
+    demo_provider,
+    get_history_provider,
+)
 from app.schemas import (
     AnalysisResponse,
     BacktestRequest,
@@ -111,11 +116,11 @@ async def analyze(ticker: str, provider_name: str | None = None) -> AnalysisResp
             code="insufficient_data",
         )
 
-    # Benchmark (S&P 500). Use the same provider family; demo has ^GSPC.
+    # Benchmark (S&P 500), using a symbol appropriate for the active provider.
     benchmark_bars: list[OHLCV] = []
     try:
         bench_provider = primary if primary.is_demo else get_history_provider(primary)
-        benchmark_bars = await _get_history_cached(bench_provider, BENCHMARK_TICKER if primary.is_demo else "^SPX")
+        benchmark_bars = await _get_history_cached(bench_provider, benchmark_symbol(bench_provider))
     except ProviderError:
         benchmark_bars = []
 
@@ -238,10 +243,8 @@ async def backtest(req: BacktestRequest) -> BacktestResult:
     df.attrs["ticker"] = ticker
     benchmark_bars: list[OHLCV] = []
     try:
-        benchmark_bars = await _get_history_cached(
-            demo_provider() if is_demo else get_history_provider(build_provider()),
-            BENCHMARK_TICKER if is_demo else "^SPX",
-        )
+        bench_provider = demo_provider() if is_demo else get_history_provider(build_provider())
+        benchmark_bars = await _get_history_cached(bench_provider, benchmark_symbol(bench_provider))
     except ProviderError:
         benchmark_bars = []
     bench_series = to_dataframe(benchmark_bars)["adj_close"] if benchmark_bars else None

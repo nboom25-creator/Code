@@ -4,6 +4,7 @@ import Link from "next/link";
 import { api, StockCastError } from "@/lib/api";
 import type { AnalysisResponse, HealthInfo } from "@/lib/types";
 import { useRecents, useWatchlist } from "@/lib/storage";
+import { useLiveQuote } from "@/lib/live";
 import { TickerSearch } from "@/components/TickerSearch";
 import { CompanyHeader } from "@/components/CompanyHeader";
 import { PriceChart } from "@/components/PriceChart";
@@ -19,6 +20,7 @@ import {
   TechnicalSection,
 } from "@/components/Sections";
 import { ListCard } from "@/components/Sidebar";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { Card, InfoTip } from "@/components/ui";
 import { DemoBanner, EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { fmtPct } from "@/lib/format";
@@ -60,12 +62,15 @@ export default function Dashboard() {
 
   const currency = data?.profile.currency || "USD";
   const horizon = data?.forecast.horizons[horizonIdx];
+  // Near real-time price polling while a (non-demo) stock is displayed.
+  const liveQuote = useLiveQuote(data ? data.ticker : null, 20000, !!data && !data.is_demo);
 
   return (
     <div className="space-y-6">
       {/* Search + setup banner */}
       <div className="space-y-3">
         <TickerSearch onAnalyze={analyze} loading={loading} />
+        <ConnectionStatus health={health} />
         {health && !health.configured && !health.allow_demo_fallback && (
           <div className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-2.5 text-sm text-warn">
             <span className="font-semibold">Setup needed:</span> {health.setup_hint}
@@ -73,8 +78,9 @@ export default function Dashboard() {
         )}
         {health && health.is_demo && (
           <div className="text-xs text-muted">
-            Active data source: <span className="font-semibold text-warn">{health.provider_name}</span>. Add a
-            provider key in <span className="font-mono">backend/.env</span> for live data — see README.
+            For real-time data, set <span className="font-mono">PROVIDER=twelvedata</span> and add{" "}
+            <span className="font-mono">TWELVEDATA_API_KEY</span> in{" "}
+            <span className="font-mono">backend/.env</span> — see README → “Enabling live data”.
           </div>
         )}
       </div>
@@ -111,6 +117,7 @@ export default function Dashboard() {
             data={data}
             inWatchlist={watchlist.has(data.ticker)}
             onToggleWatch={() => watchlist.toggle(data.ticker)}
+            liveQuote={liveQuote}
           />
 
           {/* Charts row */}

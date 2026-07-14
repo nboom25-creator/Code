@@ -59,6 +59,59 @@ async def health() -> dict:
     }
 
 
+@app.get("/api/diagnostics")
+async def diagnostics(symbol: str = "AAPL") -> dict:
+    """Live self-test: can this server actually reach the configured provider?
+
+    Attempts a real quote through the configured (non-demo) provider and reports
+    whether the network path works. This is the fastest way to distinguish a
+    misconfiguration from an environment network policy that blocks the host.
+    """
+    import asyncio
+
+    from app.providers.base import ProviderError, ProviderNotConfigured
+
+    result: dict = {"provider": settings.provider, "symbol": symbol.upper()}
+    try:
+        provider = build_provider()
+    except ProviderNotConfigured as exc:
+        return {**result, "reachable": None, "configured": False,
+                "detail": exc.message, "setup_hint": exc.setup_hint}
+    if provider.is_demo:
+        return {**result, "reachable": None, "configured": True, "is_demo": True,
+                "detail": "Demo provider selected — no live network call is made."}
+    try:
+        quote = await asyncio.wait_for(provider.get_quote(symbol), timeout=12)
+        return {
+            **result, "reachable": True, "configured": True, "is_demo": False,
+            "live_price": quote.price, "as_of": quote.provenance.as_of.isoformat(),
+            "source": quote.provenance.source, "delay_note": quote.provenance.delay_note,
+            "detail": "Provider reachable — live data is flowing.",
+        }
+    except asyncio.TimeoutError:
+        return {
+            **result, "reachable": False, "configured": True, "is_demo": False,
+            "error_code": "timeout", "likely_network_policy": True,
+            "detail": "Timed out contacting the provider (host likely blocked).",
+            "hint": "If running on Claude Code for the web, allow the provider host in your "
+            "environment's network policy. See README → 'Enabling live data'.",
+        }
+    except ProviderError as exc:
+        blocked = getattr(exc, "code", "") in ("network_error", "upstream_error")
+        return {
+            **result, "reachable": False, "configured": True, "is_demo": False,
+            "error_code": getattr(exc, "code", "provider_error"),
+            "detail": str(exc),
+            "likely_network_policy": blocked,
+            "hint": (
+                "The host appears blocked. If running on Claude Code for the web, allow the "
+                "provider host in your environment's network policy; if running locally, check "
+                "your firewall/proxy. See README → 'Enabling live data'."
+                if blocked else getattr(exc, "setup_hint", None)
+            ),
+        }
+
+
 @app.get("/api/meta")
 async def meta() -> dict:
     """Static metadata for the frontend (horizons, chart ranges, disclaimer)."""

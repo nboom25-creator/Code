@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import type { AnalysisResponse } from "@/lib/types";
+import type { AnalysisResponse, Quote } from "@/lib/types";
 import { Badge, InfoTip } from "./ui";
 import { fmtLargeMoney, fmtPct, fmtPrice, timeAgo } from "@/lib/format";
 
@@ -8,12 +8,17 @@ export function CompanyHeader({
   data,
   inWatchlist,
   onToggleWatch,
+  liveQuote,
 }: {
   data: AnalysisResponse;
   inWatchlist: boolean;
   onToggleWatch: () => void;
+  liveQuote?: Quote | null;
 }) {
-  const { quote, profile } = data;
+  const { profile } = data;
+  // Prefer the freshest polled quote when available (near real-time updates).
+  const quote = liveQuote ?? data.quote;
+  const isLive = !!liveQuote && !data.is_demo;
   const up = quote.change >= 0;
   const currency = profile.currency || "USD";
 
@@ -43,7 +48,18 @@ export function CompanyHeader({
         </div>
 
         <div className="shrink-0 text-right">
-          <div className="text-3xl font-bold tabular-nums text-fg">{fmtPrice(quote.price, currency)}</div>
+          <div className="flex items-center justify-end gap-2">
+            {isLive && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-up/15 px-2 py-0.5 text-[10px] font-bold text-up">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-up opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-up" />
+                </span>
+                LIVE
+              </span>
+            )}
+            <div className="text-3xl font-bold tabular-nums text-fg">{fmtPrice(quote.price, currency)}</div>
+          </div>
           <div className={`text-sm font-semibold tabular-nums ${up ? "text-up" : "text-down"}`}>
             {up ? "▲" : "▼"} {fmtPrice(Math.abs(quote.change), currency)} ({fmtPct(quote.change_percent)})
           </div>
