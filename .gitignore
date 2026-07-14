@@ -1,7 +1,28 @@
 # dependencies
 node_modules/
 
-# Expo
+# Next.js
+.next/
+out/
+build/
+
+# EngineerTutor web build artifacts
+web/.next/
+web/out/
+web/next-env.d.ts
+web/coverage/
+web/playwright-report/
+web/test-results/
+web/prisma/dev.db
+web/prisma/dev.db-journal
+
+# Python calc service
+calc/.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+
+# Expo (legacy-snake)
 .expo/
 dist/
 web-build/
@@ -25,6 +46,8 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
 
 # Local env
+.env
 .env*.local

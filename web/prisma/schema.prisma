@@ -1,0 +1,77 @@
+// EngineerTutor persistence schema.
+//
+// Guest mode (the default MVP experience) stores everything in browser
+// localStorage and needs NONE of this. This schema is the upgrade path for
+// optional accounts with synced progress. Enable by setting DATABASE_URL and
+// running `npm run prisma:migrate`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // SQLite for local dev; switch provider to "postgresql" for production.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String?  @unique
+  displayName String?
+  // Learning preferences
+  discipline  String?
+  level       String   @default("intermediate") // beginner|intermediate|advanced
+  detail      String   @default("detailed") // concise|detailed
+  units       String   @default("SI") // SI|USCS
+  createdAt   DateTime @default(now())
+
+  sessions  Session[]
+  mastery   TopicMastery[]
+  bookmarks Bookmark[]
+}
+
+// A saved lesson, solved problem, quiz, or study plan.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String // lesson|problem|quiz|study-plan
+  title     String
+  topic     String
+  // Full structured payload (validated AI output) stored as JSON text.
+  payload   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([kind])
+}
+
+// Basic mastery model: one row per (user, topic).
+model TopicMastery {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic         String
+  // not-started | learning | practicing | proficient | review-recommended
+  status        String   @default("learning")
+  attempts      Int      @default(0)
+  correct       Int      @default(0)
+  lastPracticed DateTime @default(now())
+
+  @@unique([userId, topic])
+  @@index([userId])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String // video|equation|resource
+  label     String
+  data      String // JSON text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
