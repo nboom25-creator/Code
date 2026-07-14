@@ -89,6 +89,10 @@ def run_backtest(
 
     cost = transaction_cost_bps / 10_000.0
     step = horizon  # non-overlapping rebalances so realised returns are independent
+    # Retrain roughly monthly rather than at every step. The model still only
+    # ever sees past data (no look-ahead); this just avoids refitting on nearly
+    # identical training sets, cutting backtest time several-fold.
+    refit_every = max(1, round(21 / max(horizon, 1)))
 
     points: list[BacktestPoint] = []
     ret_pred_signs: list[int] = []
@@ -100,15 +104,17 @@ def run_backtest(
     n_trades = 0
 
     idx = min_train
+    model = _model_instance(selected, horizon)
+    steps_since_fit = refit_every  # force a fit on the first iteration
     while idx + horizon < n:
-        model = _model_instance(selected, horizon)
-        X_train, y_train = X.iloc[:idx], y.iloc[:idx]
         try:
-            if model.uses_features:
-                model.fit(X_train, y_train)
+            if model.uses_features and steps_since_fit >= refit_every:
+                model.fit(X.iloc[:idx], y.iloc[:idx])
+                steps_since_fit = 0
             pred_ret = float(np.asarray(model.predict(X.iloc[[idx]]))[0])
         except Exception:
             pred_ret = 0.0
+        steps_since_fit += 1
 
         p0 = float(aligned_price.iloc[idx])
         p1 = float(aligned_price.iloc[idx + horizon])

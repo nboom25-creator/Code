@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      # Optional: create backend/.env (from .env.example) to add provider keys.
+      - path: ./backend/.env
+        required: false
+    environment:
+      # Falls back to real keyless Stooq data; set PROVIDER=demo for offline mode.
+      PROVIDER: ${PROVIDER:-stooq}
+      # Override the cache path so it lives on the named volume.
+      CACHE_DB_PATH: /data/stockcast_cache.sqlite
+    volumes:
+      - backend_cache:/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_cache:

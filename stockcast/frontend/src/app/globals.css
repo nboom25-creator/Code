@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface: 248 250 252;
+  --card: 255 255 255;
+  --border: 226 232 240;
+  --fg: 15 23 42;
+  --muted: 100 116 139;
+  --brand: 37 99 235;
+  --up: 22 163 74;
+  --down: 220 38 38;
+  --warn: 202 138 4;
+}
+
+.dark {
+  --surface: 2 6 23;
+  --card: 15 23 42;
+  --border: 30 41 59;
+  --fg: 226 232 240;
+  --muted: 148 163 184;
+  --brand: 96 165 250;
+  --up: 34 197 94;
+  --down: 248 113 113;
+  --warn: 250 204 21;
+}
+
+html, body {
+  background: rgb(var(--surface));
+  color: rgb(var(--fg));
+}
+
+* { border-color: rgb(var(--border)); }
+
+/* Accessible focus ring for keyboard users. */
+:focus-visible {
+  outline: 2px solid rgb(var(--brand));
+  outline-offset: 2px;
+}
+
+/* Custom tooltip (?) */
+.tip { position: relative; cursor: help; }
+.tip > .tip-body {
+  visibility: hidden; opacity: 0; transition: opacity .12s ease;
+  position: absolute; z-index: 50; bottom: 125%; left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: 18rem; padding: .5rem .625rem; border-radius: .5rem;
+  background: rgb(var(--fg)); color: rgb(var(--surface)); font-size: .75rem; line-height: 1rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / .25);
+}
+.tip:hover > .tip-body, .tip:focus-within > .tip-body { visibility: visible; opacity: 1; }
+
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.skeleton { position: relative; overflow: hidden; background: rgb(var(--border) / .5); }
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(var(--card) / .6), transparent);
+  animation: shimmer 1.4s infinite;
+}
