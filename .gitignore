@@ -1,30 +1,35 @@
 # dependencies
 node_modules/
+.pnp
+.pnp.js
 
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
+# next.js
+/.next/
+/out/
+next-env.d.ts
 
-# Native
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
+# production
+/build
 
-# Metro
-.metro-health-check*
+# testing
+/coverage
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
 
-# macOS
+# misc
 .DS_Store
+*.pem
 
-# Logs
+# debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# Local env
+# local env files
+.env
 .env*.local
+
+# typescript
+*.tsbuildinfo

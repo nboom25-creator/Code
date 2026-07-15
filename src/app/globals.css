@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm off-white background, deep charcoal text. */
+    --background: 40 33% 97%;
+    --foreground: 220 26% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 26% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 26% 14%;
+
+    /* Construction orange, used sparingly for primary actions. */
+    --primary: 22 90% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Deep navy secondary. */
+    --secondary: 220 40% 18%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 40 20% 92%;
+    --muted-foreground: 220 12% 40%;
+
+    --accent: 40 24% 90%;
+    --accent-foreground: 220 26% 14%;
+
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Green for completed steps. */
+    --success: 142 55% 36%;
+    --success-foreground: 0 0% 100%;
+
+    /* Amber for cautions. */
+    --warning: 38 92% 46%;
+    --warning-foreground: 30 40% 12%;
+
+    --border: 40 18% 86%;
+    --input: 40 18% 84%;
+    --ring: 22 90% 50%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 220 26% 10%;
+    --foreground: 40 24% 94%;
+
+    --card: 220 24% 14%;
+    --card-foreground: 40 24% 94%;
+
+    --popover: 220 24% 14%;
+    --popover-foreground: 40 24% 94%;
+
+    --primary: 22 90% 55%;
+    --primary-foreground: 220 30% 8%;
+
+    --secondary: 40 24% 92%;
+    --secondary-foreground: 220 30% 12%;
+
+    --muted: 220 18% 20%;
+    --muted-foreground: 40 12% 68%;
+
+    --accent: 220 18% 22%;
+    --accent-foreground: 40 24% 94%;
+
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 50% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 90% 55%;
+    --warning-foreground: 30 40% 10%;
+
+    --border: 220 16% 24%;
+    --input: 220 16% 26%;
+    --ring: 22 90% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Always-visible focus ring for keyboard users. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+/* Respect the user's reduced-motion preference (system or in-app override). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
