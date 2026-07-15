@@ -1,7 +1,8 @@
+# Core calc-service dependencies — all pure-Python or with wheels, so they
+# install cleanly on desktops, servers, AND Termux (Android). NumPy/SciPy are
+# NOT required (see requirements-optional.txt for future numerical features).
 fastapi==0.115.6
-uvicorn[standard]==0.34.0
+uvicorn==0.34.0
 pydantic==2.10.4
 sympy==1.13.3
 pint==0.24.4
-numpy==2.2.1
-scipy==1.15.0

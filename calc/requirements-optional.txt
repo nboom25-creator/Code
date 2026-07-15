@@ -1,0 +1,9 @@
+# Optional dependencies for FUTURE numerical features (curve fits, ODE solving,
+# matrix ops). The current evaluator does not import these. They are heavy and
+# need prebuilt wheels; on Termux install them with `pkg install python-numpy
+# python-scipy` instead of pip.
+numpy>=2.0
+scipy>=1.13
+# Performance extras for uvicorn (uvloop/httptools/watchfiles) — need a compiler
+# / Rust, so they are optional and NOT needed to run the service.
+uvicorn[standard]>=0.34.0

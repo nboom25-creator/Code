@@ -93,9 +93,13 @@ in-app "configure this" banners — nothing is faked.
 ```bash
 cd calc
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt                      # pure-Python core (SymPy, Pint, FastAPI)
 uvicorn app.main:app --reload --port 8000            # http://localhost:8000
 ```
+
+> The core requirements are intentionally lean (no NumPy/SciPy — they aren't
+> used yet), so they install cleanly everywhere including Termux/Android. Future
+> numerical features live in `calc/requirements-optional.txt`.
 
 Point the web app at it by setting `CALC_SERVICE_URL=http://localhost:8000` in
 `web/.env.local` (already the default). Without it, the JS fallback runs and is
@@ -222,6 +226,8 @@ makes it phone-installable).
 - **Installable (PWA)** — the app ships a web manifest + generated icons, so on a
   phone you can **Add to Home Screen** (iOS Safari) or **Install app** (Android
   Chrome) and it runs full-screen like a native app.
+- **Run it on your Android phone (Termux)** — see [`TERMUX.md`](./TERMUX.md) to
+  run the whole thing locally on-device, no cloud needed.
 - **Calc service** — containerize `calc/` (`uvicorn app.main:app`) and set
   `CALC_SERVICE_URL` to its internal URL. It holds no secrets.
 - **Database (optional)** — switch the Prisma datasource to `postgresql`, set
