@@ -1,0 +1,26 @@
+# Web framework
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+pydantic>=2.7
+pydantic-settings>=2.3
+sqlalchemy>=2.0
+
+# Geometry / numerics
+numpy>=1.26
+scipy>=1.13
+trimesh>=4.4
+manifold3d>=2.5
+rtree>=1.2
+shapely>=2.0
+networkx>=3.2
+meshio>=5.3
+gmsh>=4.12          # optional at runtime; FEA meshing degrades gracefully without it
+pillow>=10.0
+
+# Reporting
+reportlab>=4.0
+
+# Optional integrations (loaded lazily, app works without them)
+httpx>=0.27
+psycopg2-binary>=2.9   # PostgreSQL driver (SQLite is the default)

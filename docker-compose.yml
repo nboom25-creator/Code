@@ -1,0 +1,39 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      PARTFORGE_ENVIRONMENT: development
+      PARTFORGE_DATABASE_URL: postgresql+psycopg2://partforge:partforge@db:5432/partforge
+      PARTFORGE_CORS_ORIGINS: '["http://localhost:5173"]'
+    volumes:
+      - partforge_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: partforge
+      POSTGRES_PASSWORD: partforge
+      POSTGRES_DB: partforge
+    volumes:
+      - partforge_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U partforge"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  partforge_data:
+  partforge_db:
