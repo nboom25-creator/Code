@@ -97,23 +97,30 @@ export default function JobsBar({ projectId }: { projectId: string }) {
   const shown = jobs.slice(0, 8);
 
   return (
-    <div className="flex h-16 items-center gap-2 overflow-x-auto border-t border-slate-700/70 bg-slate-800 px-3">
-      <div className="flex shrink-0 items-center gap-1.5 pr-2 text-xs font-medium text-slate-400">
-        {active.length > 0 && <Spinner />}
-        Jobs
-        {sseFailed && (
-          <span title="SSE stream unavailable; polling every 1.5 s" className="text-[10px] text-slate-500">
-            (polling)
-          </span>
-        )}
+    <div
+      className="flex h-16 items-center gap-2 overflow-x-auto border-t px-3 backdrop-blur-md"
+      style={{ background: 'var(--lab-panel)', borderColor: 'var(--lab-border)' }}
+    >
+      <div className="flex shrink-0 flex-col items-start gap-0.5 pr-3">
+        <span className="label-tech flex items-center gap-1.5">
+          {active.length > 0 ? <Spinner className="h-3 w-3" /> : <span className="led bg-current text-slate-600" />}
+          Operations
+        </span>
+        <span className="font-mono text-[10px] text-slate-600">
+          {active.length > 0 ? `${active.length} running` : 'idle'}
+          {sseFailed && (
+            <span title="SSE stream unavailable; polling every 1.5 s"> · polling</span>
+          )}
+        </span>
       </div>
       {shown.length === 0 && <span className="text-xs text-slate-500">No background jobs yet.</span>}
       {shown.map((j) => (
         <div
           key={j.id}
           className={cx(
-            'flex w-64 shrink-0 flex-col gap-1 rounded border px-2 py-1.5',
-            j.status === 'failed' ? 'border-red-500/40 bg-red-950/30' : 'border-slate-700 bg-slate-900/60',
+            'lab-panel-raised flex w-64 shrink-0 flex-col gap-1 !rounded-md px-2 py-1.5',
+            j.status === 'failed' && '!border-red-500/40',
+            j.status === 'running' && '!border-sky-500/30',
           )}
         >
           <div className="flex items-center justify-between gap-1 text-[11px]">

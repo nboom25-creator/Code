@@ -13,10 +13,13 @@ export default function Legend({
   note?: string;
 }) {
   return (
-    <div className="pointer-events-none rounded border border-slate-700 bg-slate-900/85 px-3 py-2 text-xs text-slate-300">
-      <div className="mb-1 font-medium">{label}</div>
-      <div className="h-2.5 w-48 rounded" style={{ background: legendGradient() }} />
-      <div className="mt-0.5 flex w-48 justify-between font-mono text-[10px]">
+    <div className="lab-panel pointer-events-none px-3 py-2 text-xs text-slate-300">
+      <div className="label-tech mb-1.5 !text-slate-300">{label}</div>
+      <div
+        className="h-2 w-48 rounded-sm"
+        style={{ background: legendGradient(), boxShadow: '0 0 8px -2px rgba(35,213,255,0.3)' }}
+      />
+      <div className="mt-1 flex w-48 justify-between font-mono text-[10px] tabular-nums text-slate-400">
         <span>{fmt(min, 4)}</span>
         <span>{fmt(max, 4)}</span>
       </div>

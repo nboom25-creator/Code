@@ -8,14 +8,17 @@ export default function Settings() {
 
   return (
     <div className="min-h-full">
-      <header className="flex items-center justify-between border-b border-slate-700/70 bg-slate-800 px-5 py-3">
+      <header
+        className="flex items-center justify-between border-b px-5 py-3 backdrop-blur-md"
+        style={{ background: 'var(--lab-panel)', borderColor: 'var(--lab-border)' }}
+      >
         <div className="flex items-center gap-3">
-          <Link to="/" className="text-lg font-bold text-sky-400 hover:text-sky-300">
-            PartForge AI
+          <Link to="/" className="font-display text-lg font-semibold tracking-wide text-slate-100 hover:text-sky-300">
+            PartForge <span className="text-sky-400">AI</span>
           </Link>
-          <span className="text-sm text-slate-400">Settings</span>
+          <span className="label-tech">Settings</span>
         </div>
-        <Link to="/" className="text-sm text-slate-400 hover:text-sky-300">
+        <Link to="/" className="label-tech transition-colors hover:text-sky-300">
           Dashboard
         </Link>
       </header>
@@ -44,7 +47,7 @@ export default function Settings() {
             </Alert>
           )}
           {caps && (
-            <pre className="overflow-x-auto rounded bg-slate-900 p-3 text-xs text-slate-300">
+            <pre className="overflow-x-auto rounded-md border border-slate-700/50 bg-slate-950/70 p-3 font-mono text-xs leading-relaxed text-slate-300">
               {JSON.stringify(caps, null, 2)}
             </pre>
           )}

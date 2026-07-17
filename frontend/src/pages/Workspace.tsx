@@ -114,11 +114,20 @@ export default function Workspace() {
   return (
     <div className="flex h-full flex-col">
       {/* top bar */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-700/70 bg-slate-800 px-4">
-        <div className="flex items-center gap-3">
-          <Link to="/" className="text-base font-bold text-sky-400 hover:text-sky-300">
-            PartForge AI
+      <header
+        className="z-10 flex h-12 shrink-0 items-center justify-between border-b px-4 backdrop-blur-md"
+        style={{ background: 'var(--lab-panel)', borderColor: 'var(--lab-border)' }}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <Link to="/" className="group flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded border border-sky-500/50 bg-sky-500/10 font-mono text-[13px] font-bold text-sky-400 shadow-glow-cyan-soft transition-shadow group-hover:shadow-glow-cyan">
+              ⌬
+            </span>
+            <span className="font-display text-[15px] font-semibold tracking-wide text-slate-100">
+              PartForge <span className="text-sky-400">AI</span>
+            </span>
           </Link>
+          <span className="label-tech hidden sm:block">Engineering Lab</span>
           <span className="text-slate-600">/</span>
           <span className="max-w-[280px] truncate text-sm font-medium text-slate-200">
             {project?.name ?? '…'}
@@ -127,59 +136,69 @@ export default function Workspace() {
         </div>
         <div className="flex items-center gap-3">
           {caps && (
-            <Badge
-              color={caps.fea_available ? 'green' : 'amber'}
+            <span
+              className="hud-chip flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium uppercase tracking-wider"
               title={
                 caps.fea_available
                   ? `Gmsh + CalculiX detected (${caps.version})`
                   : `ccx available: ${caps.ccx_available}, gmsh available: ${caps.gmsh_available}`
               }
             >
-              {caps.fea_available ? 'FEA: available' : 'FEA: solver not installed'}
-            </Badge>
+              <span className={cx('led', caps.fea_available ? 'text-emerald-400' : 'text-amber-400')} style={{ background: 'currentColor' }} />
+              <span className={caps.fea_available ? 'text-emerald-300' : 'text-amber-300'}>
+                {caps.fea_available ? 'FEA solver online' : 'FEA solver offline'}
+              </span>
+            </span>
           )}
-          <Link to="/settings" className="text-xs text-slate-400 hover:text-sky-300">
+          <Link to="/settings" className="label-tech transition-colors hover:text-sky-300">
             Settings
           </Link>
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* sidebar */}
-        <nav className="flex w-52 shrink-0 flex-col border-r border-slate-700/70 bg-slate-800/60 py-2">
+        {/* workflow rail */}
+        <nav className="flex w-56 shrink-0 flex-col border-r py-3 backdrop-blur-md"
+             style={{ background: 'rgba(11,18,32,0.55)', borderColor: 'var(--lab-border)' }}>
           <NavLink
             to="/"
-            className="mx-2 mb-1 rounded px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-700/60 hover:text-slate-200"
+            className="mx-3 mb-2 rounded px-2 py-1 text-[11px] text-slate-500 transition-colors hover:bg-slate-800/70 hover:text-slate-300"
           >
             ← Dashboard
           </NavLink>
-          {STEPS.map((s) => (
-            <NavLink
-              key={s.key}
-              to={`/p/${projectId}/${s.key}`}
-              className={({ isActive }) =>
-                cx(
-                  'mx-2 flex items-center gap-2 rounded px-2 py-1.5 text-xs',
-                  isActive
-                    ? 'bg-sky-500/15 font-medium text-sky-300'
-                    : 'text-slate-300 hover:bg-slate-700/60',
-                )
-              }
-            >
-              <span
-                className={cx(
-                  'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px]',
-                  completion[s.key]
-                    ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
-                    : 'border-slate-600 text-slate-400',
-                )}
+          <div className="label-tech mx-3 mb-1.5 px-2">Workflow sequence</div>
+          <div className="relative flex-1 overflow-y-auto">
+            {/* connector line */}
+            <span className="pointer-events-none absolute bottom-3 left-[27px] top-1 w-px bg-gradient-to-b from-sky-500/40 via-slate-600/40 to-slate-700/20" />
+            {STEPS.map((s) => (
+              <NavLink
+                key={s.key}
+                to={`/p/${projectId}/${s.key}`}
+                className={({ isActive }) =>
+                  cx(
+                    'relative mx-2 flex items-center gap-2.5 rounded-md px-2 py-[7px] text-xs transition-colors',
+                    isActive
+                      ? 'bg-sky-500/10 font-medium text-sky-200 shadow-[inset_2px_0_0_0_#23D5FF]'
+                      : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200',
+                  )
+                }
               >
-                {completion[s.key] ? '✓' : s.num}
-              </span>
-              <span className="truncate">{s.label}</span>
-            </NavLink>
-          ))}
-          <div className="mt-auto px-4 pb-2 text-[10px] leading-relaxed text-slate-600">
+                <span
+                  className={cx(
+                    'z-[1] flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[9.5px]',
+                    completion[s.key]
+                      ? 'border-emerald-500/70 bg-emerald-500/15 text-emerald-300 shadow-[0_0_8px_-2px_#32E6A1]'
+                      : 'border-slate-600 bg-slate-900 text-slate-500',
+                  )}
+                >
+                  {completion[s.key] ? '✓' : String(s.num).padStart(2, '0')}
+                </span>
+                <span className="truncate">{s.label}</span>
+              </NavLink>
+            ))}
+          </div>
+          <div className="mx-3 mt-2 border-t pt-2 text-[10px] leading-relaxed text-slate-600"
+               style={{ borderColor: 'var(--lab-border)' }}>
             Geometry observations come from the mesh; FEA results are preliminary linear statics,
             not a certified validation.
           </div>
@@ -195,7 +214,8 @@ export default function Workspace() {
         </div>
 
         {/* right panel */}
-        <aside className="w-[380px] shrink-0 overflow-y-auto border-l border-slate-700/70 bg-slate-800/40 p-3">
+        <aside className="w-[380px] shrink-0 overflow-y-auto border-l p-3 backdrop-blur-md"
+               style={{ background: 'rgba(11,18,32,0.45)', borderColor: 'var(--lab-border)' }}>
           {stepKey === 'upload' && <Step1Upload projectId={projectId} />}
           {stepKey === 'material' && <Step2Material projectId={projectId} />}
           {stepKey === 'loads' && <Step3Loads projectId={projectId} />}

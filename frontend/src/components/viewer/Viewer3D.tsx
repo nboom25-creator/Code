@@ -432,9 +432,22 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
   const feaActive = !!feaResultId && !!fieldsQuery.data;
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-slate-900">
+    <div
+      className="relative h-full w-full overflow-hidden"
+      style={{
+        background:
+          'radial-gradient(900px 500px at 50% 108%, rgba(35,213,255,0.07), transparent 60%), ' +
+          'radial-gradient(700px 420px at 85% -8%, rgba(139,92,255,0.05), transparent 60%), ' +
+          'linear-gradient(180deg, var(--lab-bg-1) 0%, var(--lab-bg-0) 100%)',
+      }}
+    >
+      {/* viewport frame ticks */}
+      <span className="hud-corner tl" />
+      <span className="hud-corner tr" />
+      <span className="hud-corner bl" />
+      <span className="hud-corner br" />
       <Canvas
-        gl={{ preserveDrawingBuffer: true, antialias: true }}
+        gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.localClippingEnabled = true;
           glRef.current = gl;
@@ -464,8 +477,8 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
           cellSize={diag / 20}
           sectionSize={diag / 4}
           fadeDistance={diag * 4}
-          cellColor="#334155"
-          sectionColor="#475569"
+          cellColor="#14283E"
+          sectionColor="#1E4258"
         />
         <axesHelper args={[diag * 0.4]} />
 
@@ -504,10 +517,16 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
 
         {probe && feaActive && (
           <Html position={probe.point} zIndexRange={[30, 0]}>
-            <div className="pointer-events-none w-max rounded border border-slate-600 bg-slate-900/90 px-2 py-1 text-[11px] text-slate-200">
-              <div>von Mises: {fmt(probe.vonMisesMPa, 4)} MPa</div>
-              <div>displacement: {fmt(probe.dispMm, 4)} mm</div>
-              <div className="text-slate-500">node #{probe.nodeIndex}</div>
+            <div className="hud-chip pointer-events-none w-max px-2 py-1 text-[11px] text-slate-200">
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-400">von Mises</span>
+                <span className="value-mono">{fmt(probe.vonMisesMPa, 4)} MPa</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-400">displacement</span>
+                <span className="value-mono">{fmt(probe.dispMm, 4)} mm</span>
+              </div>
+              <div className="font-mono text-[9px] text-slate-500">node #{probe.nodeIndex}</div>
             </div>
           </Html>
         )}
@@ -548,12 +567,12 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
 
       {/* top toolbar */}
       <div className="absolute left-2 top-2 flex flex-wrap items-center gap-1.5 text-xs">
-        <div className="flex overflow-hidden rounded border border-slate-700 bg-slate-800/90">
+        <div className="hud-chip flex overflow-hidden">
           {(['front', 'top', 'right', 'iso', 'fit'] as const).map((v) => (
             <button
               key={v}
               onClick={() => requestCamera(v)}
-              className="px-2 py-1 capitalize text-slate-300 hover:bg-slate-700"
+              className="px-2 py-1 uppercase tracking-wider text-[10px] text-slate-400 transition-colors hover:bg-sky-500/10 hover:text-sky-200"
             >
               {v}
             </button>
@@ -561,7 +580,7 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
         </div>
         <button
           onClick={() => setOrthographic(!orthographic)}
-          className="rounded border border-slate-700 bg-slate-800/90 px-2 py-1 text-slate-300 hover:bg-slate-700"
+          className="hud-chip px-2 py-1 text-slate-300 transition-colors hover:border-sky-500/40 hover:text-sky-200"
           title="Toggle perspective / orthographic projection"
         >
           {orthographic ? 'Ortho' : 'Persp'}
@@ -569,7 +588,7 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
         <select
           value={displayMode}
           onChange={(e) => setDisplayMode(e.target.value as typeof displayMode)}
-          className="rounded border border-slate-700 bg-slate-800/90 px-1.5 py-1 text-slate-300"
+          className="hud-chip px-1.5 py-1 text-slate-300"
           title="Display mode"
         >
           <option value="shaded">Shaded</option>
@@ -580,7 +599,7 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
         <select
           value={heatmapField}
           onChange={(e) => setHeatmapField(e.target.value as typeof heatmapField)}
-          className="rounded border border-slate-700 bg-slate-800/90 px-1.5 py-1 text-slate-300"
+          className="hud-chip px-1.5 py-1 text-slate-300"
           title="Heat map (requires geometry analysis)"
         >
           <option value="none">Heat map: none</option>
@@ -591,10 +610,10 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
         <button
           onClick={() => setSelectionTool(selectionTool === 'measure' ? 'none' : 'measure')}
           className={cx(
-            'rounded border border-slate-700 px-2 py-1',
+            'hud-chip px-2 py-1 transition-colors',
             selectionTool === 'measure'
-              ? 'bg-amber-500/30 text-amber-200'
-              : 'bg-slate-800/90 text-slate-300 hover:bg-slate-700',
+              ? '!border-amber-500/60 bg-amber-500/20 text-amber-200'
+              : 'text-slate-300 hover:border-sky-500/40 hover:text-sky-200',
           )}
           title="Measure: click two points on the surface"
         >
@@ -602,7 +621,7 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
         </button>
         <button
           onClick={takeScreenshot}
-          className="rounded border border-slate-700 bg-slate-800/90 px-2 py-1 text-slate-300 hover:bg-slate-700"
+          className="hud-chip px-2 py-1 text-slate-300 transition-colors hover:border-sky-500/40 hover:text-sky-200"
           title="Capture viewport as PNG"
         >
           Screenshot
@@ -611,7 +630,7 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
 
       {/* second toolbar row: section plane + toggles */}
       <div className="absolute left-2 top-11 flex flex-wrap items-center gap-1.5 text-xs">
-        <div className="flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800/90 px-2 py-1">
+        <div className="hud-chip flex items-center gap-1.5 px-2 py-1">
           <label className="flex items-center gap-1 text-slate-300">
             <input
               type="checkbox"
@@ -650,7 +669,7 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
           return (
             <label
               key={k}
-              className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800/90 px-2 py-1 text-slate-300"
+              className="hud-chip flex items-center gap-1 px-2 py-1 text-slate-300"
             >
               <input type="checkbox" checked={val} onChange={(e) => setter(e.target.checked)} />
               {k === 'bbox' ? 'BBox' : k[0].toUpperCase() + k.slice(1)}
@@ -686,9 +705,9 @@ export default function Viewer3D({ projectId }: { projectId: string }) {
 
       {/* FEA overlay controls */}
       {feaActive && (
-        <div className="absolute bottom-2 right-2 flex flex-col gap-1.5 rounded border border-slate-700 bg-slate-900/90 p-2 text-xs text-slate-300">
+        <div className="lab-panel absolute bottom-2 right-2 flex flex-col gap-1.5 p-2.5 text-xs text-slate-300">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-slate-200">FEA overlay</span>
+            <span className="label-tech !text-sky-300">FEA overlay</span>
             <button className="text-slate-500 hover:text-slate-300" onClick={() => setFeaResultId(null)}>
               close
             </button>

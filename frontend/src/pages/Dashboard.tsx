@@ -42,26 +42,54 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-full">
-      <header className="flex items-center justify-between border-b border-slate-700/70 bg-slate-800 px-5 py-3">
+      <header
+        className="flex items-center justify-between border-b px-5 py-3 backdrop-blur-md"
+        style={{ background: 'var(--lab-panel)', borderColor: 'var(--lab-border)' }}
+      >
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-sky-400">PartForge AI</h1>
-          <span className="text-xs text-slate-500">
-            STL analysis · preliminary FEA · design variants
+          <span className="flex h-7 w-7 items-center justify-center rounded border border-sky-500/50 bg-sky-500/10 font-mono text-[15px] font-bold text-sky-400 shadow-glow-cyan-soft">
+            ⌬
+          </span>
+          <h1 className="font-display text-lg font-semibold tracking-wide text-slate-100">
+            PartForge <span className="text-sky-400">AI</span>
+          </h1>
+          <span className="label-tech hidden md:block">
+            Engineering laboratory · STL analysis · preliminary FEA · design variants
           </span>
         </div>
         <div className="flex items-center gap-3">
           {caps && (
             <Badge color={caps.fea_available ? 'green' : 'amber'}>
-              {caps.fea_available ? 'FEA: available' : 'FEA: solver not installed'}
+              {caps.fea_available ? 'FEA solver online' : 'FEA solver offline'}
             </Badge>
           )}
-          <Link to="/settings" className="text-sm text-slate-400 hover:text-sky-300">
+          <Link to="/settings" className="label-tech transition-colors hover:text-sky-300">
             Settings
           </Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-5 py-6">
+      <main className="mx-auto max-w-5xl px-5 py-8">
+        <div
+          className="mb-8 rounded-lg border px-6 py-5"
+          style={{
+            borderColor: 'var(--lab-border)',
+            background:
+              'radial-gradient(600px 200px at 20% 0%, rgba(35,213,255,0.08), transparent 70%), ' +
+              'radial-gradient(500px 220px at 85% 110%, rgba(139,92,255,0.07), transparent 70%), var(--lab-panel)',
+          }}
+        >
+          <div className="label-tech mb-1.5">Digital engineering laboratory</div>
+          <h2 className="font-display text-xl font-semibold text-slate-100">
+            Place a component on the bench. Inspect it, test it, evolve it.
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
+            Upload an STL, confirm its units, declare material and loads, then run geometry
+            diagnostics and preliminary finite-element analysis. Evidence-based recommendations
+            drive automatic design variants you can compare and export. Every number comes from
+            deterministic analysis — assumptions and validity gates are always shown.
+          </p>
+        </div>
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Panel title="New project">
             <div className="flex flex-col gap-2.5">

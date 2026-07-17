@@ -84,19 +84,23 @@ function SceneChrome({ data }: { data: MeshData | null }) {
         cellSize={diag / 20}
         sectionSize={diag / 4}
         fadeDistance={diag * 4}
-        cellColor="#334155"
-        sectionColor="#475569"
+        cellColor="#14283E"
+        sectionColor="#1E4258"
       />
     </>
   );
 }
 
-function FitOnce({ data }: { data: MeshData | null }) {
+function FitOnce({ data, side }: { data: MeshData | null; side: Side }) {
   const camera = useThree((s) => s.camera);
-  const done = useRef(false);
+  const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
+  // fit once per (camera instance, mesh): the declarative makeDefault camera
+  // replaces the initial one after mount, which must re-trigger the fit
+  const fitted = useRef<{ cam: unknown; mesh: unknown } | null>(null);
   useEffect(() => {
-    if (!data || done.current) return;
-    done.current = true;
+    if (!data) return;
+    if (fitted.current && fitted.current.cam === camera && fitted.current.mesh === data) return;
+    fitted.current = { cam: camera, mesh: data };
     const c = data.boundingSphere.center;
     const r = Math.max(data.boundingSphere.radius, 1e-6);
     camera.up.set(0, 0, 1);
@@ -105,7 +109,19 @@ function FitOnce({ data }: { data: MeshData | null }) {
     camera.far = r * 200;
     camera.lookAt(c);
     camera.updateProjectionMatrix();
-  }, [data, camera]);
+    // keep the orbit target on the part and publish so the twin viewport
+    // starts from the same fitted view instead of the default origin target
+    if (controls) {
+      controls.target.set(c.x, c.y, c.z);
+      controls.update();
+    }
+    useUIStore.getState().setCameraSync({
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      target: [c.x, c.y, c.z],
+      source: side,
+      seq: useUIStore.getState().cameraSync.seq + 1,
+    });
+  }, [data, camera, controls, side]);
   return null;
 }
 
@@ -253,11 +269,11 @@ export default function ComparisonViewports({ projectId }: { projectId: string }
   return (
     <div className="relative flex h-full w-full">
       {/* left / single viewport */}
-      <div className="relative h-full min-w-0 flex-1 border-r border-slate-700/70">
+      <div className="relative h-full min-w-0 flex-1 border-r border-slate-700/60">
         <Canvas gl={{ antialias: true }} onCreated={({ gl }) => (gl.localClippingEnabled = true)}>
           <PerspectiveCamera makeDefault position={[3, -3, 2]} up={[0, 0, 1]} fov={45} />
           <SyncedControls side="left" />
-          <FitOnce data={baseData} />
+          <FitOnce data={baseData} side="left" />
           <SceneChrome data={baseData} />
           {mode === 'side-by-side' && baseData && (
             <MeshView data={baseData} clippingPlanes={clipBase} />
@@ -272,7 +288,7 @@ export default function ComparisonViewports({ projectId }: { projectId: string }
             <MeshView data={varData} vertexColors clippingPlanes={clipBase} />
           )}
         </Canvas>
-        <div className="absolute left-2 top-2 rounded bg-slate-900/80 px-2 py-0.5 text-xs text-slate-300">
+        <div className="hud-chip absolute left-2 top-2 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">
           {mode === 'side-by-side'
             ? `Baseline: ${comparison?.baseline_mesh.label || 'original'}`
             : mode === 'overlay'
@@ -297,11 +313,11 @@ export default function ComparisonViewports({ projectId }: { projectId: string }
           <Canvas gl={{ antialias: true }} onCreated={({ gl }) => (gl.localClippingEnabled = true)}>
             <PerspectiveCamera makeDefault position={[3, -3, 2]} up={[0, 0, 1]} fov={45} />
             <SyncedControls side="right" />
-            <FitOnce data={baseData ?? varData} />
+            <FitOnce data={baseData ?? varData} side="right" />
             <SceneChrome data={varData ?? baseData} />
             {varData && <MeshView data={varData} color="#7dd3fc" clippingPlanes={clipBase} />}
           </Canvas>
-          <div className="absolute left-2 top-2 rounded bg-slate-900/80 px-2 py-0.5 text-xs text-sky-300">
+          <div className="hud-chip absolute left-2 top-2 !border-sky-500/40 px-2 py-0.5 text-[10px] uppercase tracking-wider text-sky-300">
             {variantName}
           </div>
           {!varData && (
