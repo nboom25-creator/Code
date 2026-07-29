@@ -89,6 +89,14 @@ class SymbolSeries:
     volume: np.ndarray
     quality_ok: np.ndarray  # bool
     synthetic: bool = False
+    #: Adjustment status of the stored prices. Decides whether a consumer must
+    #: apply corporate actions itself (``raw``) or whether they are already
+    #: baked in (``split_dividend``).
+    adjustment: str = "raw"
+    #: Cumulative product of split ratios with an ex-date at or before each bar.
+    #: Used to build a point-in-time-correct adjusted series (see
+    #: :meth:`adjusted_to`). ``None`` when the stored prices are already adjusted.
+    split_factor: np.ndarray | None = None
 
     def __len__(self) -> int:
         return int(self.ts.size)
@@ -96,6 +104,27 @@ class SymbolSeries:
     def cut(self, as_of: datetime) -> int:
         """Index one past the last observation at or before ``as_of``."""
         return int(np.searchsorted(self.ts, np.datetime64(ensure_utc(as_of).replace(tzinfo=None)), side="right"))
+
+    def adjusted_to(self, values: np.ndarray, cut: int, inverse: bool = False) -> np.ndarray:
+        """Split-adjust ``values[:cut]`` as of observation ``cut - 1``.
+
+        This is the point-in-time-correct adjustment. At an evaluation instant
+        every split with an ex-date **at or before** that instant is public
+        knowledge, so scaling earlier prices for those splits uses no future
+        information. Adjusting for a split that has not happened yet — which is
+        what a vendor's back-adjusted series does — would.
+
+        ``inverse=True`` applies the reciprocal, for share quantities such as
+        volume, which scale opposite to price.
+        """
+        if self.split_factor is None or cut <= 0 or values.size == 0:
+            return values
+        factors = self.split_factor[:cut]
+        current = factors[-1]
+        if current <= 0:
+            return values
+        scale = factors / current
+        return values * (1.0 / scale) if inverse else values * scale
 
 
 @dataclass(slots=True)
@@ -195,8 +224,34 @@ class MarketView:
         for bar in session.scalars(bar_q.order_by(Bar.symbol, Bar.ts)):
             rows_by_symbol.setdefault(bar.symbol, []).append(bar)
 
+        # Split schedule per symbol, needed to build the adjustment factors.
+        splits_by_symbol: dict[str, list[tuple[date, float]]] = {}
+        for ca in session.scalars(
+            select(CorporateAction)
+            .where(CorporateAction.symbol.in_(wanted), CorporateAction.action_type == "split")
+            .order_by(CorporateAction.symbol, CorporateAction.ex_date)
+        ):
+            if ca.ratio and float(ca.ratio) > 0:
+                splits_by_symbol.setdefault(ca.symbol, []).append((ca.ex_date, float(ca.ratio)))
+
         series: dict[str, SymbolSeries] = {}
         for sym, rows in rows_by_symbol.items():
+            adjustment = rows[-1].adjustment.value if rows else "raw"
+            split_factor: np.ndarray | None = None
+            splits = splits_by_symbol.get(sym)
+            if adjustment == "raw" and splits:
+                factors = np.ones(len(rows))
+                running = 1.0
+                split_idx = 0
+                ordered = sorted(splits)
+                for i, row in enumerate(rows):
+                    d = ensure_utc(row.ts).date()
+                    while split_idx < len(ordered) and ordered[split_idx][0] <= d:
+                        running *= ordered[split_idx][1]
+                        split_idx += 1
+                    factors[i] = running
+                split_factor = factors
+
             series[sym] = SymbolSeries(
                 symbol=sym,
                 ts=np.array(
@@ -212,6 +267,8 @@ class MarketView:
                     [r.data_quality.value not in ("corrupt", "suspect") for r in rows], dtype=bool
                 ),
                 synthetic=any(r.is_synthetic for r in rows),
+                adjustment=adjustment,
+                split_factor=split_factor,
             )
 
         fundamentals: dict[str, list[FundamentalRow]] = {}
@@ -382,11 +439,21 @@ class PointInTime:
         return self._arr(symbol, "ts", n)
 
     def _arr(self, symbol: str, field_name: str, n: int | None) -> np.ndarray:
+        """Truncate at ``as_of``, split-adjusting prices and volumes.
+
+        Features must see a continuous series — a raw price series has a genuine
+        discontinuity at every split, which would otherwise be read as a real
+        return. The adjustment uses only splits already public at ``as_of``.
+        """
         s = self.view.series.get(symbol.upper())
         if s is None:
             return np.array([])
         cut = self._cut(symbol)
         arr = getattr(s, field_name)[:cut]
+        if field_name in ("open", "high", "low", "close"):
+            arr = s.adjusted_to(arr, cut)
+        elif field_name == "volume":
+            arr = s.adjusted_to(arr, cut, inverse=True)
         if n is not None and arr.size > n:
             arr = arr[-n:]
         return arr

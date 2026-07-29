@@ -174,13 +174,17 @@ class _SymbolSim:
         self.quality = float(np.clip(r.normal(0.0, 1.0), -2.5, 2.5))
         self.alpha = 0.0 if self.is_etf else self.quality * 0.00022
         self.start_price = float(np.clip(r.lognormal(3.6, 0.75), 6.0, 900.0))
-        self.base_revenue = float(np.clip(r.lognormal(21.0, 1.4), 5e7, 2e11))
         self.rev_growth = float(np.clip(r.normal(0.16, 0.16) + self.quality * 0.05, -0.20, 0.85))
         self.rev_accel = float(r.normal(0.0, 0.05))
         self.gross_margin = float(np.clip(r.normal(0.52, 0.16), 0.12, 0.90))
         self.op_margin = float(np.clip(self.gross_margin - abs(r.normal(0.30, 0.12)), -0.35, 0.45))
         self.debt_to_equity = float(np.clip(abs(r.normal(0.55, 0.5)), 0.0, 3.5))
         self.shares = float(np.clip(r.lognormal(20.0, 0.9), 2e7, 1.2e10))
+        # Revenue is derived from the starting market cap and a plausible sales
+        # multiple, so simulated valuation ratios land in a realistic range
+        # instead of being an independent draw that can imply a 0.01x multiple.
+        self.target_ps = float(np.clip(r.lognormal(1.25, 0.65), 0.4, 35.0))
+        self.base_revenue = max(5e6, self.start_price * self.shares / self.target_ps)
         self.adv_shares = float(np.clip(r.lognormal(14.2, 1.3), 5e4, 1.2e8))
         self.spread_bps = float(np.clip(r.normal(6.0, 5.0), 0.6, 90.0))
         self.split_dates: list[tuple[date, float]] = []
@@ -276,19 +280,31 @@ class FixtureProvider(
         rng = np.random.default_rng(_seed_for(self.seed, symbol, "ohlc"))
         out: list[BarRecord] = []
         cal = {c.session_date: c for c in build_calendar(start, end)}
+        horizon = sessions[-1]
         for i, d in enumerate(sessions):
             if d < start or d > end:
                 continue
-            close = float(closes[i])
-            prev = float(closes[i - 1]) if i else close
+            # Emit RAW prices: the continuous path is scaled up by the product of
+            # split ratios still ahead of this date, so a split produces a real
+            # discontinuity. Back-adjusted history is deliberately *not* emitted,
+            # because adjusting the past using a future split is itself a form of
+            # look-ahead, and it hides whether the consumer handles splits at all.
+            factor = self._forward_split_factor(symbol, d, horizon)
+            prev_factor = (
+                self._forward_split_factor(symbol, sessions[i - 1], horizon) if i else factor
+            )
+            close = float(closes[i]) * factor
+            prev = (float(closes[i - 1]) * prev_factor) if i else close
             # Overnight gap, then intraday range around it.
             gap = float(rng.normal(0, sim.idio_vol * 0.6))
-            open_ = max(0.01, prev * (1 + gap))
+            # On a split ex-date the open reflects the post-split price, so the
+            # gap is measured against the *adjusted* prior close.
+            open_ = max(0.01, prev * (factor / prev_factor) * (1 + gap))
             hi = max(open_, close) * (1 + abs(float(rng.normal(0, sim.idio_vol * 0.8))))
             lo = min(open_, close) * (1 - abs(float(rng.normal(0, sim.idio_vol * 0.8))))
             lo = max(0.01, min(lo, open_, close))
             hi = max(hi, open_, close)
-            vol = float(volumes[i])
+            vol = float(volumes[i]) / factor  # share counts scale inversely to price
             early = bool(cal.get(d).early_close) if cal.get(d) else False
             out.append(
                 BarRecord(
@@ -305,7 +321,10 @@ class FixtureProvider(
                     provenance=self.provenance(
                         symbol,
                         as_of_from_bar_close(d, early=early),
-                        adjustment=adjustment,
+                        # Always RAW, whatever was requested: the simulator's
+                        # canonical output is unadjusted, and mislabelling it
+                        # would make the consumer double-count splits.
+                        adjustment=Adjustment.RAW,
                         quality=DataQuality.SYNTHETIC,
                     ),
                 )
@@ -356,46 +375,67 @@ class FixtureProvider(
         return out
 
     # -- CorporateActionProvider --------------------------------------------
+    @lru_cache(maxsize=512)  # noqa: B019 - bounded by universe size
+    def _split_events(self, symbol: str, end_year: int) -> tuple[tuple[date, float], ...]:
+        """Split schedule for a symbol. Price-independent so it can be used to
+        build the raw price path without recursing back into ``get_bars``."""
+        rng = np.random.default_rng(_seed_for(self.seed, symbol.upper(), "corp"))
+        out: list[tuple[date, float]] = []
+        for year in range(EPOCH.year, end_year + 1):
+            if rng.random() < 0.18:
+                ex = date(year, int(rng.integers(2, 12)), int(rng.integers(1, 28)))
+                ratio = float(rng.choice([2.0, 3.0, 4.0, 10.0], p=[0.55, 0.2, 0.2, 0.05]))
+                out.append((ex, ratio))
+        return tuple(out)
+
+    def _forward_split_factor(self, symbol: str, d: date, end: date) -> float:
+        """Product of split ratios with an ex-date after ``d``.
+
+        Raw price on ``d`` equals the continuous (adjusted) price times this
+        factor, which is what creates a genuine split discontinuity in the
+        emitted series.
+        """
+        factor = 1.0
+        for ex, ratio in self._split_events(symbol.upper(), end.year):
+            if ex > d:
+                factor *= ratio
+        return factor
+
     def get_corporate_actions(
         self, symbol: str, start: date, end: date
     ) -> list[CorporateActionRecord]:
         symbol = symbol.upper()
         sim = self._sim(symbol)
-        rng = np.random.default_rng(_seed_for(self.seed, symbol, "corp"))
+        rng = np.random.default_rng(_seed_for(self.seed, symbol, "corp_div"))
         out: list[CorporateActionRecord] = []
-        # Splits: rare, and only after a large run-up (as in reality).
-        for year in range(max(start.year, EPOCH.year), end.year + 1):
-            if rng.random() < 0.18:
-                ex = date(year, int(rng.integers(2, 12)), int(rng.integers(1, 28)))
-                if start <= ex <= end:
-                    ratio = float(rng.choice([2.0, 3.0, 4.0, 10.0], p=[0.55, 0.2, 0.2, 0.05]))
-                    out.append(
-                        CorporateActionRecord(
-                            symbol=symbol,
-                            action_type="split",
-                            ex_date=ex,
-                            ratio=D(ratio),
-                            provenance=self.provenance(
-                                symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC
-                            ),
-                        )
+        for ex, ratio in self._split_events(symbol, end.year):
+            if start <= ex <= end:
+                out.append(
+                    CorporateActionRecord(
+                        symbol=symbol,
+                        action_type="split",
+                        ex_date=ex,
+                        ratio=D(ratio),
+                        provenance=self.provenance(
+                            symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC
+                        ),
                     )
-        # Quarterly dividends for payers.
+                )
+        # Quarterly dividends for payers. Sized off the simulated starting price
+        # scaled by the split factor, so no price lookup (and no recursion).
         if sim.div_yield > 0:
-            bars = {b.ts.date(): b for b in self.get_bars(symbol, start, end)}
             for year in range(start.year, end.year + 1):
                 for month in (3, 6, 9, 12):
                     ex = date(year, month, 15)
                     if not (start <= ex <= end):
                         continue
-                    ref = next((b for d, b in sorted(bars.items()) if d >= ex), None)
-                    price = float(ref.close) if ref else sim.start_price
+                    price = sim.start_price * self._forward_split_factor(symbol, ex, end)
                     out.append(
                         CorporateActionRecord(
                             symbol=symbol,
                             action_type="dividend",
                             ex_date=ex,
-                            cash_amount=D(round(price * sim.div_yield / 4, 4)),
+                            cash_amount=D(round(max(0.01, price * sim.div_yield / 4), 4)),
                             provenance=self.provenance(
                                 symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC
                             ),
@@ -433,9 +473,16 @@ class FixtureProvider(
     # -- FundamentalsProvider ----------------------------------------------
     REPORTING_LAG_DAYS = 42  # publication delay: filings land weeks after period end
 
-    def get_fundamentals(self, symbol: str, limit: int = 12) -> list[FundamentalRecord]:
+    # Deep default so a multi-year backtest has reported fundamentals available at
+    # every historical evaluation date, not only near the present.
+    def get_fundamentals(self, symbol: str, limit: int = 52) -> list[FundamentalRecord]:
         symbol = symbol.upper()
         sim = self._sim(symbol)
+        if sim.is_etf:
+            # An ETF has no income statement. Returning an empty list is the
+            # honest answer; inventing one would let fundamental strategies
+            # "analyse" a fund as though it were an operating company.
+            return []
         today = utcnow().date()
         # Quarter ends going back ``limit`` quarters, only those already published.
         out: list[FundamentalRecord] = []
@@ -518,17 +565,20 @@ class FixtureProvider(
         return out[-limit:]
 
     # -- NewsProvider --------------------------------------------------------
+    # (template, event tag, base sentiment, relative frequency). Serious adverse
+    # disclosures are rare on purpose — in reality a restatement is an unusual
+    # event, and over-generating them would disqualify most of the universe.
     _HEADLINES = [
-        ("{name} reports quarterly results above internal plan", "earnings", 0.45),
-        ("{name} announces expanded capacity at flagship facility", "capacity", 0.35),
-        ("{name} names new chief financial officer", "management", -0.05),
-        ("{name} wins multi-year contract with major customer", "customer_win", 0.55),
-        ("Regulator opens review of {name} business practices", "regulatory", -0.50),
-        ("{name} unveils next-generation product line", "product", 0.40),
-        ("Analysts revise {name} estimates following guidance update", "estimate_revision", 0.25),
-        ("{name} discloses restatement of prior-period figures", "accounting", -0.70),
-        ("{name} completes bolt-on acquisition", "m_and_a", 0.15),
-        ("Short seller publishes critical report on {name}", "short_report", -0.60),
+        ("{name} reports quarterly results above internal plan", "earnings", 0.45, 0.20),
+        ("{name} announces expanded capacity at flagship facility", "capacity", 0.35, 0.13),
+        ("{name} names new chief financial officer", "management", -0.05, 0.07),
+        ("{name} wins multi-year contract with major customer", "customer_win", 0.55, 0.15),
+        ("Regulator opens review of {name} business practices", "regulatory", -0.50, 0.04),
+        ("{name} unveils next-generation product line", "product", 0.40, 0.17),
+        ("Analysts revise {name} estimates following guidance update", "estimate_revision", 0.25, 0.15),
+        ("{name} discloses restatement of prior-period figures", "accounting", -0.70, 0.01),
+        ("{name} completes bolt-on acquisition", "m_and_a", 0.15, 0.06),
+        ("Short seller publishes critical report on {name}", "short_report", -0.60, 0.02),
     ]
 
     def get_news(self, symbol: str, start: date | None = None, limit: int = 50) -> list[NewsRecord]:
@@ -537,12 +587,14 @@ class FixtureProvider(
         today = utcnow().date()
         start = start or (today - timedelta(days=90))
         rng = np.random.default_rng(_seed_for(self.seed, symbol, "news", start.isoformat()))
+        probs = np.array([h[3] for h in self._HEADLINES], dtype=float)
+        probs = probs / probs.sum()
         out: list[NewsRecord] = []
         d = start
         seen: set[str] = set()
         while d <= today and len(out) < limit:
             if rng.random() < 0.16:
-                tmpl, tag, base_sent = self._HEADLINES[int(rng.integers(0, len(self._HEADLINES)))]
+                tmpl, tag, base_sent, _freq = self._HEADLINES[int(rng.choice(len(self._HEADLINES), p=probs))]
                 published = datetime.combine(d, datetime.min.time()).replace(
                     hour=int(rng.integers(11, 22)), tzinfo=utcnow().tzinfo
                 )

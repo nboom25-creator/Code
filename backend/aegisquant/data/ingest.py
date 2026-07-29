@@ -378,10 +378,25 @@ def ingest_symbol(
     timeframe: str = "1Day",
     with_fundamentals: bool = True,
     with_news: bool = True,
+    news_lookback_days: int = 120,
     cross_check: bool = False,
+    adjustment: Adjustment = Adjustment.RAW,
     report: IngestReport | None = None,
 ) -> IngestReport:
-    """Ingest one symbol's price history plus optional fundamentals and news."""
+    """Ingest one symbol's price history plus optional fundamentals and news.
+
+    ``news_lookback_days`` bounds how far back news is requested. Live providers
+    only serve recent news, so the default is deliberately short; a backtest
+    seeded from the fixture provider passes the full window so news features are
+    populated across history rather than only near the present.
+
+    ``adjustment`` defaults to ``RAW`` deliberately. Back-adjusted history is
+    convenient but subtly dishonest for research: a split that happens tomorrow
+    silently rewrites every price before it, so a strategy backtested on adjusted
+    data is reading a series that could not have existed at the time. Storing raw
+    prices and applying corporate actions explicitly on their ex-date is the
+    look-ahead-free option, and it also proves the corporate-action path works.
+    """
     report = report or IngestReport()
     report.symbols_requested += 1
     symbol = symbol.upper()
@@ -409,7 +424,7 @@ def ingest_symbol(
     bars, outcome = call_with_policy(
         prices.name,
         "bars",
-        lambda: prices.get_bars(symbol, start, end, timeframe, Adjustment.SPLIT_DIVIDEND),
+        lambda: prices.get_bars(symbol, start, end, timeframe, adjustment),
         symbol=symbol,
     )
     if bars is None:
@@ -489,7 +504,9 @@ def ingest_symbol(
             recs, _ = call_with_policy(
                 np_.name,
                 "news",
-                lambda: np_.get_news(symbol, start=max(start, end - timedelta(days=120))),
+                lambda: np_.get_news(
+                    symbol, start=max(start, end - timedelta(days=news_lookback_days))
+                ),
                 symbol=symbol,
             )
             if recs:
@@ -510,10 +527,15 @@ def ingest_universe(
     timeframe: str = "1Day",
     with_fundamentals: bool = True,
     with_news: bool = True,
+    news_lookback_days: int = 120,
     cross_check: bool = False,
+    adjustment: Adjustment = Adjustment.RAW,
 ) -> IngestReport:
     report = IngestReport()
     sync_calendar(session, start - timedelta(days=10), end + timedelta(days=10))
+    # Reference data first: sector and asset-class classification decides which
+    # strategies may even look at a symbol, so it must exist before bars land.
+    sync_instruments(session, symbols)
     for sym in symbols:
         try:
             ingest_symbol(
@@ -524,7 +546,9 @@ def ingest_universe(
                 timeframe=timeframe,
                 with_fundamentals=with_fundamentals,
                 with_news=with_news,
+                news_lookback_days=news_lookback_days,
                 cross_check=cross_check,
+                adjustment=adjustment,
                 report=report,
             )
         except Exception as exc:  # one bad symbol must not abort the run
