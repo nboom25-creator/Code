@@ -28,3 +28,14 @@ yarn-error.*
 
 # Local env
 .env*.local
+
+# GliderForge Assistant (gliderforge/)
+gliderforge/node_modules/
+gliderforge/.next/
+gliderforge/data/*.db
+gliderforge/data/*.db-*
+gliderforge/data/uploads/
+gliderforge/test-results/
+gliderforge/playwright-report/
+gliderforge/next-env.d.ts
+gliderforge/*.tsbuildinfo

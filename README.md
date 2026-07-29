@@ -1,3 +1,16 @@
+# Repository contents
+
+This repository holds two independent projects:
+
+| Directory | Project |
+| --- | --- |
+| `/` (root) | **Snake** — a minimal React Native + Expo arcade game (see below) |
+| `gliderforge/` | **GliderForge Assistant** — an engineering workspace for a laboratory-scale autonomous underwater glider senior-design project. See [`gliderforge/README.md`](gliderforge/README.md). |
+
+Each has its own `package.json` and dependencies; they do not interact.
+
+---
+
 # 🐍 Snake
 
 A simple, minimal Snake arcade game built with **React Native + Expo**. Runs on
