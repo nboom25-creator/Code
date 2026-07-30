@@ -107,6 +107,15 @@ def update_risk_config(
     or dangerous combination (for example a Kelly fraction above 0.5, or
     out-of-order drawdown stages) is rejected rather than stored.
     """
+    # Pydantic settings ignore unknown keys, which would let a typo'd limit name
+    # be accepted and silently do nothing — the operator would believe a control
+    # was in place when it was not.
+    unknown = sorted(set(payload.limits) - set(RiskLimits.model_fields))
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown risk limit(s): {', '.join(unknown)}",
+        )
     try:
         validated = RiskLimits(**payload.limits)
     except Exception as exc:

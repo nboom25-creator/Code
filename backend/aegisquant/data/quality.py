@@ -50,6 +50,9 @@ ADJUSTMENT_JUMP_THRESHOLD = Decimal("0.35")
 OUTLIER_ROBUST_Z = Decimal("12")
 # Cross-provider close tolerance.
 PROVIDER_DISAGREEMENT_TOLERANCE = Decimal("0.02")
+# How far after a recorded ex-date a price gap may still be attributed to it.
+# Covers a weekend plus a holiday, which is the longest a US session gap runs.
+ACTION_MATCH_WINDOW_DAYS = 4
 
 
 @dataclass(slots=True)
@@ -113,9 +116,19 @@ def validate_bars(
     issues: list[Issue] = []
     accepted: list[BarRecord] = []
     rejected: list[BarRecord] = []
-    action_dates = {a.ex_date for a in (corporate_actions or [])}
     # A dividend that is small relative to price cannot explain a large jump, but
     # splits and large special dividends can; keep both in the exemption set.
+    #
+    # The window matters. Providers disagree by a day or two on where an ex-date
+    # falls (announcement vs. ex vs. distribution), a holiday shifts the first
+    # session that can print the gap, and some feeds date an action to a weekend.
+    # Requiring exact equality would report a perfectly ordinary split as an
+    # unexplained 67% move — and since the promotion gate demands zero open
+    # blocking issues, a false positive here blocks a strategy for no reason.
+    action_dates: set[date] = set()
+    for action in corporate_actions or []:
+        for offset in range(-1, ACTION_MATCH_WINDOW_DAYS + 1):
+            action_dates.add(action.ex_date + timedelta(days=offset))
 
     # --- structural checks, bar by bar ---
     seen_keys: set[tuple[str, datetime]] = set()

@@ -108,7 +108,10 @@ def _blend(parts: dict[str, float | None], weights: dict[str, float]) -> float |
         den += w
     if den <= 0:
         return None
-    return num / den
+    # Clamp: with weights that do not sum to exactly 1 in binary floating point,
+    # a blend of perfectly-100 sub-scores can land on 100.00000000000001, which
+    # then reads as an out-of-range score in the registry check.
+    return float(np.clip(num / den, 0.0, 100.0))
 
 
 # ---------------------------------------------------------------------------

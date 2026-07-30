@@ -230,7 +230,10 @@ def portfolio(user: CurrentUser = Depends(require_viewer), session: Session = De
             }
             for s in history[-500:]
         ],
-        "using_synthetic_data": any(r["is_synthetic"] for r in rows),
+        # Also true when the price provider is the simulator, so the banner shows
+        # on an empty book: `any()` over no positions is False, which would
+        # otherwise present a fully simulated environment as if it were real.
+        "using_synthetic_data": any(r["is_synthetic"] for r in rows) or get_settings().price_provider == "fixture",
     }
 
 

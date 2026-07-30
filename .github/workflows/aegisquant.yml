@@ -1,0 +1,176 @@
+name: AegisQuant CI
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "docker-compose.yml"
+      - ".github/workflows/aegisquant.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "docker-compose.yml"
+      - ".github/workflows/aegisquant.yml"
+
+concurrency:
+  group: aegisquant-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The test suite runs entirely on SQLite with the simulated data provider, so
+  # no services, no network and no API keys are needed. Never put a real secret
+  # here — these are throwaway development values.
+  AEGIS_ENV_NAME: ci
+  AEGIS_MODE: PAPER
+  AEGIS_BROKER: mock
+  AEGIS_PRICE_PROVIDER: fixture
+  AEGIS_FUNDAMENTALS_PROVIDER: fixture
+  AEGIS_NEWS_PROVIDER: fixture
+  AEGIS_MACRO_PROVIDER: fixture
+  AEGIS_SECRET_KEY: ci-only-secret-key-not-used-anywhere-real
+  AEGIS_BOOTSTRAP_ADMIN_PASSWORD: ci-only-password-1234
+
+jobs:
+  backend:
+    name: Backend (lint, types, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Type check
+        run: mypy aegisquant
+
+      - name: Tests
+        run: pytest -q --durations=10
+
+  migrations:
+    name: Migrations match the models
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aegis
+          POSTGRES_PASSWORD: aegis
+          POSTGRES_DB: aegisquant
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aegis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      AEGIS_DATABASE_URL: postgresql+psycopg2://aegis:aegis@localhost:5432/aegisquant
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Apply migrations
+        run: alembic upgrade head
+
+      # Catches the common failure where a model changed but no migration was
+      # written: the schema and the ORM would silently disagree in production.
+      - name: Check for model drift
+        run: alembic check
+
+      - name: Seed and run one autonomous cycle end to end
+        run: |
+          python -m aegisquant.cli seed --years 2 --cycles 1
+          python -m aegisquant.cli loop-once --no-ingest
+          python -m aegisquant.cli reconcile
+          python -m aegisquant.cli live-preflight
+
+  frontend:
+    name: Frontend (types, tests, production build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    # Advisory: a new CVE published upstream should surface here without
+    # blocking an unrelated change from merging. Review the output, don't ignore it.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit Python dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          pip install -e .
+          pip-audit --desc --progress-spinner off
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Audit npm dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --audit-level=high

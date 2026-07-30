@@ -837,7 +837,18 @@ class AutonomousLoop:
                 reference_price=price,
                 limit_price=limit_price,
                 confidence=tp.confidence,
-                signal_inputs=tp.signal_inputs,
+                # The narration cites the growth score, the sector and the
+                # contributing sleeves, so they are persisted alongside the raw
+                # features. Otherwise the explanation would assert numbers that
+                # the stored record cannot account for, and the audit trail could
+                # not be re-derived from what was written down.
+                signal_inputs={
+                    **tp.signal_inputs,
+                    "growth_opportunity_score": (float(tp.growth_score) if tp.growth_score is not None else None),
+                    "_sector": tp.sector,
+                    "_strategies": list(tp.strategies),
+                    "_weaknesses": list(sf.growth.weaknesses) if sf and sf.growth else [],
+                },
                 explanation="",  # filled in after the risk verdict
                 regime=assessment.regime,
                 thesis=tp.thesis,

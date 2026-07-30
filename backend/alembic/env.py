@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from aegisquant.config import get_settings
 from aegisquant.db import models  # noqa: F401  (import registers every mapper)
 from aegisquant.db.base import Base
+from alembic import context
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

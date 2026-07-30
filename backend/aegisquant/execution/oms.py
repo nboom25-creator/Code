@@ -375,8 +375,11 @@ class OrderManager:
             order.acknowledged_at = bo.updated_at or utcnow()
         order.last_event_at = utcnow()
 
-        # Book any fills we have not seen yet.
-        seen = {f.broker_fill_id for f in order.fills}
+        # Book any fills we have not seen yet. The set is built from a query
+        # rather than ``order.fills``: that relationship is loaded once and
+        # cached, so a second poll of a partially-filled order would see a stale
+        # empty collection and re-insert a fill it had already booked.
+        seen = set(self.session.scalars(select(Fill.broker_fill_id).where(Fill.order_id == order.id)).all())
         new_qty = ZERO
         for bf in bo.fills:
             if bf.fill_id in seen:
@@ -541,6 +544,11 @@ class OrderManager:
         if to_status is E.OrderStatus.CANCELED:
             order.canceled_at = utcnow()
         self._event(order, event_type, from_status, to_status, message=message, source=source)
+        # Sessions run with autoflush off, so the duplicate-detection queries in
+        # submit() read the database directly. Without this flush a status change
+        # made earlier in the same transaction would be invisible to them, and a
+        # rejected order would keep blocking the next decision for that symbol.
+        self.session.flush()
         return True
 
     def _event(

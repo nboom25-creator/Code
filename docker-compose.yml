@@ -1,0 +1,141 @@
+# AegisQuant — full local stack.
+#
+#   cp .env.example .env      # then edit AEGIS_SECRET_KEY at minimum
+#   docker compose up --build
+#   docker compose exec backend python -m aegisquant.cli seed --years 4 --cycles 1
+#   open http://localhost:5173
+#
+# Everything runs in PAPER mode with the simulated data provider by default.
+# LIVE mode is not reachable from this file: it needs AEGIS_LIVE_TRADING_ENABLED
+# set deliberately, real broker credentials, and the in-app activation gate.
+
+name: aegisquant
+
+x-backend-env: &backend-env
+  AEGIS_ENV_NAME: ${AEGIS_ENV_NAME:-development}
+  AEGIS_MODE: ${AEGIS_MODE:-PAPER}
+  AEGIS_DATABASE_URL: postgresql+psycopg2://aegis:${POSTGRES_PASSWORD:-aegis}@postgres:5432/aegisquant
+  AEGIS_REDIS_URL: redis://redis:6379/0
+  AEGIS_SECRET_KEY: ${AEGIS_SECRET_KEY:?set AEGIS_SECRET_KEY in .env}
+  AEGIS_BOOTSTRAP_ADMIN_EMAIL: ${AEGIS_BOOTSTRAP_ADMIN_EMAIL:-admin@aegisquant.local}
+  AEGIS_BOOTSTRAP_ADMIN_PASSWORD: ${AEGIS_BOOTSTRAP_ADMIN_PASSWORD:?set AEGIS_BOOTSTRAP_ADMIN_PASSWORD in .env}
+  AEGIS_BROKER: ${AEGIS_BROKER:-mock}
+  AEGIS_PRICE_PROVIDER: ${AEGIS_PRICE_PROVIDER:-fixture}
+  AEGIS_FUNDAMENTALS_PROVIDER: ${AEGIS_FUNDAMENTALS_PROVIDER:-fixture}
+  AEGIS_NEWS_PROVIDER: ${AEGIS_NEWS_PROVIDER:-fixture}
+  AEGIS_MACRO_PROVIDER: ${AEGIS_MACRO_PROVIDER:-fixture}
+  AEGIS_CALENDAR_PROVIDER: ${AEGIS_CALENDAR_PROVIDER:-static}
+  AEGIS_TIMEZONE: ${AEGIS_TIMEZONE:-America/New_York}
+  AEGIS_LOOP_ENABLED: ${AEGIS_LOOP_ENABLED:-false}
+  AEGIS_LOOP_INTERVAL_SECONDS: ${AEGIS_LOOP_INTERVAL_SECONDS:-900}
+  AEGIS_CORS_ORIGINS: ${AEGIS_CORS_ORIGINS:-http://localhost:5173}
+  # Secrets below are read only if the corresponding provider/broker is selected.
+  AEGIS_ALPACA_KEY_ID: ${AEGIS_ALPACA_KEY_ID:-}
+  AEGIS_ALPACA_SECRET_KEY: ${AEGIS_ALPACA_SECRET_KEY:-}
+  AEGIS_FRED_API_KEY: ${AEGIS_FRED_API_KEY:-}
+  AEGIS_ANTHROPIC_API_KEY: ${AEGIS_ANTHROPIC_API_KEY:-}
+  # Live trading stays off unless the operator sets this explicitly. The backend
+  # refuses to start in LIVE mode without it.
+  AEGIS_LIVE_TRADING_ENABLED: ${AEGIS_LIVE_TRADING_ENABLED:-false}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aegis}
+      POSTGRES_DB: aegisquant
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegisquant"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # Runs migrations to completion, then exits. Everything else waits for it, so
+  # no service ever talks to a half-migrated schema.
+  migrate:
+    build:
+      context: ./backend
+    environment: *backend-env
+    command: ["python", "-m", "aegisquant.cli", "migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+    environment: *backend-env
+    command: ["python", "-m", "aegisquant.cli", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Durable job execution: ingestion, backtests, reconciliation, post-trade
+  # reviews. acks_late + prefetch 1 are set in the Celery config, so a worker
+  # crash re-queues the task instead of losing it.
+  worker:
+    build:
+      context: ./backend
+    environment: *backend-env
+    command: ["python", "-m", "aegisquant.cli", "worker", "--concurrency", "2"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Periodic trigger for the autonomous loop. Idle unless AEGIS_LOOP_ENABLED is
+  # true, so a fresh stack never starts trading on its own.
+  scheduler:
+    build:
+      context: ./backend
+    environment: *backend-env
+    command: ["python", "-m", "aegisquant.cli", "scheduler"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

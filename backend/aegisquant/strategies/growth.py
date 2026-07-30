@@ -573,9 +573,7 @@ class EarningsAcceleration(Strategy):
         for score, symbol, inputs in scored[: self.meta.max_positions]:
             vol = ctx.value(symbol, "realized_vol_63") or 0.35
             margin_text = (
-                _pct(inputs["gross_margin_delta_yoy"])
-                if inputs["gross_margin_delta_yoy"] is not None
-                else "flat"
+                _pct(inputs["gross_margin_delta_yoy"]) if inputs["gross_margin_delta_yoy"] is not None else "flat"
             )
             strength = self._clip01(score / best if best > 0 else 0)
             confidence = self._confidence_from(

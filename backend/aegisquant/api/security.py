@@ -239,6 +239,12 @@ def get_rate_limiter() -> RateLimiter:
     return _RATE_LIMITER
 
 
+def reset_rate_limiter() -> None:
+    """Drop the process-wide limiter. Used between tests and after a config reload."""
+    global _RATE_LIMITER
+    _RATE_LIMITER = None
+
+
 # ---------------------------------------------------------------------------
 def authenticate(session: Session, email: str, password: str) -> tuple[User | None, str | None]:
     """Verify credentials. Returns ``(user, error)``; the error is deliberately vague."""

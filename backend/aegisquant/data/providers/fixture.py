@@ -291,8 +291,18 @@ class FixtureProvider(
         out: list[BarRecord] = []
         cal = {c.session_date: c for c in build_calendar(start, end)}
         horizon = sessions[-1]
+        now = utcnow()
         for i, d in enumerate(sessions):
             if d < start or d > end:
+                continue
+            calendar_day = cal.get(d)
+            early = bool(calendar_day.early_close) if calendar_day is not None else False
+            bar_close = as_of_from_bar_close(d, early=early)
+            # A daily bar does not exist until its session has closed. Emitting
+            # today's bar mid-session would hand the consumer a close that has
+            # not happened — the same look-ahead the rest of the platform is
+            # built to prevent — and the validator rightly rejects it.
+            if bar_close > now:
                 continue
             # Emit RAW prices: the continuous path is scaled up by the product of
             # split ratios still ahead of this date, so a split produces a real
@@ -313,12 +323,10 @@ class FixtureProvider(
             lo = max(0.01, min(lo, open_, close))
             hi = max(hi, open_, close)
             vol = float(volumes[i]) / factor  # share counts scale inversely to price
-            calendar_day = cal.get(d)
-            early = bool(calendar_day.early_close) if calendar_day is not None else False
             out.append(
                 BarRecord(
                     symbol=symbol,
-                    ts=as_of_from_bar_close(d, early=early),
+                    ts=bar_close,
                     open=D(round(open_, 4)),
                     high=D(round(hi, 4)),
                     low=D(round(lo, 4)),
@@ -329,7 +337,7 @@ class FixtureProvider(
                     timeframe=timeframe,
                     provenance=self.provenance(
                         symbol,
-                        as_of_from_bar_close(d, early=early),
+                        bar_close,
                         # Always RAW, whatever was requested: the simulator's
                         # canonical output is unadjusted, and mislabelling it
                         # would make the consumer double-count splits.
@@ -393,6 +401,12 @@ class FixtureProvider(
         for year in range(EPOCH.year, end_year + 1):
             if rng.random() < 0.18:
                 ex = date(year, int(rng.integers(2, 12)), int(rng.integers(1, 28)))
+                # A real ex-date is always a trading day. Left on a weekend, the
+                # price discontinuity prints on the following Monday while the
+                # action is dated Sunday, and the validator then reports a
+                # perfectly good split as an unexplained 67% move.
+                while ex.weekday() >= 5:
+                    ex += timedelta(days=1)
                 ratio = float(rng.choice([2.0, 3.0, 4.0, 10.0], p=[0.55, 0.2, 0.2, 0.05]))
                 out.append((ex, ratio))
         return tuple(out)

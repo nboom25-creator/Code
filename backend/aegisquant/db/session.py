@@ -90,11 +90,27 @@ def session_scope() -> Iterator[Session]:
 
 
 def get_session() -> Generator[Session, None, None]:
-    """FastAPI dependency. Commits on success, rolls back on exception."""
+    """FastAPI dependency. Commits on success and on a deliberate HTTP error.
+
+    A 4xx ``HTTPException`` is a decision the handler reached, not a failure, and
+    the handler has usually written the audit trail *for* that decision — a
+    failed login, a refused live-mode activation, a rejected approval. Rolling
+    those back would erase exactly the records an operator needs. Genuine
+    exceptions, and any 5xx, still roll back so a half-applied change is never
+    persisted.
+    """
+    from fastapi import HTTPException
+
     session = get_session_factory()()
     try:
         yield session
         session.commit()
+    except HTTPException as exc:
+        if exc.status_code < 500:
+            session.commit()
+        else:
+            session.rollback()
+        raise
     except Exception:
         session.rollback()
         raise

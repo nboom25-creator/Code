@@ -72,7 +72,9 @@ def opportunities(
             return {
                 "as_of": latest_at.isoformat(),
                 "source": "last_cycle",
-                "using_synthetic_data": any(r.is_synthetic for r in rows),
+                "using_synthetic_data": (
+                    any(r.is_synthetic for r in rows) or get_settings().price_provider == "fixture"
+                ),
                 "candidates": [_opportunity_out(r) for r in rows],
             }
 

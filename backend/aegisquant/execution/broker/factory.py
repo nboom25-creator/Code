@@ -33,6 +33,7 @@ def build_broker(kind: str | None = None) -> Broker:
         # report an empty account and reconciliation would "helpfully" zero out
         # every stored position. Rehydrating from the database keeps the paper
         # account coherent across restarts, which is what a real broker does.
+        broker.autorefresh = True  # type: ignore[attr-defined]
         _rehydrate_mock(broker)
         return broker
     if kind == "alpaca":
@@ -70,6 +71,7 @@ def _rehydrate_mock(broker: Any) -> None:
 
         with session_scope() as session:
             mode = current_mode()
+            broker.positions.clear()
             for symbol in session.scalars(select(Instrument.symbol)):
                 bar = latest_bar(session, symbol)
                 if bar is not None and bar.close > 0:
@@ -116,6 +118,11 @@ def get_broker(kind: str | None = None) -> Broker:
         broker = build_broker(key)
         _CACHE[key] = broker
         log.info("broker_ready", broker=broker.name, is_paper=broker.is_paper, mode=settings.mode.value)
+    elif getattr(broker, "autorefresh", False):
+        # A cached simulator would otherwise drift from the database once another
+        # process (the scheduler, a worker) traded — which showed up as an account
+        # reporting full cash while holding positions. Re-read on each handout.
+        _rehydrate_mock(broker)
     return broker
 
 

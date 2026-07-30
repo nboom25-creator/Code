@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import enum
 
+from aegisquant.config import Mode as _ConfigMode
+
 
 class StrEnum(str, enum.Enum):
     def __str__(self) -> str:  # pragma: no cover - trivial
@@ -86,10 +88,11 @@ _OPEN = {
 }
 
 
-class Mode(StrEnum):
-    BACKTEST = "BACKTEST"
-    PAPER = "PAPER"
-    LIVE = "LIVE"
+#: Re-exported rather than redefined. Two structurally identical ``Mode`` enums
+#: would compare unequal under ``is``, and the mock-broker guard in the broker
+#: factory is written as ``settings.mode is Mode.LIVE`` — with two classes that
+#: check could silently pass and let a simulator stand in for a real account.
+Mode = _ConfigMode
 
 
 class DecisionAction(StrEnum):

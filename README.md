@@ -1,380 +1,233 @@
-# Autonomous Trading Bot
+# AegisQuant
 
-A rule-based, autonomous trading bot for US stocks/ETFs built on
-[Alpaca](https://alpaca.markets/). It runs technical strategies (moving-average
-crossover, RSI mean-reversion) through a risk-managed execution engine, and
-ships with an offline backtester so you can validate a strategy on historical
-data before risking a cent.
+An autonomous, auditable research-and-execution platform for US equities and
+ETFs. It researches a universe, argues both sides of every trade, sizes inside
+hard limits, executes through a broker, reconciles what it thinks it owns against
+what it actually owns, and writes down enough that you can reconstruct any
+decision months later.
 
-> **⚠️ Safety first.** The bot trades **paper money by default**. Live trading
-> with real funds is gated behind an explicit `mode: live` config flag *and* a
-> `LIVE_TRADING_CONFIRM=I_UNDERSTAND_THE_RISK` environment variable. Algorithmic
-> trading can lose money quickly. Nothing here is financial advice. Start on
-> paper, understand the code, and only risk money you can afford to lose.
+> **Paper trading by default. Live trading is off and hard to turn on.** Reaching
+> live requires seven independent conditions including a separate environment
+> flag, a promotion gate, an in-app confirmation and a typed phrase. The platform
+> never falls back from paper to live: a misconfiguration is a startup failure,
+> not a downgrade.
+>
+> **The default data is simulated.** Every screen says so, permanently. Backtested
+> and simulated results are hypothetical and are not a track record. Nothing here
+> is financial advice, and no level of performance is promised anywhere in the
+> code or in these docs.
 
-## Features
+---
 
-- **Strategies** — rule-based SMA crossover, RSI mean-reversion, MACD crossover,
-  Bollinger breakout, plus an optional **ML signal layer** (scikit-learn
-  random-forest on engineered features). All behind one registry for easy
-  extension.
-- **Backtesting engine** — simulate a strategy over historical bars with no
-  look-ahead, realistic position sizing, commission/slippage hooks, intrabar
-  **stop-loss / take-profit** exits, and metrics (total return, Sharpe, max
-  drawdown, win rate).
-- **Optimization & validation** — grid-search strategy parameters and run
-  **walk-forward (out-of-sample) validation** to catch over-fitting before it
-  costs you.
-- **Risk management** — per-trade risk sizing, max open positions, max position
-  size, daily loss limit, stop-loss/take-profit, and a global kill switch.
-- **Live execution** — autonomous loop with broker-managed **bracket orders**
-  (stop + take-profit attached at entry) so protective exits hold even if the
-  bot goes offline.
-- **Notifications & dashboard** — log/Slack/Discord webhook alerts on trades and
-  daily P&L, plus a self-contained **HTML report** with an inline equity curve.
-- **Paper/live gating** — paper trading is the default; live requires two
-  independent confirmations.
-- **Tested + CI** — 58 offline unit tests; GitHub Actions runs them on Python
-  3.10–3.12 on every push.
+## What it actually does
+
+One structural commitment shapes everything:
+
+> A language model may research, summarise, critique and explain. A
+> **deterministic risk engine** decides what gets sent to a broker.
+
+So the system is layered by *authority*. Strategies and models **propose**; a pure
+function with ~30 named checks **disposes**; the OMS executes only what was
+approved. There is no code path from a strategy, the API, or an LLM to
+`broker.submit_order` that bypasses it.
+
+| Area | What is built |
+|---|---|
+| **Data** | 6 provider interfaces, a deterministic market simulator, yfinance / Alpaca / FRED adapters, 13 validators, full provenance on every record |
+| **Features** | 108-definition registry with units, expected ranges, dependencies, availability delays and versions; point-in-time-safe market, fundamental, macro and news features |
+| **Strategies** | 12 strategies in 4 families behind one interface, plus a bounded ensemble allocator |
+| **Backtesting** | Event-driven engine; signal at close, fill at next open; spread, square-root impact, partial fills, commissions, gap-through stops; walk-forward, purged CV, Monte Carlo, block bootstrap, stress tests, acceptance screening |
+| **Risk** | Deterministic engine with final authority: ~30 checks, 5 sizing methods, a 4-stage defensive ladder, kill switch, quarantine, flatten, read-only mode |
+| **Execution** | Idempotent client order IDs, an enforced state machine, partial fills, cancel-and-replace, triple duplicate defence, broker reconciliation |
+| **Autonomy** | A 15-step cycle, every step recorded with its outcome |
+| **Governance** | Promotion gate (paper → live-eligible), live-mode gate, append-only audit |
+| **UI** | 8 operator screens: Overview, Portfolio, Opportunities, Strategy Lab, Execution Monitor, Risk Centre, Decision Journal, Settings |
+| **Tests** | 439 backend tests + 17 frontend tests; lint, types, migration-drift check, and an end-to-end paper simulation in CI |
+
+Full detail: **[Architecture](docs/architecture.md)** ·
+**[Data sources](docs/data-sources.md)** ·
+**[Risk controls](docs/risk-controls.md)** ·
+**[Deployment](docs/deployment.md)** ·
+**[Runbook](docs/runbook.md)** ·
+**[Testing](docs/testing.md)** ·
+**[Deferred features](docs/deferred-features.md)**
+
+---
 
 ## Quick start
 
+### Docker Compose
+
 ```bash
-# 1. Install
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# 2. Configure credentials (paper keys from https://alpaca.markets/)
 cp .env.example .env
-# edit .env with your Alpaca paper API key/secret
 
-# 3. Run the test suite (no network needed)
-pytest
+# Two values are required. Generate the secret:
+#   python -c "import secrets; print(secrets.token_urlsafe(48))"
+# Set AEGIS_SECRET_KEY and AEGIS_BOOTSTRAP_ADMIN_PASSWORD in .env.
 
-# 4. Backtest a strategy on synthetic data (no network needed)
-python -m trading_bot backtest --synthetic --strategy sma_crossover
+docker compose up --build
 
-# 5. Backtest on real data + write an HTML dashboard
-python -m trading_bot backtest --symbols AAPL,MSFT --strategy rsi_reversion \
-    --start 2022-01-01 --end 2023-01-01 --report report.html
+# Load the demo environment: 4 years of simulated history for 32 symbols,
+# in-sample and out-of-sample backtests, and two autonomous cycles.
+docker compose exec backend python -m aegisquant.cli seed --years 4 --cycles 2
+```
 
-# 6. Optimize parameters, then validate out-of-sample
-python -m trading_bot optimize --synthetic --strategy macd_crossover --top 5
-python -m trading_bot walkforward --synthetic --strategy sma_crossover
+Open <http://localhost:5173> and sign in with `AEGIS_BOOTSTRAP_ADMIN_EMAIL` /
+`AEGIS_BOOTSTRAP_ADMIN_PASSWORD` (default email `admin@aegisquant.local`).
 
-# 7. Run live against the PAPER account
-python -m trading_bot run
+### Without Docker
+
+```bash
+# Backend
+cd backend
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+export AEGIS_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+export AEGIS_BOOTSTRAP_ADMIN_PASSWORD="pick-something-long"
+export AEGIS_DATABASE_URL="postgresql+psycopg2://aegis:aegis@localhost:5432/aegisquant"
+export AEGIS_REDIS_URL="redis://localhost:6379/0"
+
+aegisquant migrate
+aegisquant seed --years 4 --cycles 2
+aegisquant serve --port 8000
+
+# Frontend, second terminal
+cd frontend && npm ci && npm run dev
+```
+
+No PostgreSQL to hand? `export AEGIS_DATABASE_URL="sqlite:///aegis.db"` works for
+a look around, and is what the test suite uses.
+
+### Your first backtest
+
+```bash
+aegisquant backtest --start 2021-01-01 --end 2024-12-31 --phase in_sample --validate
+```
+
+Or use **Strategy Lab** in the UI: pick a window, pick strategies, run. Results are
+labelled by phase — in-sample, validation, out-of-sample, paper — and never mixed.
+The acceptance screen states its verdict and its reasons.
+
+### Start paper trading
+
+```bash
+# One cycle now, so you can read what it decided before letting it run:
+aegisquant loop-once
+
+# Read the reasoning: UI → Journal, or
+curl -b cookies.txt localhost:8000/api/journal | jq '.[0]'
+
+# When you are satisfied, enable the scheduler:
+export AEGIS_LOOP_ENABLED=true
+aegisquant scheduler
+```
+
+The loop reviews existing positions *before* considering new entries, and refuses
+to trade when a health check, the regime gate or a loss limit says not to. A cycle
+that does nothing is a normal outcome.
+
+---
+
+## Repository layout
+
+```
+backend/
+  aegisquant/          the platform (84 modules)
+  alembic/             migrations, verified against PostgreSQL in CI
+  tests/               439 tests: unit, integration, end-to-end paper simulation
+frontend/
+  src/                 React + TypeScript operator dashboard
+docs/                  architecture, data, risk, deployment, runbook, testing
+docker-compose.yml     postgres, redis, migrate, backend, worker, scheduler, frontend
+src/trading_bot/       the earlier standalone agent — see docs/legacy-trading-bot.md
 ```
 
 ## Commands
 
-| Command       | What it does                                                  |
-| ------------- | ------------------------------------------------------------ |
-| `backtest`    | Backtest a strategy (`--synthetic` or real data); `--report` |
-| `optimize`    | Grid-search strategy parameters, ranked by a metric          |
-| `walkforward` | Walk-forward out-of-sample validation across folds           |
-| `run`         | Run the autonomous engine (`--once` for a single cycle)      |
-| `status`      | Show account equity and open positions                       |
-
-### Strategies
-
-`sma_crossover`, `rsi_reversion`, `macd_crossover`, `bollinger_breakout`, and
-`ml` (requires `pip install scikit-learn`).
-
-### Notifications
-
-Set `NOTIFY_WEBHOOK_URL` in `.env` to a Slack or Discord incoming-webhook URL to
-receive trade and daily-P&L alerts. Unset, alerts just go to the log.
-
-## Configuration
-
-Edit `config.yaml`. Key fields:
-
-| Field                       | Meaning                                              |
-| --------------------------- | ---------------------------------------------------- |
-| `mode`                      | `paper` (default) or `live`                          |
-| `symbols`                   | List of tickers to trade                             |
-| `strategy.name`             | `sma_crossover` or `rsi_reversion`                   |
-| `risk.max_position_pct`     | Max % of equity in a single position                 |
-| `risk.risk_per_trade_pct`   | % of equity risked per trade (drives position size)  |
-| `risk.max_open_positions`   | Cap on concurrent positions                          |
-| `risk.daily_loss_limit_pct` | Halt trading after this daily drawdown               |
-
-Secrets (API keys) live in `.env`, never in `config.yaml`.
-
-## Project layout
-
-```
-src/trading_bot/
-  config.py       # config + env loading
-  indicators.py   # technical indicators (pure pandas/numpy)
-  strategy.py     # strategy base class + rule-based implementations
-  ml_strategy.py  # optional ML signal layer (scikit-learn, self-registering)
-  risk.py         # risk manager / guardrails
-  portfolio.py    # in-memory portfolio for backtesting
-  backtest.py     # backtesting engine + metrics + stop/take-profit
-  optimize.py     # grid search + walk-forward validation
-  data.py         # historical/live data provider
-  broker.py       # Alpaca broker wrapper (paper/live, bracket orders)
-  engine.py       # live trading loop
-  notify.py       # log / webhook notifications
-  report.py       # HTML dashboard generation
-  cli.py          # command-line entry point
-  agent/          # autonomous LLM agent (Research-then-Decide loop)
-    schemas.py    #   structured outputs per cognitive phase (Pydantic)
-    tools.py      #   perception + deep-research tools; driver-only execute_order
-    guardrails.py #   hardcoded 5% sizing / 2% drawdown / bracket stops
-    llm.py        #   Claude (Opus 4.8) + offline HeuristicLLM (same interface)
-    cognition.py  #   five-phase driver + entry & position-review loops
-    research.py   #   screener + SEC EDGAR + Firecrawl + sim providers
-    sentiment.py  #   local lexicon sentiment scorer
-    regime.py     #   market risk-on/off filter (scales new-entry exposure)
-    portfolio_risk.py # account-wide caps (cash buffer / sector / # positions)
-    account_rules.py  # limit-order cost model + PDT + wash-sale rules
-    backtest_agent.py # point-in-time backtest of the whole agent over history
-    ledger.py     #   persistent trade ledger (FIFO closed-trade matching)
-    performance.py#   realized P&L metrics + attribution by profile/confidence
-    paper_sim.py  #   in-memory simulated paper broker
-    audit.py      #   logs/YYYY-MM-DD.md transparency trail
-    runner.py     #   daily / cron runner + drawdown circuit breaker
-CLAUDE.md         # the agent's permanent system manual
-tests/            # offline unit tests
-.github/workflows/ci.yml  # CI: pytest on Python 3.10–3.12
+```bash
+aegisquant migrate                   # schema to head
+aegisquant seed --years 4 --cycles 2 # demo environment (simulated data)
+aegisquant ingest --symbols NVDA,MSFT --days 400
+aegisquant backtest --start … --end … --validate
+aegisquant validate --purged-cv --sensitivity
+aegisquant loop-once [--no-ingest]   # one autonomous cycle
+aegisquant scheduler                 # the loop on an interval
+aegisquant worker --concurrency 2    # durable jobs
+aegisquant reconcile                 # broker vs local
+aegisquant promote-check             # promotion gate per strategy
+aegisquant live-preflight            # what stands between here and live
+aegisquant metrics --prometheus
+aegisquant serve --port 8000
 ```
 
-## Autonomous LLM agent (Research-then-Decide)
-
-On top of the rule-based engine there's an optional **agentic layer** driven by
-Claude (`claude-opus-4-8`) that runs a strict, multi-step cognitive loop:
-
-```
-Perception → Cognitive Planning → Reflection (bull/bear) → Action → Memory/Audit
-```
+## Running the checks
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...   # required for the agent
-python -m trading_bot agent           # runs one daily cycle per watchlist symbol
+cd backend
+ruff format --check . && ruff check . && mypy aegisquant && pytest -q
+
+cd ../frontend
+npm run typecheck && npm run test && npm run build
 ```
 
-**Design principle — the LLM proposes, deterministic code disposes.** The model
-gets three *read-only* tools (`get_market_bars`, `get_company_news`,
-`get_portfolio_state`) to drive Perception, and emits a *structured* decision at
-each phase (validated by Pydantic via the Structured Outputs API). It is **never**
-given the `execute_order` tool. Every proposed trade is then run through a
-hardcoded guardrail layer before the harness — not the model — executes:
+---
 
-- **5% max position size** — buys are resized down to ≤5% of equity, rejected
-  if that rounds below one share.
-- **1% ADV liquidity cap** — a buy is also capped at 1% of average daily volume so
-  the position can be exited; if that rounds below one share the name is too
-  illiquid and the trade is rejected. Often binds tighter than the 5% cap on
-  thin small/micro-caps.
-- **2% daily drawdown circuit breaker** — trading halts for the day and alerts.
-- **HOLD on bad data** — if perception fails/returns empty data, the cycle
-  short-circuits to HOLD and logs a system exception (no LLM call to decide).
+## The parts worth knowing about
 
-No amount of prompt injection or hallucinated reasoning can place an unsafe or
-oversized trade, because the limits live in `agent/guardrails.py`, not the prompt.
+**Point-in-time correctness is a boundary, not a habit.** One object,
+`MarketView.at(as_of)`, decides what was knowable at an instant, and every
+feature, strategy and backtest reads through it. Fundamentals appear at their
+filing time, not their period end. News appears when published. Macro appears at
+its release. Prices are stored **unadjusted**, because a vendor's back-adjusted
+series already reflects splits that had not happened yet — look-ahead baked into
+the data. The test suite attacks this four ways, including a deliberately cheating
+"oracle" feature that the same harness catches.
 
-Every cycle is written to `logs/YYYY-MM-DD.md` — data seen, reasoning, both the
-bull and bear case, the decision, the guardrail verdict, and the action taken —
-for complete transparency. The agent's permanent operating manual is
-[`CLAUDE.md`](CLAUDE.md), loaded as its system prompt.
+**Never full Kelly.** The Kelly fraction defaults to 0.25 and is capped at 0.5 by
+validation. Full Kelly maximises growth only under perfectly known probabilities,
+and every probability here is an estimate.
 
-To run it nightly, wire `python -m trading_bot agent` into cron or the project's
-session-start hook. The agent layer is fully unit-tested offline (no API key
-needed) via a scripted LLM and in-memory broker/data fakes.
+**Stops are not guaranteed prices.** A gap through a stop fills at the gapped
+open. A backtester that fills stops at the stop systematically understates tail
+risk.
 
-### Execution quality + account rules
+**Explanations are rendered from the record, not written about it.** The
+end-to-end test re-runs the narrator from the stored decision row and asserts the
+output is character-identical. An LLM may only *rewrite* that text, and the
+rewrite is discarded unless its numbers are a subset of the original.
 
-How orders are actually placed and tracked (configurable under `execution:` in
-`config.yaml`):
+**Winners are not sold at an arbitrary percentage.** A position is trimmed when
+its *thesis* weakens and exited when it is invalidated, or when a risk limit
+binds. Pyramiding into winners requires open profit; averaging down has no code
+path.
 
-- **Limit orders** — entries/exits are price-protected limit orders ("buy now but
-  never pay more than X"), not blind market orders. The limit reaches at most
-  `limit_slippage_pct` through the current price. Buys still attach the bracket
-  stop/take-profit.
-- **Cost model** — recorded (dry-run) fills assume a little adverse slippage
-  (`est_slippage_pct`) so the performance ledger isn't optimistic.
-- **Pattern Day Trader (PDT) rule** — on a sub-$25k account the bot blocks a 4th
-  same-day round trip in a rolling window, which would otherwise restrict the
-  account.
-- **Wash-sale avoidance** — it won't rebuy a name it sold at a loss within the
-  last `wash_sale_days` (default 30), preserving the tax loss.
+**Simulated data is never presentable as real.** Every synthetic record is flagged
+at the provenance level, the API exposes the flag, and the UI banner has no
+dismiss control.
 
-Both account rules read the trade ledger and are enforced in code before any
-order is placed; each can be toggled off in config.
+---
 
-### Portfolio-level risk caps
+## Before you trade real money
 
-Per-trade caps aren't enough — ten small longs in the same sector are really one
-big bet. Account-wide limits (configurable under `portfolio:` in `config.yaml`)
-prevent that:
+Read [the runbook](docs/runbook.md) and [risk controls](docs/risk-controls.md)
+first. Then, at minimum:
 
-- **Cash buffer** — stay at most `max_invested_pct` invested (default 90%).
-- **Sector cap** — at most `max_sector_pct` of equity in any one sector (30%).
-- **Max positions** — hold at most `max_positions` names at once (10).
+1. Run on **real** data (`AEGIS_PRICE_PROVIDER=yfinance` or `alpaca`) — results on
+   the simulator prove the pipeline works, not that a strategy does.
+2. Backtest with genuine out-of-sample separation and read the acceptance verdict.
+3. Paper trade for at least the promotion gate's window, and confirm paper
+   tracking error against the backtest is inside tolerance. If paper does not
+   resemble the backtest, the backtest is wrong.
+4. Pass the promotion gate: `aegisquant promote-check`.
+5. Pass preflight: `aegisquant live-preflight`.
+6. Set `AEGIS_LIVE_MAX_ALLOCATION_USD` small. It bounds your worst case.
+7. Know where the kill switch is before you need it.
 
-Each run the agent snapshots current holdings (with sectors from the research
-layer), and every new buy is capped by the remaining sector/total headroom — or
-skipped entirely when a sector or the cash buffer is full, or the position count
-is maxed. Sectors are only enforced when the research layer is configured;
-otherwise the cash-buffer and position-count caps still apply.
+Algorithmic trading can lose money quickly. Start on paper, understand the code,
+and risk only what you can afford to lose.
 
-### Conviction + volatility position sizing
+## Licence and status
 
-Instead of a flat 5% on every trade, the harness sizes each entry by **how
-confident the agent is** and **how volatile the stock is**:
-
-```
-target = 5% cap  ×  confidence (0–1)  ×  calmness (referenceATR / stockATR, ≤1)
-```
-
-A high-conviction idea in a calm stock approaches the full cap; a low-conviction
-idea in a jumpy stock gets a small slice — so positions carry more even risk.
-Volatility comes from **ATR** (now reported by `get_market_bars`). The model only
-chooses direction + conviction; the **code decides the dollar size**, and that
-size is still clamped by every hard cap (5% / 1% ADV / regime) afterward — it can
-only shrink a position, never grow it past the limits. The audit log shows the
-math (model proposal vs risk-sized target).
-
-### Market regime filter (risk-on / risk-off)
-
-Before taking *new* exposure, the agent assesses the broad market (a benchmark vs
-its long-term trend, plus volatility) and scales new-entry size accordingly:
-
-```bash
-python -m trading_bot regime            # live (yfinance)
-python -m trading_bot regime --sim      # offline demo
-```
-
-- **risk_on** (clearly above trend, calm) → full size (×1.0)
-- **neutral** (near trend, or elevated vol) → half size (×0.5)
-- **risk_off** (below trend) → **no new entries** (×0.0) — manage-only mode
-
-The multiplier scales the position-size cap for entries and ADDs; **exits and
-trims always run** so the agent can de-risk in bad tape. Set the benchmark with
-`benchmark:` in `config.yaml` (default `SPY`).
-
-### Position management + performance attribution
-
-The agent doesn't just open positions — each run it **reviews what it holds**
-first (HOLD / TRIM / EXIT / ADD), then considers new entries. Every fill is
-written to a persistent **trade ledger** (`logs/ledger.jsonl`) with the cap
-profile and the agent's stated confidence, so outcomes can be measured:
-
-```bash
-python -m trading_bot performance              # all modes
-python -m trading_bot performance --mode paper # paper account only
-```
-
-The report gives realized P&L, win rate, expectancy, profit factor, and max
-drawdown — **broken down by cap profile and by confidence bucket**, so you can
-see whether the small-cap engine adds value and whether the agent's conviction
-actually predicts winners. This is the feedback loop that makes the bot a
-learning system instead of a black box.
-
-### Backtesting the agent
-
-Beyond backtesting individual rule strategies, you can backtest the **whole
-agent** — its regime gate, research, reviews, sizing, and every guardrail — over
-historical days:
-
-```bash
-# Synthetic data (offline, deterministic — proves the machinery):
-python -m trading_bot backtest-agent --symbols AAA,BBB,CCC --days 400 --cadence 5
-
-# Real historical prices (needs network access to the data host):
-python -m trading_bot backtest-agent --real --symbols AAPL,MSFT,NVDA \
-    --start 2022-01-01 --end 2023-12-31
-
-# Real prices from local CSV files (no network — works in locked-down envs):
-#   put AAPL.csv, MSFT.csv, NVDA.csv, SPY.csv (date,open,high,low,close,volume) in data/
-python -m trading_bot backtest-agent --csv data/ --symbols AAPL,MSFT,NVDA
-```
-
-**Real-data backtests turn the research layer OFF by default.** Fundamentals and
-news are only available as *today's* snapshot — using them for a past decision is
-look-ahead bias. Historical prices are point-in-time clean, so the real backtest
-trades on price/volume/regime only. (`--research` re-enables it but the results
-are then optimistic; the CLI warns you.)
-
-It replays history one bar at a time with a **point-in-time** data feed (the
-agent only ever sees data up to "now" — no look-ahead), fills orders through a
-simulated broker that honors the bracket stops and marks the account to market
-each day, and runs the real cognitive loop on a configurable cadence. The output
-is an equity curve (total return, Sharpe, max drawdown) plus the full trade
-attribution from the ledger — including the by-confidence breakdown, so you can
-see whether the agent's conviction actually predicts winners. Uses the offline
-`HeuristicLLM` brain so a multi-year backtest runs in seconds with no API cost;
-swap in Claude for a (slower, paid) LLM-driven backtest.
-
-### Safe dry-run (`run_dry_run.py`)
-
-Triggers the entire research loop **exactly once** and **intercepts the final
-`execute_order`** — no trade is ever sent. The proposed trade and its Bull/Bear
-reasoning are written to `logs/YYYY-MM-DD.md`.
-
-```bash
-# Fully offline — synthetic data + local heuristic analyst, zero credentials:
-python run_dry_run.py --offline --sim-data --symbols AAPL,MSFT
-
-# Free live data (yfinance) + offline analyst:
-python run_dry_run.py --offline --symbols AAPL
-
-# Real research with Claude (needs ANTHROPIC_API_KEY in .env):
-python run_dry_run.py --symbols AAPL
-```
-
-Providers are auto-selected from `.env`, and each is independent:
-
-| Layer        | With keys in `.env`            | Without (default)                 |
-| ------------ | ------------------------------ | --------------------------------- |
-| Market data  | `yfinance` (free, keyless)     | `--sim-data` for synthetic        |
-| News + sentiment | yfinance headlines + local lexicon scorer | synthetic headlines           |
-| Portfolio    | Alpaca **paper** account       | simulated in-memory $100k account |
-| Reasoning    | Claude (`ANTHROPIC_API_KEY`)   | offline `HeuristicLLM`            |
-
-All keys, secrets, and base URLs load strictly from `.env` via `python-dotenv`
-(see [`.env.example`](.env.example)) — nothing is hardcoded.
-
-### Small/micro-cap research
-
-Thinly-covered names get an alternative, high-density research pipeline and a
-discovery mechanism:
-
-```bash
-# Screen for small-caps in a sector (FMP_API_KEY for live, or --sim offline):
-python -m trading_bot discover --sector technology
-
-# Run the agent on screened small-caps (dry-run, fully offline):
-python run_dry_run.py --offline --sim-data --discover healthcare
-```
-
-**Discovery** — `discover_small_caps(sector, market_cap_max=2e9, min_volume=1e5)`
-screens via Financial Modeling Prep (or the simulated screener offline).
-
-**Multi-tiered research fallback** — when generic news returns **fewer than 3
-items**, the harness automatically enriches perception:
-- *Tier 1 — alternative financial data:* SEC EDGAR 10-Q/10-K filings and Form 4
-  insider activity (free; set `SEC_EDGAR_USER_AGENT`), plus fundamentals.
-- *Tier 2 — deep web search:* a developer scraping API (Firecrawl) runs
-  `"{TICKER} stock analysis {Company} earnings guidance"` against niche investor
-  blogs / regional outlets and returns markdown.
-
-**Asymmetric information processing** — each name is classified large- vs
-small-cap (by market cap, or sparse coverage as a proxy). Large-caps weigh macro
-trends + high-volume news sentiment; small-caps **heavily weigh raw fundamentals
-(cash, debt/equity, current ratio, growth) and unusual volume**. If news
-sentiment is empty, the agent does **not** fail — it relies 100% on fundamentals.
-
-Every external provider degrades gracefully to empty on failure, and a full set
-of offline `Sim` providers makes the whole pipeline testable and demonstrable
-with no network or keys.
-
-## Disclaimer
-
-This software is provided for educational purposes and as a starting point. It
-comes with no warranty. You are solely responsible for any trades it places and
-any losses incurred. Markets are risky; automated systems can fail in
-unexpected ways. **Always start with paper trading.**
+Personal research software. No warranty, no guarantee of any performance level,
+and no financial advice.
