@@ -62,9 +62,7 @@ def get_engine() -> Engine:
 def get_session_factory() -> sessionmaker[Session]:
     global _SessionFactory
     if _SessionFactory is None:
-        _SessionFactory = sessionmaker(
-            bind=get_engine(), autoflush=False, autocommit=False, expire_on_commit=False
-        )
+        _SessionFactory = sessionmaker(bind=get_engine(), autoflush=False, autocommit=False, expire_on_commit=False)
     return _SessionFactory
 
 
@@ -106,14 +104,14 @@ def get_session() -> Generator[Session, None, None]:
 
 def create_all() -> None:
     """Create the schema directly (tests / SQLite demo). Production uses Alembic."""
-    from aegisquant.db.base import Base
     from aegisquant.db import models  # noqa: F401  (register mappers)
+    from aegisquant.db.base import Base
 
     Base.metadata.create_all(bind=get_engine())
 
 
 def drop_all() -> None:
-    from aegisquant.db.base import Base
     from aegisquant.db import models  # noqa: F401
+    from aegisquant.db.base import Base
 
     Base.metadata.drop_all(bind=get_engine())

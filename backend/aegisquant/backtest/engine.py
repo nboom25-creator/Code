@@ -53,8 +53,7 @@ from aegisquant.strategies.ensemble import (
     allocate,
 )
 from aegisquant.strategies.registry import build_all, get_strategy
-from aegisquant.utils.money import D, ZERO, money, safe_div
-from aegisquant.utils.timeutil import ensure_utc
+from aegisquant.utils.money import ZERO, D, safe_div
 
 log = get_logger(__name__)
 
@@ -242,23 +241,17 @@ class BacktestEngine:
     # ------------------------------------------------------------------
     def run(self) -> BacktestResult:
         started = time.monotonic()
-        sessions = [
-            ts for ts in self.view.sessions() if self.config.start <= ts.date() <= self.config.end
-        ]
+        sessions = [ts for ts in self.view.sessions() if self.config.start <= ts.date() <= self.config.end]
         if len(sessions) < 30:
-            self.result.diagnostics["error"] = (
-                f"only {len(sessions)} sessions in range — not enough data to backtest"
-            )
+            self.result.diagnostics["error"] = f"only {len(sessions)} sessions in range — not enough data to backtest"
             return self.result
 
         bench = self.config.benchmark.upper()
-        self.result.uses_synthetic_data = any(
-            s.synthetic for s in self.view.series.values()
-        )
+        self.result.uses_synthetic_data = any(s.synthetic for s in self.view.series.values())
 
         prev_equity = self.config.starting_cash
-        last_rebalance_index = -10**9
-        last_review_index = -10**9
+        last_rebalance_index = -(10**9)
+        last_review_index = -(10**9)
 
         for index, ts in enumerate(sessions):
             session_date = ts.date()
@@ -303,8 +296,14 @@ class BacktestEngine:
                     last_rebalance_index = index
 
             # ---- 7. record ----
-            gross = sum((abs(p.market_value(prices.get(p.symbol, p.avg_price))) for p in self.positions.values()), ZERO)
-            net = sum((p.market_value(prices.get(p.symbol, p.avg_price)) for p in self.positions.values()), ZERO)
+            gross = sum(
+                (abs(p.market_value(prices.get(p.symbol, p.avg_price))) for p in self.positions.values()),
+                ZERO,
+            )
+            net = sum(
+                (p.market_value(prices.get(p.symbol, p.avg_price)) for p in self.positions.values()),
+                ZERO,
+            )
             self.result.dates.append(session_date)
             self.result.equity.append(float(equity))
             self.result.cash.append(float(self.cash))
@@ -387,13 +386,11 @@ class BacktestEngine:
         bench = self.config.benchmark.upper()
         price = prices.get(bench) or (self._bar(bench, session_date) or {}).get("close")
         if price is None or price <= 0:
-            return self.result.benchmark[-1] if self.result.benchmark else self.config.starting_cash
+            return D(self.result.benchmark[-1]) if self.result.benchmark else self.config.starting_cash
         if self._benchmark_shares == 0:
             self._benchmark_shares = self.config.starting_cash / price
         else:
-            adjustment = (
-                self.view.series[bench].adjustment if bench in self.view.series else "raw"
-            )
+            adjustment = self.view.series[bench].adjustment if bench in self.view.series else "raw"
             if adjustment == "raw":
                 for action in self.view.corporate_actions.get(bench, []):
                     if action["ex_date"] == session_date and action["action_type"] == "split" and action["ratio"]:
@@ -413,9 +410,7 @@ class BacktestEngine:
         ``split_dividend`` both already in the price; apply neither
         """
         for symbol, pos in list(self.positions.items()):
-            adjustment = (
-                self.view.series[symbol].adjustment if symbol in self.view.series else "raw"
-            )
+            adjustment = self.view.series[symbol].adjustment if symbol in self.view.series else "raw"
             apply_splits = adjustment == "raw"
             apply_dividends = adjustment in ("raw", "split_only")
             for action in self.view.corporate_actions.get(symbol, []):
@@ -623,9 +618,7 @@ class BacktestEngine:
         if pos.quantity <= 0:
             self.positions.pop(order.symbol, None)
 
-    def _close_position(
-        self, symbol: str, price: Decimal, session_date: date, reason: str, full: bool = True
-    ) -> None:
+    def _close_position(self, symbol: str, price: Decimal, session_date: date, reason: str, full: bool = True) -> None:
         pos = self.positions.get(symbol)
         if pos is None or pos.quantity <= 0:
             return
@@ -678,8 +671,7 @@ class BacktestEngine:
                 if bar["low"] <= trail_level:
                     triggered = (
                         trail_level,
-                        f"trailing stop {pos.trailing_stop_pct:.0%} below the "
-                        f"{pos.peak_price} peak triggered",
+                        f"trailing stop {pos.trailing_stop_pct:.0%} below the {pos.peak_price} peak triggered",
                     )
             if triggered is None:
                 continue
@@ -795,9 +787,7 @@ class BacktestEngine:
             cash=float(self.cash),
         )
 
-    def _review_positions(
-        self, ctx: StrategyContext, prices: dict[str, Decimal], session_date: date
-    ) -> None:
+    def _review_positions(self, ctx: StrategyContext, prices: dict[str, Decimal], session_date: date) -> None:
         by_key = {s.meta.key: s for s in self.strategies}
         for symbol, pos in list(self.positions.items()):
             state = ctx.positions.get(symbol)
@@ -886,9 +876,7 @@ class BacktestEngine:
             price = prices.get(tp.symbol) or D((self._bar(tp.symbol, session_date) or {}).get("close", 0))
             if price <= 0:
                 continue
-            quantity = quantity_from_weight(
-                tp.delta_weight, equity, price, self.config.cost_model.allow_fractional
-            )
+            quantity = quantity_from_weight(tp.delta_weight, equity, price, self.config.cost_model.allow_fractional)
             if quantity <= 0:
                 continue
             sf = bundle.symbols.get(tp.symbol)
@@ -963,9 +951,8 @@ class BacktestEngine:
             # approve several orders that each fit but collectively breach a limit.
             account.positions[tp.symbol] = PositionSnapshot(
                 symbol=tp.symbol,
-                quantity=verdict.approved_quantity + (
-                    self.positions[tp.symbol].quantity if tp.symbol in self.positions else ZERO
-                ),
+                quantity=verdict.approved_quantity
+                + (self.positions[tp.symbol].quantity if tp.symbol in self.positions else ZERO),
                 market_value=verdict.approved_quantity * price
                 + (account.positions[tp.symbol].market_value if tp.symbol in account.positions else ZERO),
                 avg_entry_price=price,
@@ -1035,15 +1022,11 @@ class BacktestEngine:
             uses_synthetic_data=self.result.uses_synthetic_data,
             estimate_drawdown_probabilities=False,
         )
-        self.result.regime_breakdown = regime_metrics(
-            self.result.dates, self.result.equity, self.result.regimes
-        )
+        self.result.regime_breakdown = regime_metrics(self.result.dates, self.result.equity, self.result.regimes)
         by_strategy: dict[str, dict[str, Any]] = {}
         for trade in self.result.trades:
             key = trade.get("strategy_key") or "unattributed"
-            entry = by_strategy.setdefault(
-                key, {"trades": 0, "net_pnl": 0.0, "wins": 0, "avg_holding_days": 0.0}
-            )
+            entry = by_strategy.setdefault(key, {"trades": 0, "net_pnl": 0.0, "wins": 0, "avg_holding_days": 0.0})
             entry["trades"] += 1
             entry["net_pnl"] += float(trade["net_pnl"])
             entry["wins"] += 1 if float(trade["net_pnl"]) > 0 else 0
@@ -1061,9 +1044,7 @@ class BacktestEngine:
         self.result.diagnostics = {
             "strategy_attribution": by_strategy,
             "final_ensemble_weights": {k: str(v) for k, v in self._strategy_weights.items()},
-            "rejected_order_reasons": dict(
-                sorted(reject_reasons.items(), key=lambda kv: kv[1], reverse=True)[:15]
-            ),
+            "rejected_order_reasons": dict(sorted(reject_reasons.items(), key=lambda kv: kv[1], reverse=True)[:15]),
             "final_positions": len(self.positions),
             "final_cash": float(self.cash),
             "sessions": len(self.result.dates),

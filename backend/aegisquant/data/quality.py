@@ -249,7 +249,11 @@ def validate_bars(
                         symbol,
                         provider,
                         d,
-                        {"return": str(ret), "prev_close": str(prev.close), "close": str(cur.close)},
+                        {
+                            "return": str(ret),
+                            "prev_close": str(prev.close),
+                            "close": str(cur.close),
+                        },
                     )
                 )
             elif abs(z) >= OUTLIER_ROBUST_Z and d not in action_dates:
@@ -282,7 +286,10 @@ def validate_bars(
                         symbol,
                         provider,
                         hard_missing[0],
-                        {"missing": [d.isoformat() for d in hard_missing[:30]], "count": len(hard_missing)},
+                        {
+                            "missing": [d.isoformat() for d in hard_missing[:30]],
+                            "count": len(hard_missing),
+                        },
                     )
                 )
 
@@ -315,9 +322,7 @@ def validate_bars(
     return ValidationResult(accepted=accepted, rejected=rejected, issues=issues)
 
 
-def check_quote_freshness(
-    quote: QuoteRecord, max_age_seconds: int, now: datetime | None = None
-) -> Issue | None:
+def check_quote_freshness(quote: QuoteRecord, max_age_seconds: int, now: datetime | None = None) -> Issue | None:
     now = now or utcnow()
     age = (now - quote.observed_at).total_seconds()
     if age > max_age_seconds:
@@ -385,9 +390,7 @@ def detect_silent_delisting(
     """A symbol whose data simply stopped arriving is treated as possibly delisted."""
     if len(expected_sessions) < min_missing:
         return None
-    last = session.scalar(
-        select(Bar.ts).where(Bar.symbol == symbol.upper()).order_by(Bar.ts.desc()).limit(1)
-    )
+    last = session.scalar(select(Bar.ts).where(Bar.symbol == symbol.upper()).order_by(Bar.ts.desc()).limit(1))
     if last is None:
         return None
     tail = [d for d in expected_sessions if d > last.date()]
@@ -440,17 +443,13 @@ def persist_issues(session: Session, issues: list[Issue]) -> int:
 
 
 def open_issue_summary(session: Session) -> dict[str, Any]:
-    rows = list(
-        session.scalars(select(DataQualityIssue).where(DataQualityIssue.resolved.is_(False)))
-    )
+    rows = list(session.scalars(select(DataQualityIssue).where(DataQualityIssue.resolved.is_(False))))
     by_severity: dict[str, int] = {}
     by_kind: dict[str, int] = {}
     for r in rows:
         by_severity[r.severity.value] = by_severity.get(r.severity.value, 0) + 1
         by_kind[r.kind.value] = by_kind.get(r.kind.value, 0) + 1
-    blocking = sum(
-        1 for r in rows if r.severity in (IssueSeverity.ERROR, IssueSeverity.CRITICAL)
-    )
+    blocking = sum(1 for r in rows if r.severity in (IssueSeverity.ERROR, IssueSeverity.CRITICAL))
     return {
         "open_total": len(rows),
         "blocking": blocking,

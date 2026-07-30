@@ -168,9 +168,7 @@ class CrossSectionalMomentum(Strategy):
                         if (inputs.get("accumulation_20") or 0) > 0.05
                         else []
                     ),
-                    opposing_evidence=[
-                        f"realised volatility {_pct(vol)} annualised — momentum unwinds are sharp"
-                    ]
+                    opposing_evidence=[f"realised volatility {_pct(vol)} annualised — momentum unwinds are sharp"]
                     + (
                         [f"volatility expanding ({inputs['vol_regime']:.2f}x its one-year level)"]
                         if (inputs.get("vol_regime") or 0) > 1.3
@@ -227,9 +225,7 @@ class CrossSectionalMomentum(Strategy):
                 ),
                 signal_inputs=inputs,
             )
-        return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.5, "momentum intact", signal_inputs=inputs
-        )
+        return PositionReview(self.meta.key, position.symbol, "hold", 0.5, "momentum intact", signal_inputs=inputs)
 
 
 class TimeSeriesMomentum(Strategy):
@@ -244,8 +240,7 @@ class TimeSeriesMomentum(Strategy):
         name="Time-Series Momentum",
         family="trend",
         description=(
-            "Holds names whose own 63- and 252-session trends are positive, and stands aside "
-            "in cash when they are not."
+            "Holds names whose own 63- and 252-session trends are positive, and stands aside in cash when they are not."
         ),
         required_features=("trend_63", "trend_252", "realized_vol_63"),
         required_data=("daily bars",),
@@ -365,7 +360,12 @@ class TimeSeriesMomentum(Strategy):
                 signal_inputs=inputs,
             )
         return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.55, "absolute trend intact", signal_inputs=inputs
+            self.meta.key,
+            position.symbol,
+            "hold",
+            0.55,
+            "absolute trend intact",
+            signal_inputs=inputs,
         )
 
 
@@ -494,11 +494,7 @@ class BreakoutFromConsolidation(Strategy):
                     opposing_evidence=[
                         f"false breakouts are common; ATR is {_pct(atr)} so the stop is {_pct(stop)} away"
                     ]
-                    + (
-                        ["no volume-based accumulation to confirm the move"]
-                        if (accumulation or 0) <= 0
-                        else []
-                    ),
+                    + (["no volume-based accumulation to confirm the move"] if (accumulation or 0) <= 0 else []),
                     exit_criteria={
                         "close_below_breakout_pct": self.params["failure_tolerance"],
                         "trailing_stop_pct": self.params["trailing_stop_pct"],
@@ -541,7 +537,12 @@ class BreakoutFromConsolidation(Strategy):
                 signal_inputs=inputs,
             )
         return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.5, "breakout holding above the base", signal_inputs=inputs
+            self.meta.key,
+            position.symbol,
+            "hold",
+            0.5,
+            "breakout holding above the base",
+            signal_inputs=inputs,
         )
 
 
@@ -719,5 +720,10 @@ class SectorLeadership(Strategy):
                 signal_inputs=inputs,
             )
         return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.5, "sector and stock leadership intact", signal_inputs=inputs
+            self.meta.key,
+            position.symbol,
+            "hold",
+            0.5,
+            "sector and stock leadership intact",
+            signal_inputs=inputs,
         )

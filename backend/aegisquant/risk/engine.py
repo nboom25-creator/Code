@@ -34,7 +34,7 @@ from aegisquant.db.enums import (
     Side,
 )
 from aegisquant.logging_setup import get_logger
-from aegisquant.utils.money import D, ZERO, safe_div
+from aegisquant.utils.money import ZERO, D, safe_div
 
 log = get_logger(__name__)
 
@@ -117,9 +117,7 @@ class AccountSnapshot:
         return safe_div(self.equity - self.high_water_mark, self.high_water_mark)
 
     def sector_exposure(self, sector: str) -> Decimal:
-        total = sum(
-            (abs(p.market_value) for p in self.positions.values() if p.sector == sector), ZERO
-        )
+        total = sum((abs(p.market_value) for p in self.positions.values() if p.sector == sector), ZERO)
         return safe_div(total, self.equity)
 
     def strategy_exposure(self, strategy_key: str) -> Decimal:
@@ -222,9 +220,7 @@ class RiskVerdict:
         }
 
     def utilization_map(self) -> dict[str, str]:
-        return {
-            c.name: str(c.utilization) for c in self.checks if c.utilization is not None
-        }
+        return {c.name: str(c.utilization) for c in self.checks if c.utilization is not None}
 
 
 # ---------------------------------------------------------------------------
@@ -268,28 +264,41 @@ class RiskEngine:
         def add(outcome: CheckOutcome) -> None:
             checks.append(outcome)
 
-        def ok(name: str, message: str, observed: Decimal | None = None,
-               limit: Decimal | None = None) -> None:
+        def ok(name: str, message: str, observed: Decimal | None = None, limit: Decimal | None = None) -> None:
             util = safe_div(observed, limit) if (observed is not None and limit) else None
             add(CheckOutcome(name, RiskCheckResult.PASS, message, observed, limit, util))
 
-        def reject(name: str, message: str, observed: Decimal | None = None,
-                   limit: Decimal | None = None, detail: dict[str, Any] | None = None) -> None:
+        def reject(
+            name: str,
+            message: str,
+            observed: Decimal | None = None,
+            limit: Decimal | None = None,
+            detail: dict[str, Any] | None = None,
+        ) -> None:
             util = safe_div(observed, limit) if (observed is not None and limit) else None
             add(CheckOutcome(name, RiskCheckResult.REJECT, message, observed, limit, util, detail or {}))
 
-        def warn(name: str, message: str, observed: Decimal | None = None,
-                 limit: Decimal | None = None) -> None:
+        def warn(name: str, message: str, observed: Decimal | None = None, limit: Decimal | None = None) -> None:
             util = safe_div(observed, limit) if (observed is not None and limit) else None
             add(CheckOutcome(name, RiskCheckResult.WARN, message, observed, limit, util))
 
-        def resize(name: str, message: str, allowed: Decimal, observed: Decimal | None = None,
-                   limit: Decimal | None = None) -> None:
+        def resize(
+            name: str,
+            message: str,
+            allowed: Decimal,
+            observed: Decimal | None = None,
+            limit: Decimal | None = None,
+        ) -> None:
             nonlocal max_quantity
             util = safe_div(observed, limit) if (observed is not None and limit) else None
             add(
                 CheckOutcome(
-                    name, RiskCheckResult.RESIZE, message, observed, limit, util,
+                    name,
+                    RiskCheckResult.RESIZE,
+                    message,
+                    observed,
+                    limit,
+                    util,
                     max_quantity=allowed,
                 )
             )
@@ -379,7 +388,10 @@ class RiskEngine:
                 "trading on unreliable data is not permitted",
             )
         elif intent.data_quality in ("suspect", "stale"):
-            warn("data_quality", f"market data for {intent.symbol} is flagged '{intent.data_quality}'")
+            warn(
+                "data_quality",
+                f"market data for {intent.symbol} is flagged '{intent.data_quality}'",
+            )
         else:
             ok("data_quality", "market data quality is acceptable")
 
@@ -388,8 +400,7 @@ class RiskEngine:
         elif intent.data_age_seconds > L.max_data_age_seconds:
             reject(
                 "data_age",
-                f"price data is {intent.data_age_seconds:.0f}s old, beyond the "
-                f"{L.max_data_age_seconds}s budget",
+                f"price data is {intent.data_age_seconds:.0f}s old, beyond the {L.max_data_age_seconds}s budget",
                 D(intent.data_age_seconds),
                 D(L.max_data_age_seconds),
             )
@@ -425,9 +436,7 @@ class RiskEngine:
         # =================================================================
         day_pnl = account.day_pnl_pct
         if day_pnl <= -L.max_daily_loss_pct:
-            outcome = (
-                RiskCheckResult.WARN if intent.reduce_only else RiskCheckResult.REJECT
-            )
+            outcome = RiskCheckResult.WARN if intent.reduce_only else RiskCheckResult.REJECT
             add(
                 CheckOutcome(
                     "max_daily_loss",
@@ -449,8 +458,7 @@ class RiskEngine:
         if week_pnl <= -L.max_weekly_loss_pct and not intent.reduce_only:
             reject(
                 "max_weekly_loss",
-                f"the account is down {week_pnl:.2%} this week, beyond the "
-                f"{L.max_weekly_loss_pct:.2%} limit",
+                f"the account is down {week_pnl:.2%} this week, beyond the {L.max_weekly_loss_pct:.2%} limit",
                 abs(week_pnl),
                 L.max_weekly_loss_pct,
             )
@@ -461,8 +469,7 @@ class RiskEngine:
         if dd <= -L.max_portfolio_drawdown_pct and not intent.reduce_only:
             reject(
                 "max_drawdown",
-                f"portfolio drawdown {dd:.2%} is at or beyond the "
-                f"{L.max_portfolio_drawdown_pct:.2%} limit",
+                f"portfolio drawdown {dd:.2%} is at or beyond the {L.max_portfolio_drawdown_pct:.2%} limit",
                 abs(dd),
                 L.max_portfolio_drawdown_pct,
             )
@@ -489,8 +496,7 @@ class RiskEngine:
         if account.risk_state in (RiskState.EMERGENCY, RiskState.READ_ONLY) and not intent.reduce_only:
             reject(
                 "risk_state",
-                f"the account is in the {account.risk_state.value} risk state — "
-                "new risk may not be added",
+                f"the account is in the {account.risk_state.value} risk state — new risk may not be added",
             )
         elif account.risk_state is RiskState.DEFENSIVE_2 and not intent.reduce_only:
             reject(
@@ -556,7 +562,12 @@ class RiskEngine:
                     L.min_order_notional,
                 )
             else:
-                ok("min_order_notional", f"notional ${notional:,.2f}", notional, L.min_order_notional)
+                ok(
+                    "min_order_notional",
+                    f"notional ${notional:,.2f}",
+                    notional,
+                    L.min_order_notional,
+                )
 
             # --- max order notional ---
             max_order_value = L.max_order_notional_pct * equity
@@ -571,7 +582,7 @@ class RiskEngine:
                     max_order_value,
                 )
             else:
-                ok("max_order_notional", f"notional within cap", notional, max_order_value)
+                ok("max_order_notional", "notional within cap", notional, max_order_value)
 
             # --- position size ---
             projected_value = existing_value + notional
@@ -607,18 +618,14 @@ class RiskEngine:
             # --- risk per trade (to the stop) ---
             stop_distance = None
             if intent.stop_price and intent.reference_price > 0:
-                stop_distance = abs(
-                    safe_div(intent.reference_price - intent.stop_price, intent.reference_price)
-                )
+                stop_distance = abs(safe_div(intent.reference_price - intent.stop_price, intent.reference_price))
             elif intent.asset_vol:
                 stop_distance = intent.asset_vol / Decimal(4)  # ~one-quarter of annual vol
             if stop_distance and stop_distance > 0:
                 risk_amount = notional * stop_distance
                 max_risk = L.max_risk_per_trade_pct * equity
                 if risk_amount > max_risk:
-                    allowed = (
-                        max_risk / (stop_distance * intent.reference_price)
-                    ).quantize(Decimal("0.000001"))
+                    allowed = (max_risk / (stop_distance * intent.reference_price)).quantize(Decimal("0.000001"))
                     resize(
                         "max_risk_per_trade",
                         f"risking ${risk_amount:,.2f} to the stop exceeds the "
@@ -673,19 +680,21 @@ class RiskEngine:
                     L.max_gross_exposure_pct,
                 )
 
-            projected_net = safe_div(
-                sum((p.market_value for p in account.positions.values()), ZERO) + notional, equity
-            )
+            projected_net = safe_div(sum((p.market_value for p in account.positions.values()), ZERO) + notional, equity)
             if projected_net > L.max_net_exposure_pct:
                 reject(
                     "max_net_exposure",
-                    f"net exposure would reach {projected_net:.1%}, above the "
-                    f"{L.max_net_exposure_pct:.0%} limit",
+                    f"net exposure would reach {projected_net:.1%}, above the {L.max_net_exposure_pct:.0%} limit",
                     projected_net,
                     L.max_net_exposure_pct,
                 )
             else:
-                ok("max_net_exposure", f"net exposure would be {projected_net:.1%}", projected_net, L.max_net_exposure_pct)
+                ok(
+                    "max_net_exposure",
+                    f"net exposure would be {projected_net:.1%}",
+                    projected_net,
+                    L.max_net_exposure_pct,
+                )
 
             # --- cash buffer ---
             projected_cash = account.cash - notional
@@ -703,8 +712,7 @@ class RiskEngine:
                 else:
                     resize(
                         "cash_buffer",
-                        f"the order would leave ${projected_cash:,.2f} in cash, below the "
-                        f"${min_cash:,.2f} buffer",
+                        f"the order would leave ${projected_cash:,.2f} in cash, below the ${min_cash:,.2f} buffer",
                         (headroom / intent.reference_price).quantize(Decimal("0.000001")),
                         safe_div(projected_cash, equity),
                         L.min_cash_buffer_pct,
@@ -724,8 +732,7 @@ class RiskEngine:
                 else:
                     resize(
                         "buying_power",
-                        f"order notional ${notional:,.2f} exceeds buying power "
-                        f"${account.buying_power:,.2f}",
+                        f"order notional ${notional:,.2f} exceeds buying power ${account.buying_power:,.2f}",
                         (account.buying_power / intent.reference_price).quantize(Decimal("0.000001")),
                         notional,
                         account.buying_power,
@@ -768,11 +775,7 @@ class RiskEngine:
             # --- strategy concentration ---
             if intent.strategy_key:
                 strat_value = sum(
-                    (
-                        abs(p.market_value)
-                        for p in account.positions.values()
-                        if p.strategy_key == intent.strategy_key
-                    ),
+                    (abs(p.market_value) for p in account.positions.values() if p.strategy_key == intent.strategy_key),
                     ZERO,
                 )
                 projected_strat = safe_div(strat_value + notional, equity)
@@ -805,9 +808,7 @@ class RiskEngine:
 
             # --- correlated exposure ---
             if intent.correlation_to_book is not None and intent.correlation_to_book > L.correlation_threshold:
-                correlated_value = sum(
-                    (abs(p.market_value) for p in account.positions.values()), ZERO
-                )
+                correlated_value = sum((abs(p.market_value) for p in account.positions.values()), ZERO)
                 projected_corr = safe_div(correlated_value + notional, equity)
                 if projected_corr > L.max_correlated_exposure_pct:
                     headroom_value = (L.max_correlated_exposure_pct * equity) - correlated_value
@@ -838,15 +839,17 @@ class RiskEngine:
                         L.correlation_threshold,
                     )
             else:
-                ok("max_correlated_exposure", "correlation to the existing book is within tolerance")
+                ok(
+                    "max_correlated_exposure",
+                    "correlation to the existing book is within tolerance",
+                )
 
             # --- position count ---
             if intent.symbol.upper() not in account.positions:
                 if len(account.positions) >= L.max_open_positions:
                     reject(
                         "max_open_positions",
-                        f"already holding {len(account.positions)} positions, at the "
-                        f"{L.max_open_positions} limit",
+                        f"already holding {len(account.positions)} positions, at the {L.max_open_positions} limit",
                         D(len(account.positions)),
                         D(L.max_open_positions),
                     )
@@ -893,8 +896,7 @@ class RiskEngine:
             elif intent.adv_usd < L.min_adv_usd:
                 reject(
                     "min_liquidity",
-                    f"{intent.symbol} trades ${intent.adv_usd:,.0f}/day, below the "
-                    f"${L.min_adv_usd:,.0f} minimum",
+                    f"{intent.symbol} trades ${intent.adv_usd:,.0f}/day, below the ${L.min_adv_usd:,.0f} minimum",
                     intent.adv_usd,
                     L.min_adv_usd,
                 )
@@ -943,8 +945,7 @@ class RiskEngine:
             if intent.spread_bps is not None and intent.spread_bps > L.max_spread_bps:
                 reject(
                     "max_spread",
-                    f"the quoted spread is {intent.spread_bps:.0f}bps, above the "
-                    f"{L.max_spread_bps:.0f}bps limit",
+                    f"the quoted spread is {intent.spread_bps:.0f}bps, above the {L.max_spread_bps:.0f}bps limit",
                     intent.spread_bps,
                     L.max_spread_bps,
                 )
@@ -985,9 +986,7 @@ class RiskEngine:
         return self._finalize(intent, checks, max_quantity)
 
     # ------------------------------------------------------------------
-    def _finalize(
-        self, intent: OrderIntent, checks: list[CheckOutcome], max_quantity: Decimal
-    ) -> RiskVerdict:
+    def _finalize(self, intent: OrderIntent, checks: list[CheckOutcome], max_quantity: Decimal) -> RiskVerdict:
         rejections = [c.message for c in checks if c.result is RiskCheckResult.REJECT]
         warnings = [c.message for c in checks if c.result is RiskCheckResult.WARN]
         resized_by = [c.name for c in checks if c.result is RiskCheckResult.RESIZE]
@@ -1000,8 +999,7 @@ class RiskEngine:
 
         if not rejections and approved_qty <= 0:
             rejections.append(
-                "after applying every limit the permitted quantity rounds to zero — "
-                "the order is too small to place"
+                "after applying every limit the permitted quantity rounds to zero — the order is too small to place"
             )
             checks.append(
                 CheckOutcome(
@@ -1038,10 +1036,7 @@ class RiskEngine:
             f"at a reference price of ${intent.reference_price}."
         ]
         if verdict.was_resized:
-            parts.append(
-                f"Quantity was reduced from {verdict.original_quantity} by "
-                f"{', '.join(verdict.resized_by)}."
-            )
+            parts.append(f"Quantity was reduced from {verdict.original_quantity} by {', '.join(verdict.resized_by)}.")
         passed = sum(1 for c in verdict.checks if c.result is RiskCheckResult.PASS)
         parts.append(f"{passed} of {len(verdict.checks)} checks passed cleanly.")
         if verdict.warnings:

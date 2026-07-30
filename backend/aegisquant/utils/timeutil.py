@@ -6,10 +6,10 @@ conversion to the operator's configured timezone happens in the API layer only.
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-UTC = timezone.utc
+UTC = UTC
 NY = ZoneInfo("America/New_York")
 
 # Regular US equity session, in exchange-local time.

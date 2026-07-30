@@ -182,7 +182,11 @@ def roic(pit: PointInTime, symbol: str) -> float | None:
     direct = _val(row, "roic")
     if direct is not None:
         return direct
-    oi, equity, debt = _val(row, "operating_income"), _val(row, "total_equity"), _val(row, "total_debt")
+    oi, equity, debt = (
+        _val(row, "operating_income"),
+        _val(row, "total_equity"),
+        _val(row, "total_debt"),
+    )
     if oi is None or equity is None:
         return None
     invested = equity + (debt or 0.0)

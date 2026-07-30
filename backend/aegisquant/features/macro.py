@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from aegisquant.features.market_view import PointInTime
 from aegisquant.features.market_structure import breadth_above_200sma
+from aegisquant.features.market_view import PointInTime
 
 TEN_YEAR = "DGS10"
 TWO_YEAR = "DGS2"

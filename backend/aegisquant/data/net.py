@@ -208,7 +208,7 @@ def call_with_policy(
         except ProviderRateLimited as exc:
             rate_limited = True
             last_error, status = str(exc), 429
-            delay = exc.retry_after or min(2.0 ** attempts, 30.0)
+            delay = exc.retry_after or min(2.0**attempts, 30.0)
             time.sleep(delay)
         except ProviderError as exc:
             last_error, status = str(exc), exc.status_code
@@ -253,9 +253,7 @@ _FETCH_BUFFER: deque[dict[str, Any]] = deque(maxlen=5000)
 _BUFFER_LOCK = threading.Lock()
 
 
-def _record_fetch(
-    provider: str, endpoint: str, symbol: str | None, outcome: CallOutcome, records: int
-) -> None:
+def _record_fetch(provider: str, endpoint: str, symbol: str | None, outcome: CallOutcome, records: int) -> None:
     from aegisquant.utils.timeutil import utcnow
 
     with _BUFFER_LOCK:

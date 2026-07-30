@@ -212,11 +212,7 @@ def _beta_alpha(
         return None, None, None
     beta = float(np.cov(r, b, ddof=1)[0, 1] / var)
     alpha_daily = float(np.mean(r) - beta * np.mean(b))
-    corr = (
-        float(np.corrcoef(r, b)[0, 1])
-        if float(np.std(r)) > 0 and float(np.std(b)) > 0
-        else None
-    )
+    corr = float(np.corrcoef(r, b)[0, 1]) if float(np.std(r)) > 0 and float(np.std(b)) > 0 else None
     return beta, alpha_daily * TRADING_DAYS, corr
 
 
@@ -234,9 +230,7 @@ def _capture(rets: np.ndarray, bench: np.ndarray, upside: bool) -> float | None:
     return float(np.mean(r[mask]) / bench_mean)
 
 
-def _rolling_window(
-    equity: np.ndarray, dates: list[date], years: int
-) -> dict[str, float | None]:
+def _rolling_window(equity: np.ndarray, dates: list[date], years: int) -> dict[str, float | None]:
     window = years * TRADING_DAYS
     if equity.size <= window:
         return {"available": 0.0, "best": None, "worst": None, "median": None, "mean": None}
@@ -398,9 +392,7 @@ def compute_metrics(
     if benchmark_values and len(benchmark_values) == len(equity_values):
         bench = np.array(benchmark_values, dtype=float)
         bench_rets = _returns(bench)
-        m.benchmark_total_return = (
-            float(bench[-1] / bench[0] - 1.0) if bench[0] > 0 else None
-        )
+        m.benchmark_total_return = float(bench[-1] / bench[0] - 1.0) if bench[0] > 0 else None
         m.benchmark_cagr = _cagr(float(bench[0]), float(bench[-1]), m.years)
         bdd, *_ = _max_drawdown_window(bench, dates)
         m.benchmark_max_drawdown = bdd
@@ -430,22 +422,15 @@ def compute_metrics(
     m.trade_stats = compute_trade_stats(trades or [])
     m.capacity_estimate_usd = capacity_estimate_usd
     if m.trade_stats.total_costs and m.starting_equity > 0:
-        m.transaction_cost_bps_of_equity = float(
-            m.trade_stats.total_costs / m.starting_equity * 10_000
-        )
+        m.transaction_cost_bps_of_equity = float(m.trade_stats.total_costs / m.starting_equity * 10_000)
 
     if rets.size < 60:
-        m.notes.append(
-            f"only {rets.size} return observations — risk statistics are not yet meaningful"
-        )
+        m.notes.append(f"only {rets.size} return observations — risk statistics are not yet meaningful")
     if m.trade_stats.trades < 30:
-        m.notes.append(
-            f"only {m.trade_stats.trades} closed trades — trade statistics have wide error bars"
-        )
+        m.notes.append(f"only {m.trade_stats.trades} closed trades — trade statistics have wide error bars")
     if uses_synthetic_data:
         m.notes.append(
-            "COMPUTED FROM SIMULATED DATA — these figures describe a simulated market, "
-            "not real historical performance"
+            "COMPUTED FROM SIMULATED DATA — these figures describe a simulated market, not real historical performance"
         )
     return m
 

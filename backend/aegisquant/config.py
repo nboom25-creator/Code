@@ -183,6 +183,7 @@ class Settings(BaseSettings):
     loop_enabled: bool = True
     loop_interval_seconds: int = 300
     universe_max_symbols: int = 250
+    benchmark_symbol: str = "SPY"
     max_candidates_per_cycle: int = 40
     llm_enabled: bool = False  # narration is deterministic unless explicitly enabled
     anthropic_api_key: SecretStr | None = None
@@ -257,6 +258,7 @@ class Settings(BaseSettings):
             "live_max_allocation_usd": str(self.live_max_allocation_usd),
             "loop_enabled": self.loop_enabled,
             "loop_interval_seconds": self.loop_interval_seconds,
+            "benchmark_symbol": self.benchmark_symbol,
             "llm_enabled": self.llm_enabled,
             "using_synthetic_data": self.price_provider == "fixture",
             "version": __import__("aegisquant").__version__,

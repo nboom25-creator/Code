@@ -18,7 +18,7 @@ from decimal import Decimal
 from typing import Any
 
 from aegisquant.config import RiskLimits
-from aegisquant.utils.money import D, ZERO, safe_div
+from aegisquant.utils.money import ZERO, safe_div
 
 
 @dataclass(slots=True)
@@ -58,9 +58,7 @@ def fixed_fractional_weight(
     if stop_distance is None or stop_distance <= 0:
         return max_weight * Decimal("0.5"), "no stop distance; halved the cap"
     weight = safe_div(risk_per_trade, stop_distance)
-    return min(weight, max_weight), (
-        f"risk {risk_per_trade} / stop distance {stop_distance:.4f}"
-    )
+    return min(weight, max_weight), (f"risk {risk_per_trade} / stop distance {stop_distance:.4f}")
 
 
 def fractional_kelly_weight(
@@ -85,13 +83,9 @@ def fractional_kelly_weight(
     p = max(Decimal("0"), min(Decimal("1"), confidence))
     full_kelly = p - (Decimal(1) - p) / payoff_ratio
     if full_kelly <= 0:
-        return ZERO, (
-            f"Kelly is non-positive (p={p}, payoff={payoff_ratio:.2f}) — no edge to bet"
-        )
+        return ZERO, (f"Kelly is non-positive (p={p}, payoff={payoff_ratio:.2f}) — no edge to bet")
     weight = full_kelly * kelly_fraction
-    return min(weight, max_weight), (
-        f"{kelly_fraction} x Kelly({p}, payoff {payoff_ratio:.2f}) = {full_kelly:.4f}"
-    )
+    return min(weight, max_weight), (f"{kelly_fraction} x Kelly({p}, payoff {payoff_ratio:.2f}) = {full_kelly:.4f}")
 
 
 def conviction_multiplier(confidence: Decimal, floor: Decimal) -> Decimal:
@@ -99,9 +93,7 @@ def conviction_multiplier(confidence: Decimal, floor: Decimal) -> Decimal:
     return max(floor, min(Decimal(1), confidence))
 
 
-def correlation_multiplier(
-    avg_correlation_to_book: Decimal | None, threshold: Decimal
-) -> tuple[Decimal, str]:
+def correlation_multiplier(avg_correlation_to_book: Decimal | None, threshold: Decimal) -> tuple[Decimal, str]:
     """Shrink a position that duplicates risk already in the book."""
     if avg_correlation_to_book is None:
         return Decimal(1), "correlation to the book unknown"
@@ -143,25 +135,19 @@ def size_position(
         base, note = volatility_target_weight(asset_vol, limits.target_portfolio_vol_pct, hard_cap)
     elif method == "fixed_fractional":
         base, note = fixed_fractional_weight(
-            limits.max_risk_per_trade_pct, stop_distance or (asset_vol or ZERO) * Decimal("0.5"), hard_cap
+            limits.max_risk_per_trade_pct,
+            stop_distance or (asset_vol or ZERO) * Decimal("0.5"),
+            hard_cap,
         )
     elif method == "fractional_kelly":
-        base, note = fractional_kelly_weight(
-            expected_return, downside, confidence, limits.kelly_fraction, hard_cap
-        )
+        base, note = fractional_kelly_weight(expected_return, downside, confidence, limits.kelly_fraction, hard_cap)
         if base <= 0:  # no Kelly edge -> fall back to a conservative vol target
-            base, note2 = volatility_target_weight(
-                asset_vol, limits.target_portfolio_vol_pct / 2, hard_cap
-            )
+            base, note2 = volatility_target_weight(asset_vol, limits.target_portfolio_vol_pct / 2, hard_cap)
             note = f"{note}; fell back to half-volatility target ({note2})"
     elif method == "risk_parity":
-        base, note = volatility_target_weight(
-            asset_vol, limits.target_portfolio_vol_pct / Decimal(4), hard_cap
-        )
+        base, note = volatility_target_weight(asset_vol, limits.target_portfolio_vol_pct / Decimal(4), hard_cap)
     elif method == "conviction_weighted":
-        vol_weight, note = volatility_target_weight(
-            asset_vol, limits.target_portfolio_vol_pct, hard_cap
-        )
+        vol_weight, note = volatility_target_weight(asset_vol, limits.target_portfolio_vol_pct, hard_cap)
         kelly_weight, kelly_note = fractional_kelly_weight(
             expected_return, downside, confidence, limits.kelly_fraction, hard_cap
         )
@@ -178,9 +164,7 @@ def size_position(
     components["method_note"] = note
 
     conviction = conviction_multiplier(confidence, limits.conviction_size_floor)
-    corr_mult, corr_note = correlation_multiplier(
-        avg_correlation_to_book, limits.correlation_threshold
-    )
+    corr_mult, corr_note = correlation_multiplier(avg_correlation_to_book, limits.correlation_threshold)
     components["conviction_multiplier"] = str(conviction)
     components["correlation_multiplier"] = str(corr_mult)
     components["correlation_note"] = corr_note
@@ -220,9 +204,7 @@ def size_position(
     )
 
 
-def quantity_from_weight(
-    weight: Decimal, equity: Decimal, price: Decimal, allow_fractional: bool
-) -> Decimal:
+def quantity_from_weight(weight: Decimal, equity: Decimal, price: Decimal, allow_fractional: bool) -> Decimal:
     """Convert a target weight into a share quantity, always rounding down."""
     if price <= 0 or equity <= 0 or weight <= 0:
         return ZERO
@@ -248,21 +230,16 @@ def pyramid_increment(
     """
     if unrealized_pnl_pct < min_profit_to_add:
         return ZERO, (
-            f"position is up {unrealized_pnl_pct:.1%}; adds require at least "
-            f"{min_profit_to_add:.0%} of open profit"
+            f"position is up {unrealized_pnl_pct:.1%}; adds require at least {min_profit_to_add:.0%} of open profit"
         )
     headroom = target_weight - current_weight
     if headroom <= 0:
         return ZERO, "already at or above the target weight"
     increment = (headroom * max_add_fraction).quantize(Decimal("0.000001"))
-    return increment, (
-        f"adding {increment} of the {headroom} headroom (position up {unrealized_pnl_pct:.1%})"
-    )
+    return increment, (f"adding {increment} of the {headroom} headroom (position up {unrealized_pnl_pct:.1%})")
 
 
-def reduction_fraction(
-    thesis_status: str, severity: Decimal = Decimal("0.5")
-) -> tuple[Decimal, str]:
+def reduction_fraction(thesis_status: str, severity: Decimal = Decimal("0.5")) -> tuple[Decimal, str]:
     """Fraction of a position to sell as a thesis deteriorates."""
     if thesis_status == "invalidated":
         return Decimal(1), "thesis invalidated — exit the full position"
@@ -271,9 +248,7 @@ def reduction_fraction(
     return ZERO, "thesis intact — no reduction"
 
 
-def dynamic_cash_target(
-    regime_scale: Decimal, min_cash_buffer: Decimal, drawdown: Decimal
-) -> tuple[Decimal, str]:
+def dynamic_cash_target(regime_scale: Decimal, min_cash_buffer: Decimal, drawdown: Decimal) -> tuple[Decimal, str]:
     """Target cash weight. Cash is an active allocation, not a leftover.
 
     ``drawdown`` is expected to be negative.

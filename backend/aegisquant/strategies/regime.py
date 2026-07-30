@@ -131,18 +131,16 @@ def classify(
         )
 
     if previous is Regime.RISK_ON:
-        regime = Regime.RISK_ON if score > RISK_ON_EXIT else (
-            Regime.RISK_OFF if score < RISK_OFF_ENTRY else Regime.NEUTRAL
+        regime = (
+            Regime.RISK_ON if score > RISK_ON_EXIT else (Regime.RISK_OFF if score < RISK_OFF_ENTRY else Regime.NEUTRAL)
         )
     elif previous is Regime.RISK_OFF:
-        regime = Regime.RISK_OFF if score < RISK_OFF_EXIT else (
-            Regime.RISK_ON if score > RISK_ON_ENTRY else Regime.NEUTRAL
+        regime = (
+            Regime.RISK_OFF if score < RISK_OFF_EXIT else (Regime.RISK_ON if score > RISK_ON_ENTRY else Regime.NEUTRAL)
         )
     else:  # neutral or unknown
         regime = (
-            Regime.RISK_ON
-            if score > RISK_ON_ENTRY
-            else (Regime.RISK_OFF if score < RISK_OFF_ENTRY else Regime.NEUTRAL)
+            Regime.RISK_ON if score > RISK_ON_ENTRY else (Regime.RISK_OFF if score < RISK_OFF_ENTRY else Regime.NEUTRAL)
         )
 
     return RegimeAssessment(
@@ -154,9 +152,7 @@ def classify(
     )
 
 
-def _explain(
-    regime: Regime, score: float, c: dict[str, float | None], previous: Regime | None
-) -> str:
+def _explain(regime: Regime, score: float, c: dict[str, float | None], previous: Regime | None) -> str:
     bits: list[str] = []
     trend = c.get("index_trend_200")
     if trend is not None:
@@ -197,9 +193,7 @@ def previous_regime(session: Session) -> Regime | None:
     return row.regime if row else None
 
 
-def assess(
-    bundle: FeatureBundle, session: Session | None = None, previous: Regime | None = None
-) -> RegimeAssessment:
+def assess(bundle: FeatureBundle, session: Session | None = None, previous: Regime | None = None) -> RegimeAssessment:
     if previous is None and session is not None:
         previous = previous_regime(session)
     return classify(bundle.market, previous)
@@ -221,7 +215,7 @@ def persist(session: Session, as_of: datetime, assessment: RegimeAssessment) -> 
         "breadth": dec("breadth_above_200sma"),
         "credit": dec("credit_spread_change_63d"),
         "yield_curve": dec("yield_curve_slope"),
-        "components": {k: v for k, v in c.items()},
+        "components": dict(c),
         "explanation": assessment.explanation,
     }
     if existing is not None:

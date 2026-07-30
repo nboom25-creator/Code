@@ -18,9 +18,12 @@ NAMING_CONVENTION = {
     "pk": "pk_%(table_name)s",
 }
 
-Money = Numeric(24, 10, asdecimal=True)
-Qty = Numeric(24, 10, asdecimal=True)
-Ratio = Numeric(18, 10, asdecimal=True)
+# Precision 30 scale 10 holds values up to 10^20, which comfortably covers
+# revenue and enterprise-value aggregates for the largest listed companies.
+# Numeric(24, 10) caps out at 10^14 and overflows on those.
+Money = Numeric(30, 10, asdecimal=True)
+Qty = Numeric(28, 10, asdecimal=True)
+Ratio = Numeric(24, 10, asdecimal=True)
 UtcDateTime = DateTime(timezone=True)
 
 
@@ -35,9 +38,5 @@ class Base(DeclarativeBase):
 
 
 class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(
-        UtcDateTime, server_default=func.now(), nullable=False, index=True
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        UtcDateTime, onupdate=func.now(), nullable=True
-    )
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, server_default=func.now(), nullable=False, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(UtcDateTime, onupdate=func.now(), nullable=True)

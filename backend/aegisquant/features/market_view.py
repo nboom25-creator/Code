@@ -156,7 +156,9 @@ class MacroSeries:
     def latest(self, as_of: datetime) -> float | None:
         idx = int(
             np.searchsorted(
-                self.observed_at, np.datetime64(ensure_utc(as_of).replace(tzinfo=None)), side="right"
+                self.observed_at,
+                np.datetime64(ensure_utc(as_of).replace(tzinfo=None)),
+                side="right",
             )
         )
         if idx == 0:
@@ -168,7 +170,9 @@ class MacroSeries:
     def history(self, as_of: datetime, n: int) -> np.ndarray:
         idx = int(
             np.searchsorted(
-                self.observed_at, np.datetime64(ensure_utc(as_of).replace(tzinfo=None)), side="right"
+                self.observed_at,
+                np.datetime64(ensure_utc(as_of).replace(tzinfo=None)),
+                side="right",
             )
         )
         vals = self.values[max(0, idx - n) : idx]
@@ -263,9 +267,7 @@ class MarketView:
                 low=np.array([float(r.low) for r in rows]),
                 close=np.array([float(r.close) for r in rows]),
                 volume=np.array([float(r.volume) for r in rows]),
-                quality_ok=np.array(
-                    [r.data_quality.value not in ("corrupt", "suspect") for r in rows], dtype=bool
-                ),
+                quality_ok=np.array([r.data_quality.value not in ("corrupt", "suspect") for r in rows], dtype=bool),
                 synthetic=any(r.is_synthetic for r in rows),
                 adjustment=adjustment,
                 split_factor=split_factor,
@@ -273,17 +275,17 @@ class MarketView:
 
         fundamentals: dict[str, list[FundamentalRow]] = {}
         if include_fundamentals:
-            for row in session.scalars(
+            for fund in session.scalars(
                 select(Fundamental)
                 .where(Fundamental.symbol.in_(wanted))
                 .order_by(Fundamental.symbol, Fundamental.observed_at)
             ):
-                fundamentals.setdefault(row.symbol, []).append(
+                fundamentals.setdefault(fund.symbol, []).append(
                     FundamentalRow(
-                        period_end=row.period_end,
-                        observed_at=ensure_utc(row.observed_at),
+                        period_end=fund.period_end,
+                        observed_at=ensure_utc(fund.observed_at),
                         values={
-                            f: (float(getattr(row, f)) if getattr(row, f) is not None else None)
+                            f: (float(getattr(fund, f)) if getattr(fund, f) is not None else None)
                             for f in FUNDAMENTAL_FIELDS
                         },
                     )
@@ -291,42 +293,38 @@ class MarketView:
 
         news: dict[str, list[NewsRow]] = {}
         if include_news:
-            for row in session.scalars(
-                select(NewsItem)
-                .where(NewsItem.symbol.in_(wanted))
-                .order_by(NewsItem.symbol, NewsItem.published_at)
+            for item in session.scalars(
+                select(NewsItem).where(NewsItem.symbol.in_(wanted)).order_by(NewsItem.symbol, NewsItem.published_at)
             ):
-                tags = tuple((row.event_tags or {}).get("tags", ())) if row.event_tags else ()
-                news.setdefault(row.symbol or "", []).append(
+                tags = tuple((item.event_tags or {}).get("tags", ())) if item.event_tags else ()
+                news.setdefault(item.symbol or "", []).append(
                     NewsRow(
-                        published_at=ensure_utc(row.published_at),
-                        headline=row.headline,
-                        sentiment=float(row.sentiment) if row.sentiment is not None else None,
-                        uncertainty=float(row.uncertainty) if row.uncertainty is not None else None,
-                        credibility=(
-                            float(row.source_credibility) if row.source_credibility is not None else None
-                        ),
-                        novelty=float(row.novelty) if row.novelty is not None else None,
+                        published_at=ensure_utc(item.published_at),
+                        headline=item.headline,
+                        sentiment=float(item.sentiment) if item.sentiment is not None else None,
+                        uncertainty=float(item.uncertainty) if item.uncertainty is not None else None,
+                        credibility=(float(item.source_credibility) if item.source_credibility is not None else None),
+                        novelty=float(item.novelty) if item.novelty is not None else None,
                         tags=tags,
-                        source=row.source,
+                        source=item.source,
                     )
                 )
 
         macro: dict[str, MacroSeries] = {}
         grouped: dict[str, list[EconomicIndicator]] = {}
-        for row in session.scalars(
+        for econ in session.scalars(
             select(EconomicIndicator).order_by(EconomicIndicator.series_id, EconomicIndicator.observed_at)
         ):
-            grouped.setdefault(row.series_id, []).append(row)
-        for sid, rows in grouped.items():
+            grouped.setdefault(econ.series_id, []).append(econ)
+        for sid, econ_rows in grouped.items():
             macro[sid] = MacroSeries(
                 series_id=sid,
                 observed_at=np.array(
-                    [np.datetime64(ensure_utc(r.observed_at).replace(tzinfo=None)) for r in rows],
+                    [np.datetime64(ensure_utc(r.observed_at).replace(tzinfo=None)) for r in econ_rows],
                     dtype="datetime64[ns]",
                 ),
-                observation_date=np.array([np.datetime64(r.observation_date) for r in rows]),
-                values=np.array([float(r.value) if r.value is not None else np.nan for r in rows]),
+                observation_date=np.array([np.datetime64(r.observation_date) for r in econ_rows]),
+                values=np.array([float(r.value) if r.value is not None else np.nan for r in econ_rows]),
             )
 
         sectors: dict[str, str] = {}
@@ -518,11 +516,7 @@ class PointInTime:
         return self.view.instruments.get(symbol.upper(), {})
 
     def corporate_actions(self, symbol: str, since_days: int | None = None) -> list[dict[str, Any]]:
-        rows = [
-            a
-            for a in self.view.corporate_actions.get(symbol.upper(), [])
-            if a["ex_date"] <= self.as_of.date()
-        ]
+        rows = [a for a in self.view.corporate_actions.get(symbol.upper(), []) if a["ex_date"] <= self.as_of.date()]
         if since_days is not None:
             cutoff = (self.as_of - timedelta(days=since_days)).date()
             rows = [a for a in rows if a["ex_date"] >= cutoff]

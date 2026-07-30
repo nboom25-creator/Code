@@ -36,7 +36,13 @@ from aegisquant.db.base import Base, Money, Qty, Ratio, TimestampMixin, UtcDateT
 
 def _enum(py_enum: type, name: str) -> Enum:
     """Store enums as their string values (portable across backends)."""
-    return Enum(py_enum, name=name, native_enum=False, length=40, values_callable=lambda x: [e.value for e in x])
+    return Enum(
+        py_enum,
+        name=name,
+        native_enum=False,
+        length=40,
+        values_callable=lambda x: [e.value for e in x],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -82,9 +88,7 @@ class Instrument(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     symbol: Mapped[str] = mapped_column(String(24), unique=True, index=True)
     name: Mapped[str | None] = mapped_column(String(255))
-    asset_class: Mapped[E.AssetClass] = mapped_column(
-        _enum(E.AssetClass, "asset_class"), default=E.AssetClass.EQUITY
-    )
+    asset_class: Mapped[E.AssetClass] = mapped_column(_enum(E.AssetClass, "asset_class"), default=E.AssetClass.EQUITY)
     exchange: Mapped[str | None] = mapped_column(String(40))
     sector: Mapped[str | None] = mapped_column(String(80), index=True)
     industry: Mapped[str | None] = mapped_column(String(120))
@@ -99,9 +103,7 @@ class Instrument(Base, TimestampMixin):
     renamed_to: Mapped[str | None] = mapped_column(String(24))
     first_seen_on: Mapped[date | None] = mapped_column(Date)
     listed_on: Mapped[date | None] = mapped_column(Date)
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "data_quality"), default=E.DataQuality.OK
-    )
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "data_quality"), default=E.DataQuality.OK)
     provider: Mapped[str | None] = mapped_column(String(40))
     meta: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
@@ -145,12 +147,8 @@ class Bar(Base):
     vwap: Mapped[Decimal | None] = mapped_column(Money)
     provider: Mapped[str] = mapped_column(String(40))
     retrieved_at: Mapped[datetime] = mapped_column(UtcDateTime)
-    adjustment: Mapped[E.Adjustment] = mapped_column(
-        _enum(E.Adjustment, "adjustment"), default=E.Adjustment.RAW
-    )
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "bar_quality"), default=E.DataQuality.OK
-    )
+    adjustment: Mapped[E.Adjustment] = mapped_column(_enum(E.Adjustment, "adjustment"), default=E.Adjustment.RAW)
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "bar_quality"), default=E.DataQuality.OK)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
@@ -171,19 +169,35 @@ class Quote(Base):
     observed_at: Mapped[datetime] = mapped_column(UtcDateTime, index=True)
     retrieved_at: Mapped[datetime] = mapped_column(UtcDateTime)
     provider: Mapped[str] = mapped_column(String(40))
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "quote_quality"), default=E.DataQuality.OK
-    )
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "quote_quality"), default=E.DataQuality.OK)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    @property
+    def mid(self) -> Decimal | None:
+        if self.bid and self.ask and self.bid > 0 and self.ask > 0:
+            return (self.bid + self.ask) / 2
+        return self.last
+
+    @property
+    def spread_bps(self) -> Decimal | None:
+        """Quoted spread in basis points, or ``None`` when there is no two-sided quote."""
+        mid = self.mid
+        if self.bid and self.ask and mid and mid > 0 and self.ask >= self.bid:
+            return (self.ask - self.bid) / mid * Decimal(10_000)
+        return None
+
+    @property
+    def age_seconds(self) -> float | None:
+        if self.observed_at is None:
+            return None
+        from aegisquant.utils.timeutil import ensure_utc, utcnow
+
+        return (utcnow() - ensure_utc(self.observed_at)).total_seconds()
 
 
 class CorporateAction(Base):
     __tablename__ = "corporate_actions"
-    __table_args__ = (
-        UniqueConstraint(
-            "symbol", "action_type", "ex_date", name="uq_corp_action_symbol_type_date"
-        ),
-    )
+    __table_args__ = (UniqueConstraint("symbol", "action_type", "ex_date", name="uq_corp_action_symbol_type_date"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), index=True)
@@ -196,9 +210,7 @@ class CorporateAction(Base):
     provider: Mapped[str] = mapped_column(String(40))
     retrieved_at: Mapped[datetime] = mapped_column(UtcDateTime)
     observed_at: Mapped[datetime] = mapped_column(UtcDateTime)
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "ca_quality"), default=E.DataQuality.OK
-    )
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "ca_quality"), default=E.DataQuality.OK)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
@@ -210,9 +222,7 @@ class Fundamental(Base):
     """
 
     __tablename__ = "fundamentals"
-    __table_args__ = (
-        UniqueConstraint("symbol", "period_end", "provider", name="uq_fund_symbol_period"),
-    )
+    __table_args__ = (UniqueConstraint("symbol", "period_end", "provider", name="uq_fund_symbol_period"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), index=True)
@@ -222,9 +232,7 @@ class Fundamental(Base):
     observed_at: Mapped[datetime] = mapped_column(UtcDateTime, index=True)
     retrieved_at: Mapped[datetime] = mapped_column(UtcDateTime)
     provider: Mapped[str] = mapped_column(String(40))
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "fund_quality"), default=E.DataQuality.OK
-    )
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "fund_quality"), default=E.DataQuality.OK)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 
     revenue: Mapped[Decimal | None] = mapped_column(Money)
@@ -281,17 +289,13 @@ class NewsItem(Base):
     source_credibility: Mapped[Decimal | None] = mapped_column(Ratio)  # [0, 1]
     novelty: Mapped[Decimal | None] = mapped_column(Ratio)  # [0, 1]
     event_tags: Mapped[dict[str, Any] | None] = mapped_column(JSON)
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "news_quality"), default=E.DataQuality.OK
-    )
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "news_quality"), default=E.DataQuality.OK)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class EconomicIndicator(Base):
     __tablename__ = "economic_indicators"
-    __table_args__ = (
-        UniqueConstraint("series_id", "observation_date", "provider", name="uq_econ_series_date"),
-    )
+    __table_args__ = (UniqueConstraint("series_id", "observation_date", "provider", name="uq_econ_series_date"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     series_id: Mapped[str] = mapped_column(String(40), index=True)
@@ -302,9 +306,7 @@ class EconomicIndicator(Base):
     observed_at: Mapped[datetime] = mapped_column(UtcDateTime)  # release timestamp
     retrieved_at: Mapped[datetime] = mapped_column(UtcDateTime)
     provider: Mapped[str] = mapped_column(String(40))
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "econ_quality"), default=E.DataQuality.OK
-    )
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "econ_quality"), default=E.DataQuality.OK)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
@@ -351,9 +353,7 @@ class FeatureSnapshot(Base):
     """Computed feature vector for one symbol at one point in time."""
 
     __tablename__ = "feature_snapshots"
-    __table_args__ = (
-        UniqueConstraint("symbol", "as_of", "registry_version", name="uq_feature_symbol_asof"),
-    )
+    __table_args__ = (UniqueConstraint("symbol", "as_of", "registry_version", name="uq_feature_symbol_asof"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     symbol: Mapped[str] = mapped_column(String(24), index=True)
@@ -361,9 +361,7 @@ class FeatureSnapshot(Base):
     registry_version: Mapped[str] = mapped_column(String(24))
     values: Mapped[dict[str, Any]] = mapped_column(JSON)
     missing: Mapped[dict[str, Any] | None] = mapped_column(JSON)
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "feat_quality"), default=E.DataQuality.OK
-    )
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "feat_quality"), default=E.DataQuality.OK)
     computed_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
@@ -412,9 +410,7 @@ class Opportunity(Base):
     opposing_evidence: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     weaknesses: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     feature_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("feature_snapshots.id"))
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "opp_quality"), default=E.DataQuality.OK
-    )
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "opp_quality"), default=E.DataQuality.OK)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
@@ -602,9 +598,7 @@ class Decision(Base):
     risk_verdict: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     rejection_reason: Mapped[str | None] = mapped_column(Text)
     opportunity_id: Mapped[int | None] = mapped_column(ForeignKey("opportunities.id"))
-    data_quality: Mapped[E.DataQuality] = mapped_column(
-        _enum(E.DataQuality, "dec_quality"), default=E.DataQuality.OK
-    )
+    data_quality: Mapped[E.DataQuality] = mapped_column(_enum(E.DataQuality, "dec_quality"), default=E.DataQuality.OK)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
 
     orders: Mapped[list[Order]] = relationship(back_populates="decision")
@@ -647,9 +641,7 @@ class Order(Base, TimestampMixin):
     symbol: Mapped[str] = mapped_column(String(24), index=True)
     side: Mapped[E.Side] = mapped_column(_enum(E.Side, "order_side"))
     order_type: Mapped[E.OrderType] = mapped_column(_enum(E.OrderType, "order_type"))
-    time_in_force: Mapped[E.TimeInForce] = mapped_column(
-        _enum(E.TimeInForce, "tif"), default=E.TimeInForce.DAY
-    )
+    time_in_force: Mapped[E.TimeInForce] = mapped_column(_enum(E.TimeInForce, "tif"), default=E.TimeInForce.DAY)
     quantity: Mapped[Decimal] = mapped_column(Qty)
     limit_price: Mapped[Decimal | None] = mapped_column(Money)
     stop_price: Mapped[Decimal | None] = mapped_column(Money)
@@ -703,9 +695,7 @@ class OrderEvent(Base):
 
 class Fill(Base):
     __tablename__ = "fills"
-    __table_args__ = (
-        UniqueConstraint("order_id", "broker_fill_id", name="uq_fills_order_brokerfill"),
-    )
+    __table_args__ = (UniqueConstraint("order_id", "broker_fill_id", name="uq_fills_order_brokerfill"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
@@ -775,9 +765,7 @@ class PortfolioSnapshot(Base):
     drawdown_pct: Mapped[Decimal | None] = mapped_column(Ratio)
     open_positions: Mapped[int] = mapped_column(Integer, default=0)
     open_orders: Mapped[int] = mapped_column(Integer, default=0)
-    risk_state: Mapped[E.RiskState] = mapped_column(
-        _enum(E.RiskState, "snap_risk_state"), default=E.RiskState.NORMAL
-    )
+    risk_state: Mapped[E.RiskState] = mapped_column(_enum(E.RiskState, "snap_risk_state"), default=E.RiskState.NORMAL)
     sector_exposure: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     strategy_exposure: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     source: Mapped[str] = mapped_column(String(24), default="broker")
@@ -810,9 +798,7 @@ class SystemState(Base, TimestampMixin):
     kill_switch_engaged_by: Mapped[str | None] = mapped_column(String(255))
     kill_switch_engaged_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     read_only: Mapped[bool] = mapped_column(Boolean, default=False)
-    risk_state: Mapped[E.RiskState] = mapped_column(
-        _enum(E.RiskState, "sys_risk_state"), default=E.RiskState.NORMAL
-    )
+    risk_state: Mapped[E.RiskState] = mapped_column(_enum(E.RiskState, "sys_risk_state"), default=E.RiskState.NORMAL)
     risk_state_reason: Mapped[str | None] = mapped_column(Text)
     cooldown_until: Mapped[datetime | None] = mapped_column(UtcDateTime)
     cooldown_reason: Mapped[str | None] = mapped_column(Text)

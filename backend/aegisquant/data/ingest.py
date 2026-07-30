@@ -57,7 +57,6 @@ from aegisquant.db.models import (
 )
 from aegisquant.db.repo import get_or_create_instrument
 from aegisquant.logging_setup import get_logger
-from aegisquant.utils.timeutil import utcnow
 
 log = get_logger(__name__)
 
@@ -95,9 +94,7 @@ class IngestReport:
 # ---------------------------------------------------------------------------
 def sync_calendar(session: Session, start: date, end: date) -> int:
     prov = calendar_provider()
-    days, outcome = call_with_policy(
-        prov.name, "calendar", lambda: prov.get_calendar(start, end), log_fetch=True
-    )
+    days, outcome = call_with_policy(prov.name, "calendar", lambda: prov.get_calendar(start, end), log_fetch=True)
     if days is None:
         log.error("calendar_sync_failed", error=outcome.error)
         return 0
@@ -142,9 +139,7 @@ def sync_instruments(session: Session, symbols: list[str] | None = None) -> int:
     except ProviderError as exc:
         log.warning("instrument_provider_unavailable", error=exc.message)
         return 0
-    records, outcome = call_with_policy(
-        prov.name, "instruments", lambda: prov.list_instruments(symbols)
-    )
+    records, outcome = call_with_policy(prov.name, "instruments", lambda: prov.list_instruments(symbols))
     if records is None:
         log.warning("instrument_sync_failed", error=outcome.error)
         return 0
@@ -255,9 +250,7 @@ def _upsert_bars(session: Session, instrument: Instrument, bars: list[BarRecord]
     return written
 
 
-def _upsert_actions(
-    session: Session, instrument: Instrument, actions: list[CorporateActionRecord]
-) -> int:
+def _upsert_actions(session: Session, instrument: Instrument, actions: list[CorporateActionRecord]) -> int:
     written = 0
     for a in actions:
         existing = session.scalar(
@@ -296,9 +289,7 @@ def _upsert_actions(
     return written
 
 
-def _upsert_fundamentals(
-    session: Session, instrument: Instrument, records: list[FundamentalRecord]
-) -> int:
+def _upsert_fundamentals(session: Session, instrument: Instrument, records: list[FundamentalRecord]) -> int:
     written = 0
     columns = {c.name for c in Fundamental.__table__.columns}
     for rec in records:
@@ -490,9 +481,7 @@ def ingest_symbol(
     if with_fundamentals:
         try:
             fp = fundamentals_provider()
-            recs, _ = call_with_policy(
-                fp.name, "fundamentals", lambda: fp.get_fundamentals(symbol), symbol=symbol
-            )
+            recs, _ = call_with_policy(fp.name, "fundamentals", lambda: fp.get_fundamentals(symbol), symbol=symbol)
             if recs:
                 report.fundamentals_written += _upsert_fundamentals(session, inst, recs)
         except ProviderError as exc:
@@ -501,16 +490,14 @@ def ingest_symbol(
     if with_news:
         try:
             np_ = news_provider()
-            recs, _ = call_with_policy(
+            news_recs, _ = call_with_policy(
                 np_.name,
                 "news",
-                lambda: np_.get_news(
-                    symbol, start=max(start, end - timedelta(days=news_lookback_days))
-                ),
+                lambda: np_.get_news(symbol, start=max(start, end - timedelta(days=news_lookback_days))),
                 symbol=symbol,
             )
-            if recs:
-                report.news_written += _upsert_news(session, inst, recs)
+            if news_recs:
+                report.news_written += _upsert_news(session, inst, news_recs)
         except ProviderError as exc:
             log.info("news_unavailable", symbol=symbol, error=exc.message)
 
@@ -567,9 +554,7 @@ def refresh_quote(session: Session, symbol: str) -> Quote | None:
     except ProviderError as exc:
         log.info("quote_provider_unavailable", error=exc.message)
         return None
-    rec, outcome = call_with_policy(
-        prov.name, "quote", lambda: prov.get_quote(symbol), symbol=symbol
-    )
+    rec, outcome = call_with_policy(prov.name, "quote", lambda: prov.get_quote(symbol), symbol=symbol)
     if rec is None:
         Q.persist_issues(
             session,
@@ -590,9 +575,7 @@ def refresh_quote(session: Session, symbol: str) -> Quote | None:
         Q.persist_issues(session, [issue])
 
     inst = get_or_create_instrument(session, symbol, provider=prov.name)
-    row = session.scalar(
-        select(Quote).where(Quote.symbol == symbol.upper(), Quote.provider == prov.name)
-    )
+    row = session.scalar(select(Quote).where(Quote.symbol == symbol.upper(), Quote.provider == prov.name))
     if row is None:
         row = Quote(instrument_id=inst.id, symbol=symbol.upper(), provider=prov.name)
         session.add(row)

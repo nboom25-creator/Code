@@ -24,7 +24,8 @@ from decimal import Decimal
 from typing import Any
 
 from aegisquant.db.enums import OrderType, Side
-from aegisquant.utils.money import D, ZERO, price as q_price, safe_div
+from aegisquant.utils.money import ZERO, D, safe_div
+from aegisquant.utils.money import price as q_price
 
 BPS = Decimal("0.0001")
 
@@ -125,9 +126,7 @@ class CostModel:
             fee += abs(notional) * self.sec_fee_rate
         return fee.quantize(Decimal("0.0001"))
 
-    def borrow_cost(
-        self, notional: Decimal, days: int, easy_to_borrow: bool = True
-    ) -> Decimal:
+    def borrow_cost(self, notional: Decimal, days: int, easy_to_borrow: bool = True) -> Decimal:
         rate = self.borrow_rate_annual if easy_to_borrow else self.hard_to_borrow_rate_annual
         return (abs(notional) * rate * D(days) / D(365)).quantize(Decimal("0.0001"))
 
@@ -218,8 +217,7 @@ def simulate_fill(
     if fillable <= 0:
         result.rejected = True
         result.reject_reason = (
-            f"bar volume {bar_volume} allows no fill at the "
-            f"{cost_model.max_participation} participation cap"
+            f"bar volume {bar_volume} allows no fill at the {cost_model.max_participation} participation cap"
         )
         return result
     if not cost_model.allow_fractional:
@@ -306,10 +304,7 @@ def simulate_fill(
 
     # A limit order can never fill worse than its limit.
     if order_type is OrderType.LIMIT and limit_price is not None:
-        if side is Side.BUY and fill_price > limit_price:
-            fill_price = limit_price
-        elif side is Side.SELL and fill_price < limit_price:
-            fill_price = limit_price
+        fill_price = min(fill_price, limit_price) if side is Side.BUY else max(fill_price, limit_price)
 
     # Nor outside the bar's actual range.
     fill_price = max(min(fill_price, bar_high), bar_low)
@@ -324,9 +319,7 @@ def simulate_fill(
     result.partial = fillable < quantity
     result.remaining_quantity = quantity - fillable
     ref = reference_price or base
-    result.slippage_bps = (
-        safe_div(fill_price - ref, ref) * Decimal(10000) * direction
-    ).quantize(Decimal("0.01"))
+    result.slippage_bps = (safe_div(fill_price - ref, ref) * Decimal(10000) * direction).quantize(Decimal("0.01"))
     result.detail.update(
         {
             "arrival_price": str(arrival),

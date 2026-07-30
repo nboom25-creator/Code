@@ -172,9 +172,7 @@ class YFinanceProvider(
         )
 
     # -- corporate actions ---------------------------------------------------
-    def get_corporate_actions(
-        self, symbol: str, start: date, end: date
-    ) -> list[CorporateActionRecord]:
+    def get_corporate_actions(self, symbol: str, start: date, end: date) -> list[CorporateActionRecord]:
         yf = _import_yf()
         symbol = symbol.upper()
         out: list[CorporateActionRecord] = []
@@ -274,7 +272,11 @@ class YFinanceProvider(
             # YoY needs the same quarter one year back.
             yoy_period = next((p for p in prior if abs((pe - p).days - 365) <= 20), None)
             if yoy_period:
-                for base, key in (("revenue", "revenue_yoy"), ("eps", "eps_yoy"), ("free_cash_flow", "fcf_yoy")):
+                for base, key in (
+                    ("revenue", "revenue_yoy"),
+                    ("eps", "eps_yoy"),
+                    ("free_cash_flow", "fcf_yoy"),
+                ):
                     now_v, then_v = values.get(base), prior[yoy_period].get(base)
                     if now_v is not None and then_v not in (None, 0):
                         values[key] = (now_v - then_v) / abs(then_v)
@@ -289,9 +291,9 @@ class YFinanceProvider(
                 if info.get(src) is not None:
                     values[key] = D(info[src])
 
-            observed = datetime.combine(
-                pe + timedelta(days=REPORTING_LAG_DAYS), datetime.min.time()
-            ).replace(tzinfo=utcnow().tzinfo)
+            observed = datetime.combine(pe + timedelta(days=REPORTING_LAG_DAYS), datetime.min.time()).replace(
+                tzinfo=utcnow().tzinfo
+            )
             out.append(
                 FundamentalRecord(
                     symbol=symbol,
@@ -373,9 +375,7 @@ class YFinanceProvider(
                     industry=info.get("industry"),
                     tradable=True,
                     # Leveraged/inverse products are excluded from v1 trading.
-                    is_leveraged_etf=any(
-                        k in name_lc for k in ("2x", "3x", "ultra", "leveraged", "inverse", "short ")
-                    ),
+                    is_leveraged_etf=any(k in name_lc for k in ("2x", "3x", "ultra", "leveraged", "inverse", "short ")),
                     provenance=self.provenance(sym, utcnow()),
                 )
             )

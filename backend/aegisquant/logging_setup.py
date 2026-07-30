@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import MutableMapping
 from typing import Any
 
 import structlog
@@ -29,7 +30,7 @@ _SENSITIVE_KEYS = {
 }
 
 
-def _redact(_logger: Any, _name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def _redact(_logger: Any, _name: str, event_dict: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
     """Strip secret-looking keys and any literal secret value from the event."""
     try:
         secrets = get_settings().secret_values()
@@ -71,11 +72,7 @@ def configure_logging(json_output: bool | None = None) -> None:
     for noisy in ("urllib3", "httpx", "httpcore", "yfinance", "peewee", "asyncio"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
-    renderer: Any = (
-        structlog.processors.JSONRenderer()
-        if json_output
-        else structlog.dev.ConsoleRenderer(colors=False)
-    )
+    renderer: Any = structlog.processors.JSONRenderer() if json_output else structlog.dev.ConsoleRenderer(colors=False)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
@@ -87,10 +84,10 @@ def configure_logging(json_output: bool | None = None) -> None:
             _redact,
             renderer,
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(
-            logging.DEBUG if settings.debug else logging.INFO
-        ),
-        logger_factory=structlog.PrintLoggerFactory(),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.DEBUG if settings.debug else logging.INFO),
+        # Route through stdlib logging so `add_logger_name` has a real logger to
+        # read, and so uvicorn/celery handlers see the same stream.
+        logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
 

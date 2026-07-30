@@ -309,9 +309,7 @@ class Strategy(abc.ABC):
         bonus = min(0.08, 0.02 * (len(vals) - 1))
         return max(floor, min(cap, avg + bonus))
 
-    def _expected_return_band(
-        self, point: float, vol: float | None, holding_days: int
-    ) -> tuple[float, float, float]:
+    def _expected_return_band(self, point: float, vol: float | None, holding_days: int) -> tuple[float, float, float]:
         """A one-sigma band around the point estimate over the holding period."""
         if vol is None or vol <= 0:
             return point, point * 0.2, point * 1.8

@@ -123,11 +123,7 @@ class FredProvider(EconomicProvider):
         if resp.status_code >= 400:
             raise ProviderError(self.name, resp.text[:200], status_code=resp.status_code)
         payload = resp.json()
-        return [
-            (date.fromisoformat(o["date"]), o["value"])
-            for o in payload.get("observations", [])
-            if o.get("date")
-        ]
+        return [(date.fromisoformat(o["date"]), o["value"]) for o in payload.get("observations", []) if o.get("date")]
 
     def get_series(self, series_id: str, start: date, end: date) -> list[EconomicRecord]:
         rows = self._fetch_api(series_id, start, end) if self._key else self._fetch_csv(series_id, start, end)
@@ -137,9 +133,9 @@ class FredProvider(EconomicProvider):
         for obs_date, raw in rows:
             # FRED marks unavailable observations with "."; never invent a value.
             value = None if raw in (".", "", None) else D(raw)
-            released = datetime.combine(
-                obs_date + timedelta(days=lag), datetime.min.time()
-            ).replace(hour=13, tzinfo=utcnow().tzinfo)
+            released = datetime.combine(obs_date + timedelta(days=lag), datetime.min.time()).replace(
+                hour=13, tzinfo=utcnow().tzinfo
+            )
             out.append(
                 EconomicRecord(
                     series_id=series_id,

@@ -79,17 +79,13 @@ def get_system_state(session: Session) -> SystemState:
 
 
 def get_active_risk_config(session: Session) -> RiskConfig | None:
-    return session.scalar(
-        select(RiskConfig).where(RiskConfig.is_active.is_(True)).order_by(RiskConfig.version.desc())
-    )
+    return session.scalar(select(RiskConfig).where(RiskConfig.is_active.is_(True)).order_by(RiskConfig.version.desc()))
 
 
 def open_positions(session: Session, mode: E.Mode | None = None) -> list[Position]:
     mode = mode or current_mode()
     return list(
-        session.scalars(
-            select(Position).where(Position.mode == mode, Position.quantity != 0).order_by(Position.symbol)
-        )
+        session.scalars(select(Position).where(Position.mode == mode, Position.quantity != 0).order_by(Position.symbol))
     )
 
 
@@ -108,19 +104,13 @@ def open_orders(session: Session, mode: E.Mode | None = None) -> list[Order]:
 def latest_snapshot(session: Session, mode: E.Mode | None = None) -> PortfolioSnapshot | None:
     mode = mode or current_mode()
     return session.scalar(
-        select(PortfolioSnapshot)
-        .where(PortfolioSnapshot.mode == mode)
-        .order_by(PortfolioSnapshot.at.desc())
-        .limit(1)
+        select(PortfolioSnapshot).where(PortfolioSnapshot.mode == mode).order_by(PortfolioSnapshot.at.desc()).limit(1)
     )
 
 
 def latest_bar(session: Session, symbol: str, timeframe: str = "1Day") -> Bar | None:
     return session.scalar(
-        select(Bar)
-        .where(Bar.symbol == symbol.upper(), Bar.timeframe == timeframe)
-        .order_by(Bar.ts.desc())
-        .limit(1)
+        select(Bar).where(Bar.symbol == symbol.upper(), Bar.timeframe == timeframe).order_by(Bar.ts.desc()).limit(1)
     )
 
 
@@ -189,8 +179,6 @@ def recent_orders(session: Session, hours: int = 24, mode: E.Mode | None = None)
     cutoff = utcnow() - timedelta(hours=hours)
     return list(
         session.scalars(
-            select(Order)
-            .where(Order.mode == mode, Order.created_at >= cutoff)
-            .order_by(Order.created_at.desc())
+            select(Order).where(Order.mode == mode, Order.created_at >= cutoff).order_by(Order.created_at.desc())
         )
     )

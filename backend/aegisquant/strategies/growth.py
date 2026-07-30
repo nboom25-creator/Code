@@ -188,9 +188,7 @@ class QualityGrowthCompounder(Strategy):
                         if inputs.get("fcf_conversion")
                         else []
                     ),
-                    opposing_evidence=[
-                        "quality is widely recognised, so the multiple is the risk"
-                    ]
+                    opposing_evidence=["quality is widely recognised, so the multiple is the risk"]
                     + (
                         [f"leverage at {_num(inputs['debt_to_equity'])}x equity"]
                         if (inputs.get("debt_to_equity") or 0) > 1.0
@@ -284,12 +282,7 @@ class QualityGrowthCompounder(Strategy):
                 target_fraction=0.6,
                 signal_inputs=inputs,
             )
-        if (
-            accel is not None
-            and accel > 0.02
-            and position.unrealized_pnl_pct > 0.15
-            and (margin_delta or 0) >= 0
-        ):
+        if accel is not None and accel > 0.02 and position.unrealized_pnl_pct > 0.15 and (margin_delta or 0) >= 0:
             return PositionReview(
                 self.meta.key,
                 position.symbol,
@@ -579,6 +572,11 @@ class EarningsAcceleration(Strategy):
         out: list[StrategySignal] = []
         for score, symbol, inputs in scored[: self.meta.max_positions]:
             vol = ctx.value(symbol, "realized_vol_63") or 0.35
+            margin_text = (
+                _pct(inputs["gross_margin_delta_yoy"])
+                if inputs["gross_margin_delta_yoy"] is not None
+                else "flat"
+            )
             strength = self._clip01(score / best if best > 0 else 0)
             confidence = self._confidence_from(
                 self._clip01((inputs["revenue_growth_accel"] or 0) / 0.06),
@@ -605,8 +603,7 @@ class EarningsAcceleration(Strategy):
                     expected_holding_days=self.meta.expected_holding_days,
                     thesis=(
                         f"{symbol}'s revenue growth rate rose {inputs['revenue_growth_accel']:+.1%} versus "
-                        f"the prior comparison with gross margin "
-                        f"{_pct(inputs['gross_margin_delta_yoy']) if inputs['gross_margin_delta_yoy'] is not None else 'flat'} "
+                        f"the prior comparison with gross margin {margin_text} "
                         "year over year — a fundamental inflection the price is beginning to confirm."
                     ),
                     supporting_evidence=[
@@ -682,7 +679,12 @@ class EarningsAcceleration(Strategy):
                 signal_inputs=inputs,
             )
         return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.55, "acceleration thesis intact", signal_inputs=inputs
+            self.meta.key,
+            position.symbol,
+            "hold",
+            0.55,
+            "acceleration thesis intact",
+            signal_inputs=inputs,
         )
 
 
@@ -754,9 +756,7 @@ class PostEarningsDrift(Strategy):
             rev_growth = ctx.value(symbol, "revenue_growth_yoy")
             if days is None or gap is None or drift is None:
                 continue
-            if not (
-                self.params["min_days_since_earnings"] <= days <= self.params["max_days_since_earnings"]
-            ):
+            if not (self.params["min_days_since_earnings"] <= days <= self.params["max_days_since_earnings"]):
                 continue
             if gap < self.params["min_earnings_gap"] or drift < self.params["min_drift"]:
                 continue
@@ -861,7 +861,12 @@ class PostEarningsDrift(Strategy):
                 signal_inputs=inputs,
             )
         return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.5, "still inside the drift window", signal_inputs=inputs
+            self.meta.key,
+            position.symbol,
+            "hold",
+            0.5,
+            "still inside the drift window",
+            signal_inputs=inputs,
         )
 
 
@@ -1103,5 +1108,10 @@ class SmallMidGrowthDiscovery(Strategy):
                 signal_inputs=inputs,
             )
         return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.5, "growth and liquidity intact", signal_inputs=inputs
+            self.meta.key,
+            position.symbol,
+            "hold",
+            0.5,
+            "growth and liquidity intact",
+            signal_inputs=inputs,
         )

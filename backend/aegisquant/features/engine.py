@@ -85,9 +85,7 @@ class FeatureBundle:
     universe_synthetic: bool = False
 
     def ranked(self, feature: str, descending: bool = True) -> list[tuple[str, float]]:
-        pairs = [
-            (s, f.values[feature]) for s, f in self.symbols.items() if feature in f.values
-        ]
+        pairs = [(s, f.values[feature]) for s, f in self.symbols.items() if feature in f.values]
         return sorted(pairs, key=lambda kv: kv[1], reverse=descending)
 
     def as_dict(self) -> dict[str, Any]:

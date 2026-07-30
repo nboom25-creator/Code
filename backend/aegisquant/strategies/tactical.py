@@ -211,7 +211,12 @@ class ShortTermMeanReversion(Strategy):
                 signal_inputs=inputs,
             )
         return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.5, "still oversold; awaiting reversion", signal_inputs=inputs
+            self.meta.key,
+            position.symbol,
+            "hold",
+            0.5,
+            "still oversold; awaiting reversion",
+            signal_inputs=inputs,
         )
 
 
@@ -295,9 +300,7 @@ class VolatilityTargetCore(Strategy):
             # Exposure scalar is the sizing hint; the risk engine still caps it.
             scalar = float(np.clip(self.params["target_vol"] / max(vol21, 0.02), 0.25, 1.0))
             strength = scalar
-            confidence = self._confidence_from(
-                self._clip01(trend / 0.15), self._clip01(scalar), floor=0.40, cap=0.80
-            )
+            confidence = self._confidence_from(self._clip01(trend / 0.15), self._clip01(scalar), floor=0.40, cap=0.80)
             point = 0.08 * scalar
             er, lo, hi = self._expected_return_band(point, vol21, self.meta.expected_holding_days)
             inputs = {
@@ -371,13 +374,16 @@ class VolatilityTargetCore(Strategy):
                 0.65,
                 f"realised volatility at {_pct(vol21)} exceeds the ceiling — cut exposure",
                 thesis_status="weakening",
-                target_fraction=float(
-                    np.clip(self.params["target_vol"] / max(vol21, 0.02), 0.25, 1.0)
-                ),
+                target_fraction=float(np.clip(self.params["target_vol"] / max(vol21, 0.02), 0.25, 1.0)),
                 signal_inputs=inputs,
             )
         return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.55, "core exposure at target risk", signal_inputs=inputs
+            self.meta.key,
+            position.symbol,
+            "hold",
+            0.55,
+            "core exposure at target risk",
+            signal_inputs=inputs,
         )
 
 
@@ -505,9 +511,7 @@ class RegimeGrowthAllocation(Strategy):
                         if inputs.get("breadth_above_200sma") is not None
                         else []
                     ),
-                    opposing_evidence=[
-                        "regime signals lag turning points; a reversal will be caught late"
-                    ]
+                    opposing_evidence=["regime signals lag turning points; a reversal will be caught late"]
                     + (
                         [f"credit spreads widened {_num(inputs['credit_spread_change_63d'])}pp over 63 sessions"]
                         if (inputs.get("credit_spread_change_63d") or 0) > 0.1
@@ -553,5 +557,10 @@ class RegimeGrowthAllocation(Strategy):
                 signal_inputs=inputs,
             )
         return PositionReview(
-            self.meta.key, position.symbol, "hold", 0.55, "regime still supports growth exposure", signal_inputs=inputs
+            self.meta.key,
+            position.symbol,
+            "hold",
+            0.55,
+            "regime still supports growth exposure",
+            signal_inputs=inputs,
         )

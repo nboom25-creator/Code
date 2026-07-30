@@ -211,8 +211,13 @@ class InstrumentRecord:
 # ---------------------------------------------------------------------------
 # Interfaces
 # ---------------------------------------------------------------------------
-class Provider(abc.ABC):
-    """Common provider surface."""
+class Provider(abc.ABC):  # noqa: B024 - intentional shared base with no abstract members
+    """Common provider surface.
+
+    Deliberately declares no abstract methods: it carries the provenance helper
+    and health probe that every provider role shares, while the role protocols
+    below (``PriceProvider``, ``NewsProvider``, ...) define the actual contracts.
+    """
 
     name: str = "abstract"
     is_synthetic: bool = False
@@ -268,9 +273,7 @@ class TradeProvider(Provider):
 
 class CorporateActionProvider(Provider):
     @abc.abstractmethod
-    def get_corporate_actions(
-        self, symbol: str, start: date, end: date
-    ) -> list[CorporateActionRecord]: ...
+    def get_corporate_actions(self, symbol: str, start: date, end: date) -> list[CorporateActionRecord]: ...
 
 
 class FundamentalsProvider(Provider):

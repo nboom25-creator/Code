@@ -349,13 +349,13 @@ def _disqualifiers(
         and (growth is None or growth < 0.05)
         and (price is None or price < 15.0)
     ):
-        out.append(
-            "pump-and-dump pattern: vertical move on extreme volume with no revenue growth to support it"
-        )
+        out.append("pump-and-dump pattern: vertical move on extreme volume with no revenue growth to support it")
 
-    if f.get("periods_available") is not None and f["periods_available"] < 2 and instrument.get(
-        "asset_class"
-    ) not in ("etf",):
+    if (
+        f.get("periods_available") is not None
+        and f["periods_available"] < 2
+        and instrument.get("asset_class") not in ("etf",)
+    ):
         out.append("fewer than two reported fiscal periods available — insufficient fundamental history")
     return out
 
@@ -396,9 +396,7 @@ def compute_growth_score(
     total = _blend({k: c.score for k, c in components.items()}, weights)
 
     all_inputs = [v for c in components.values() for v in c.inputs.values()]
-    coverage = (
-        sum(1 for v in all_inputs if v is not None) / len(all_inputs) if all_inputs else 0.0
-    )
+    coverage = sum(1 for v in all_inputs if v is not None) / len(all_inputs) if all_inputs else 0.0
 
     disq = _disqualifiers(
         features,

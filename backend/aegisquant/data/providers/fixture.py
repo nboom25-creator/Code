@@ -30,7 +30,6 @@ from __future__ import annotations
 import math
 import zlib
 from datetime import date, datetime, timedelta
-from decimal import Decimal
 from functools import lru_cache
 from typing import Any
 
@@ -146,13 +145,24 @@ def _market_path(seed: int, n_days: int) -> tuple[np.ndarray, np.ndarray]:
 
 @lru_cache(maxsize=64)
 def _sector_path(seed: int, sector: str, n_days: int) -> np.ndarray:
+    """Sector rotation as daily excess returns.
+
+    The sector's *cumulative* excess is modelled as a mean-reverting
+    Ornstein-Uhlenbeck level, and the emitted series is its first difference. A
+    persistent level must never be used directly as a daily return: over a decade
+    that compounds into a drift of many hundred-fold, which is how a simulator
+    ends up quoting a $190,000 share price.
+    """
     rng = np.random.default_rng(_seed_for(seed, "sector", sector))
-    # Slow-moving rotation: AR(1) on the sector's excess drift.
-    phi, sigma = 0.995, 0.0035
-    x, out = 0.0, np.empty(n_days)
+    phi = 0.998
+    target_std = 0.30  # sector cumulative excess stays within roughly ±30%
+    sigma = target_std * float(np.sqrt(1 - phi**2))
+    level = 0.0
+    out = np.empty(n_days)
     for i in range(n_days):
-        x = phi * x + rng.normal(0, sigma)
-        out[i] = x * 0.10 + rng.normal(0, 0.0045)
+        previous = level
+        level = phi * level + rng.normal(0, sigma)
+        out[i] = (level - previous) + rng.normal(0, 0.0035)
     return out
 
 
@@ -290,9 +300,7 @@ class FixtureProvider(
             # because adjusting the past using a future split is itself a form of
             # look-ahead, and it hides whether the consumer handles splits at all.
             factor = self._forward_split_factor(symbol, d, horizon)
-            prev_factor = (
-                self._forward_split_factor(symbol, sessions[i - 1], horizon) if i else factor
-            )
+            prev_factor = self._forward_split_factor(symbol, sessions[i - 1], horizon) if i else factor
             close = float(closes[i]) * factor
             prev = (float(closes[i - 1]) * prev_factor) if i else close
             # Overnight gap, then intraday range around it.
@@ -305,7 +313,8 @@ class FixtureProvider(
             lo = max(0.01, min(lo, open_, close))
             hi = max(hi, open_, close)
             vol = float(volumes[i]) / factor  # share counts scale inversely to price
-            early = bool(cal.get(d).early_close) if cal.get(d) else False
+            calendar_day = cal.get(d)
+            early = bool(calendar_day.early_close) if calendar_day is not None else False
             out.append(
                 BarRecord(
                     symbol=symbol,
@@ -401,12 +410,9 @@ class FixtureProvider(
                 factor *= ratio
         return factor
 
-    def get_corporate_actions(
-        self, symbol: str, start: date, end: date
-    ) -> list[CorporateActionRecord]:
+    def get_corporate_actions(self, symbol: str, start: date, end: date) -> list[CorporateActionRecord]:
         symbol = symbol.upper()
         sim = self._sim(symbol)
-        rng = np.random.default_rng(_seed_for(self.seed, symbol, "corp_div"))
         out: list[CorporateActionRecord] = []
         for ex, ratio in self._split_events(symbol, end.year):
             if start <= ex <= end:
@@ -416,9 +422,7 @@ class FixtureProvider(
                         action_type="split",
                         ex_date=ex,
                         ratio=D(ratio),
-                        provenance=self.provenance(
-                            symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC
-                        ),
+                        provenance=self.provenance(symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC),
                     )
                 )
         # Quarterly dividends for payers. Sized off the simulated starting price
@@ -436,9 +440,7 @@ class FixtureProvider(
                             action_type="dividend",
                             ex_date=ex,
                             cash_amount=D(round(max(0.01, price * sim.div_yield / 4), 4)),
-                            provenance=self.provenance(
-                                symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC
-                            ),
+                            provenance=self.provenance(symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC),
                         )
                     )
         if symbol in SYNTHETIC_DELISTINGS:
@@ -449,9 +451,7 @@ class FixtureProvider(
                         symbol=symbol,
                         action_type="delist",
                         ex_date=ex,
-                        provenance=self.provenance(
-                            symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC
-                        ),
+                        provenance=self.provenance(symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC),
                     )
                 )
         if symbol in SYNTHETIC_RENAMES:
@@ -463,9 +463,7 @@ class FixtureProvider(
                         action_type="symbol_change",
                         ex_date=ex,
                         new_symbol=new,
-                        provenance=self.provenance(
-                            symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC
-                        ),
+                        provenance=self.provenance(symbol, as_of_from_bar_close(ex), quality=DataQuality.SYNTHETIC),
                     )
                 )
         return sorted(out, key=lambda r: r.ex_date)
@@ -524,9 +522,7 @@ class FixtureProvider(
                     fiscal_period=f"Q{((pe.month - 1) // 3) + 1} {pe.year}",
                     provenance=self.provenance(
                         symbol,
-                        datetime.combine(published, datetime.min.time()).replace(
-                            tzinfo=utcnow().tzinfo
-                        ),
+                        datetime.combine(published, datetime.min.time()).replace(tzinfo=utcnow().tzinfo),
                         quality=DataQuality.SYNTHETIC,
                     ),
                     values={
@@ -547,9 +543,17 @@ class FixtureProvider(
                         "cash": D(round(equity * 0.28, 2)),
                         "debt_to_equity": D(round(sim.debt_to_equity, 6)),
                         "current_ratio": D(round(float(np.clip(rng.normal(2.1, 0.7), 0.4, 6.0)), 4)),
-                        "roic": D(round(float(np.clip(om * 0.75 / max(0.2, sim.debt_to_equity + 0.6), -0.4, 0.6)), 6)),
+                        "roic": D(
+                            round(
+                                float(np.clip(om * 0.75 / max(0.2, sim.debt_to_equity + 0.6), -0.4, 0.6)),
+                                6,
+                            )
+                        ),
                         "market_cap": D(round(mcap, 2)),
-                        "pe_ratio": D(round(mcap / max(ni * 4, 1.0), 4)),
+                        # Undefined for a loss-maker: emitting market cap as the
+                        # P/E (which a max(x, 1) guard would do) is worse than
+                        # emitting nothing, because it ranks as "expensive".
+                        "pe_ratio": D(round(mcap / (ni * 4), 4)) if ni > 0 else None,
                         "ps_ratio": D(round(mcap / max(rev * 4, 1.0), 4)),
                         "ev_to_sales": D(round((mcap + debt) / max(rev * 4, 1.0), 4)),
                         "shares_outstanding": D(round(sim.shares, 0)),
@@ -575,7 +579,12 @@ class FixtureProvider(
         ("{name} wins multi-year contract with major customer", "customer_win", 0.55, 0.15),
         ("Regulator opens review of {name} business practices", "regulatory", -0.50, 0.04),
         ("{name} unveils next-generation product line", "product", 0.40, 0.17),
-        ("Analysts revise {name} estimates following guidance update", "estimate_revision", 0.25, 0.15),
+        (
+            "Analysts revise {name} estimates following guidance update",
+            "estimate_revision",
+            0.25,
+            0.15,
+        ),
         ("{name} discloses restatement of prior-period figures", "accounting", -0.70, 0.01),
         ("{name} completes bolt-on acquisition", "m_and_a", 0.15, 0.06),
         ("Short seller publishes critical report on {name}", "short_report", -0.60, 0.02),
@@ -626,7 +635,14 @@ class FixtureProvider(
             return []
         label, unit = MACRO_SERIES[series_id]
         rng = np.random.default_rng(_seed_for(self.seed, "macro", series_id))
-        anchors = {"DGS10": 3.9, "DGS2": 4.3, "CPIAUCSL": 3.1, "BAMLH0A0HYM2": 3.4, "VIXCLS": 16.0, "UNRATE": 4.0}
+        anchors = {
+            "DGS10": 3.9,
+            "DGS2": 4.3,
+            "CPIAUCSL": 3.1,
+            "BAMLH0A0HYM2": 3.4,
+            "VIXCLS": 16.0,
+            "UNRATE": 4.0,
+        }
         level = anchors[series_id]
         out: list[EconomicRecord] = []
         # Monthly series are released with a lag; daily rate series are same-day.
@@ -657,9 +673,7 @@ class FixtureProvider(
                         unit=unit,
                         provenance=self.provenance(
                             None,
-                            datetime.combine(released, datetime.min.time()).replace(
-                                hour=13, tzinfo=utcnow().tzinfo
-                            ),
+                            datetime.combine(released, datetime.min.time()).replace(hour=13, tzinfo=utcnow().tzinfo),
                             quality=DataQuality.SYNTHETIC,
                         ),
                     )

@@ -43,7 +43,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aegisquant.db.enums import Regime, StrategyStatus
-from aegisquant.db.models import EnsembleWeight, Strategy as StrategyRow
+from aegisquant.db.models import EnsembleWeight
+from aegisquant.db.models import Strategy as StrategyRow
 from aegisquant.logging_setup import get_logger
 from aegisquant.strategies.base import Strategy
 from aegisquant.utils.money import D
@@ -165,7 +166,7 @@ def _correlation_penalties(
 ) -> dict[str, float]:
     """Penalise sleeves that duplicate another sleeve's return stream."""
     keys = [k for k, p in perfs.items() if p.daily_returns.size >= 40]
-    penalties = {k: 0.0 for k in perfs}
+    penalties = dict.fromkeys(perfs, 0.0)
     if len(keys) < 2:
         return penalties
     n = min(len(perfs[k].daily_returns) for k in keys)
@@ -254,9 +255,7 @@ def allocate(
             skipped_reason="within the stable update interval",
         )
 
-    corr_penalties = _correlation_penalties(
-        performance, config.correlation_threshold, config.correlation_penalty
-    )
+    corr_penalties = _correlation_penalties(performance, config.correlation_threshold, config.correlation_penalty)
 
     raw: dict[str, tuple[float, SleeveAllocation]] = {}
     for strategy in strategies:
@@ -270,8 +269,17 @@ def allocate(
             raw[key] = (
                 0.0,
                 SleeveAllocation(
-                    key, Decimal("0"), prev, 0.0, perf.sharpe, 0.0, 0.0, 0.0, perf.trades,
-                    "paused", "strategy is paused; weight forced to zero",
+                    key,
+                    Decimal("0"),
+                    prev,
+                    0.0,
+                    perf.sharpe,
+                    0.0,
+                    0.0,
+                    0.0,
+                    perf.trades,
+                    "paused",
+                    "strategy is paused; weight forced to zero",
                 ),
             )
             continue
@@ -310,8 +318,17 @@ def allocate(
         raw[key] = (
             adjusted,
             SleeveAllocation(
-                key, Decimal("0"), prev, adjusted, perf.sharpe, corr_pen, 0.0,
-                regime_mult, perf.trades, capped_by, "; ".join(reasons),
+                key,
+                Decimal("0"),
+                prev,
+                adjusted,
+                perf.sharpe,
+                corr_pen,
+                0.0,
+                regime_mult,
+                perf.trades,
+                capped_by,
+                "; ".join(reasons),
             ),
         )
 
@@ -326,7 +343,7 @@ def allocate(
         return AllocationResult(as_of, regime, {k: a for k, (_, a) in raw.items()}, updated=True)
 
     # Normalise, apply turnover penalty and the per-update step limit.
-    for key, (value, alloc) in raw.items():
+    for value, alloc in raw.values():
         target = D(value / total)
         prev = alloc.prev_weight
         # Turnover penalty: pull the target back toward the previous weight.

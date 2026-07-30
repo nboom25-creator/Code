@@ -204,9 +204,7 @@ class AlpacaProvider(
             ask=D(q.get("ap")) if q.get("ap") else None,
             bid_size=D(q.get("bs")) if q.get("bs") is not None else None,
             ask_size=D(q.get("as")) if q.get("as") is not None else None,
-            provenance=self.provenance(
-                symbol, observed, quality=DataQuality.STALE if age > 60 else DataQuality.OK
-            ),
+            provenance=self.provenance(symbol, observed, quality=DataQuality.STALE if age > 60 else DataQuality.OK),
         )
 
     def get_recent_trades(self, symbol: str, limit: int = 50) -> list[TradeRecord]:
@@ -237,9 +235,7 @@ class AlpacaProvider(
         return out
 
     # -- corporate actions ---------------------------------------------------
-    def get_corporate_actions(
-        self, symbol: str, start: date, end: date
-    ) -> list[CorporateActionRecord]:
+    def get_corporate_actions(self, symbol: str, start: date, end: date) -> list[CorporateActionRecord]:
         symbol = symbol.upper()
         payload = self._get(
             f"{self._data_url}/v1/corporate-actions",
@@ -294,11 +290,7 @@ class AlpacaProvider(
             )
         for row in actions.get("delistings", []):
             ex = date.fromisoformat(row["process_date"])
-            out.append(
-                CorporateActionRecord(
-                    symbol=symbol, action_type="delist", ex_date=ex, provenance=prov(ex)
-                )
-            )
+            out.append(CorporateActionRecord(symbol=symbol, action_type="delist", ex_date=ex, provenance=prov(ex)))
         return sorted(out, key=lambda r: r.ex_date)
 
     # -- news ----------------------------------------------------------------
@@ -330,9 +322,7 @@ class AlpacaProvider(
 
     # -- calendar ------------------------------------------------------------
     def get_calendar(self, start: date, end: date) -> list[CalendarDayRecord]:
-        rows = self._get(
-            f"{self._trade_url}/v2/calendar", {"start": start.isoformat(), "end": end.isoformat()}
-        )
+        rows = self._get(f"{self._trade_url}/v2/calendar", {"start": start.isoformat(), "end": end.isoformat()})
         if not isinstance(rows, list):
             raise ProviderDataMissing(self.name, "unexpected calendar payload")
         out: list[CalendarDayRecord] = []
@@ -365,12 +355,11 @@ class AlpacaProvider(
 
     # -- instruments ---------------------------------------------------------
     def list_instruments(self, symbols: list[str] | None = None) -> list[InstrumentRecord]:
-        rows = self._get(
-            f"{self._trade_url}/v2/assets", {"status": "active", "asset_class": "us_equity"}
-        )
+        rows = self._get(f"{self._trade_url}/v2/assets", {"status": "active", "asset_class": "us_equity"})
         wanted = {s.upper() for s in symbols} if symbols else None
         out: list[InstrumentRecord] = []
-        for r in rows if isinstance(rows, list) else []:
+        assets: list[dict[str, Any]] = rows if isinstance(rows, list) else []
+        for r in assets:
             sym = r["symbol"].upper()
             if wanted and sym not in wanted:
                 continue
@@ -387,9 +376,7 @@ class AlpacaProvider(
                     fractionable=bool(r.get("fractionable")),
                     shortable=bool(r.get("shortable")),
                     easy_to_borrow=bool(r.get("easy_to_borrow")),
-                    is_leveraged_etf=any(
-                        k in lc for k in ("2x", "3x", "ultra", "leveraged", "inverse")
-                    ),
+                    is_leveraged_etf=any(k in lc for k in ("2x", "3x", "ultra", "leveraged", "inverse")),
                     provenance=self.provenance(sym, utcnow()),
                 )
             )

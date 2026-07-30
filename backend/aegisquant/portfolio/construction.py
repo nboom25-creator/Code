@@ -35,7 +35,7 @@ from aegisquant.portfolio.sizing import (
     size_position,
 )
 from aegisquant.strategies.base import OpenPositionState, StrategySignal
-from aegisquant.utils.money import D, ZERO
+from aegisquant.utils.money import ZERO, D
 
 
 @dataclass(slots=True)
@@ -91,9 +91,7 @@ class TargetPosition:
             "exit_criteria": self.exit_criteria,
             "invalidating_conditions": self.invalidating_conditions,
             "risk_contribution": None if self.risk_contribution is None else str(self.risk_contribution),
-            "correlation_to_book": (
-                None if self.correlation_to_book is None else str(self.correlation_to_book)
-            ),
+            "correlation_to_book": (None if self.correlation_to_book is None else str(self.correlation_to_book)),
             "action": self.action,
             "reason": self.reason,
         }
@@ -141,9 +139,7 @@ def combine_confidence(confidences: list[Decimal]) -> Decimal:
     return min(Decimal("0.95"), best + bonus)
 
 
-def _avg_correlation_to_book(
-    pit: PointInTime, symbol: str, book: list[str], window: int = 63
-) -> Decimal | None:
+def _avg_correlation_to_book(pit: PointInTime, symbol: str, book: list[str], window: int = 63) -> Decimal | None:
     """Mean absolute return correlation between ``symbol`` and the current book."""
     peers = [s for s in book if s != symbol]
     if not peers:
@@ -211,9 +207,7 @@ def construct_portfolio(
             continue
         grouped.setdefault(sig.symbol.upper(), []).append(sig)
 
-    cash_target, cash_reason = dynamic_cash_target(
-        regime_scale, limits.min_cash_buffer_pct, current_drawdown
-    )
+    cash_target, cash_reason = dynamic_cash_target(regime_scale, limits.min_cash_buffer_pct, current_drawdown)
     book = list(positions)
 
     candidates: list[TargetPosition] = []
@@ -270,9 +264,7 @@ def construct_portfolio(
         target_weight = sizing.weight
 
         if current is not None:
-            increment, pyr_reason = pyramid_increment(
-                current_weight, sizing.weight, D(current.unrealized_pnl_pct)
-            )
+            increment, pyr_reason = pyramid_increment(current_weight, sizing.weight, D(current.unrealized_pnl_pct))
             if increment > 0:
                 action, target_weight, reason = "add", current_weight + increment, pyr_reason
             else:
@@ -293,7 +285,9 @@ def construct_portfolio(
                 expected_vol=None if asset_vol is None else D(asset_vol),
                 downside=D(float(np.mean(downsides))) if downsides else None,
                 expected_holding_days=int(np.mean([s.expected_holding_days for s in sigs])),
-                growth_score=D(sf.get("growth_opportunity_score")) if sf.get("growth_opportunity_score") is not None else None,
+                growth_score=D(sf.get("growth_opportunity_score"))
+                if sf.get("growth_opportunity_score") is not None
+                else None,
                 sector=pit.sector(symbol),
                 thesis=primary.thesis,
                 supporting_evidence=sorted({e for s in sigs for e in s.supporting_evidence}),
@@ -335,9 +329,7 @@ def construct_portfolio(
             accepted.append(target)
             continue
         if len(positions) + new_count >= max_positions and target.symbol not in positions:
-            rejected[target.symbol] = (
-                f"position count limit reached ({max_positions} open positions)"
-            )
+            rejected[target.symbol] = f"position count limit reached ({max_positions} open positions)"
             continue
         if max_new_positions is not None and new_count >= max_new_positions and target.symbol not in positions:
             rejected[target.symbol] = f"new-position budget for this cycle exhausted ({max_new_positions})"
@@ -360,9 +352,8 @@ def construct_portfolio(
             target.target_weight = target.current_weight + headroom
             target.delta_weight = headroom
             target.reason = (
-                (target.reason + "; " if target.reason else "")
-                + f"reduced to the remaining {headroom:.2%} investable headroom"
-            )
+                target.reason + "; " if target.reason else ""
+            ) + f"reduced to the remaining {headroom:.2%} investable headroom"
             delta = headroom
 
         # Sector budget.
@@ -371,17 +362,15 @@ def construct_portfolio(
         sector_headroom = limits.max_sector_exposure_pct - used
         if sector_headroom <= 0:
             rejected[target.symbol] = (
-                f"{sector} sector is at its {limits.max_sector_exposure_pct:.0%} limit "
-                f"(currently {used:.1%})"
+                f"{sector} sector is at its {limits.max_sector_exposure_pct:.0%} limit (currently {used:.1%})"
             )
             continue
         if delta > sector_headroom:
             target.target_weight = target.current_weight + sector_headroom
             target.delta_weight = sector_headroom
             target.reason = (
-                (target.reason + "; " if target.reason else "")
-                + f"reduced to the {sector_headroom:.2%} remaining {sector} sector headroom"
-            )
+                target.reason + "; " if target.reason else ""
+            ) + f"reduced to the {sector_headroom:.2%} remaining {sector} sector headroom"
             delta = sector_headroom
 
         if delta <= 0:
@@ -402,25 +391,15 @@ def construct_portfolio(
         # covariance calculation lives in the risk engine's correlation check.
         assumed_corr = Decimal("0.5")
         var = sum((w * v) ** 2 for w, v in vols)
-        cross = sum(
-            w1 * v1 * w2 * v2 * assumed_corr
-            for i, (w1, v1) in enumerate(vols)
-            for (w2, v2) in vols[i + 1 :]
-        )
-        portfolio_vol = D(float((var + 2 * cross)) ** 0.5)
+        cross = sum(w1 * v1 * w2 * v2 * assumed_corr for i, (w1, v1) in enumerate(vols) for (w2, v2) in vols[i + 1 :])
+        portfolio_vol = D(float(var + 2 * cross) ** 0.5)
     for target in accepted:
-        target.risk_contribution = _risk_contribution(
-            target.target_weight, target.expected_vol, portfolio_vol
-        )
+        target.risk_contribution = _risk_contribution(target.target_weight, target.expected_vol, portfolio_vol)
 
     if not accepted and grouped:
-        notes.append(
-            f"{len(grouped)} candidate(s) were generated but none survived portfolio construction"
-        )
+        notes.append(f"{len(grouped)} candidate(s) were generated but none survived portfolio construction")
     if regime_scale == 0:
-        notes.append(
-            "risk-off regime: new entries are blocked entirely; existing positions are still managed"
-        )
+        notes.append("risk-off regime: new entries are blocked entirely; existing positions are still managed")
 
     return PortfolioTarget(
         as_of=as_of,
