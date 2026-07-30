@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fitting Room — Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="pagehead">
+        <div class="brand">
+          <span class="brand__mark" aria-hidden="true"></span>
+          <span>Fitting Room</span>
+        </div>
+        <p class="hint">Settings and your saved photos. Everything here stays on this computer.</p>
+      </header>
+
+      <!-- ─────────────────────────── connection ─────────────────────────── -->
+      <section class="card">
+        <h3>Google Gemini API key</h3>
+        <p class="hint">
+          Try-ons are rendered by Google's Gemini image model. The key is stored in this
+          browser profile and is sent only to
+          <code>generativelanguage.googleapis.com</code>.
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer"
+            >Get a key →</a
+          >
+        </p>
+        <div class="row">
+          <input
+            id="apiKey"
+            type="password"
+            class="input"
+            placeholder="AIza…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="toggleKey" class="btn btn--ghost" type="button">Show</button>
+          <button id="saveKey" class="btn btn--primary" type="button">Save</button>
+        </div>
+        <div class="row">
+          <button id="testKey" class="btn btn--ghost" type="button">Test connection</button>
+          <span id="keyStatus" class="hint"></span>
+        </div>
+      </section>
+
+      <!-- ───────────────────────────── model ────────────────────────────── -->
+      <section class="card">
+        <h3>Image model</h3>
+        <p class="hint">
+          Defaults to <code>gemini-2.5-flash-image</code>. Google renames image models
+          from time to time — if generation starts failing with “model not found”, look
+          up what your key can reach and pick from the list.
+        </p>
+        <div class="row">
+          <input
+            id="model"
+            class="input"
+            list="modelList"
+            spellcheck="false"
+            placeholder="gemini-2.5-flash-image"
+          />
+          <datalist id="modelList"></datalist>
+          <button id="findModels" class="btn btn--ghost" type="button">Find models</button>
+          <button id="resetModel" class="btn btn--ghost" type="button">Reset</button>
+        </div>
+        <p id="modelStatus" class="hint"></p>
+      </section>
+
+      <!-- ────────────────────────── body photos ─────────────────────────── -->
+      <section class="card">
+        <div class="card__head">
+          <h3>Your photos</h3>
+          <button id="addBody" class="btn btn--primary" type="button">Add photo</button>
+        </div>
+        <p class="hint">
+          Best results come from a well-lit photo, taken straight on, with your whole
+          outfit visible and your arms away from your body. Add a few — different
+          lighting, standing and seated — and pick whichever suits the item.
+        </p>
+        <div id="bodyGrid" class="bodygrid"></div>
+        <p id="bodyEmpty" class="empty" hidden>No photos yet.</p>
+      </section>
+
+      <!-- ───────────────────────────── behaviour ────────────────────────── -->
+      <section class="card">
+        <h3>Behaviour</h3>
+        <label class="check">
+          <input id="autoSave" type="checkbox" />
+          <span>Save every try-on to my lookbook automatically</span>
+        </label>
+      </section>
+
+      <!-- ──────────────────────────── storage ───────────────────────────── -->
+      <section class="card">
+        <h3>Storage</h3>
+        <p id="usage" class="hint">Measuring…</p>
+        <div class="row">
+          <button id="clearLooks" class="btn btn--ghost" type="button">
+            Delete all saved looks
+          </button>
+          <button id="clearAll" class="btn btn--danger" type="button">
+            Delete everything
+          </button>
+        </div>
+      </section>
+
+      <p id="toast" class="toast" hidden></p>
+    </div>
+
+    <input id="filePicker" type="file" accept="image/*" multiple hidden />
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

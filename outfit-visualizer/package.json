@@ -1,0 +1,12 @@
+{
+  "name": "fitting-room",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome extension for virtual outfit try-on while shopping",
+  "type": "module",
+  "scripts": {
+    "icons": "node tools/make-icons.mjs",
+    "test": "node tools/smoke-test.mjs",
+    "zip": "cd .. && zip -r outfit-visualizer.zip outfit-visualizer -x '*/node_modules/*' '*/.DS_Store' '*/package-lock.json'"
+  }
+}

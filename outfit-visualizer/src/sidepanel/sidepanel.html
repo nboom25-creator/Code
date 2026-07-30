@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fitting Room</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <span>Fitting Room</span>
+      </div>
+      <button id="openSettings" class="iconbtn" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5m7.43-2.53a7.7 7.7 0 0 0 0-1.94l2-1.58a.5.5 0 0 0 .12-.62l-1.9-3.28a.5.5 0 0 0-.6-.22l-2.36.95a7.3 7.3 0 0 0-1.68-.97l-.36-2.5a.5.5 0 0 0-.5-.41h-3.8a.5.5 0 0 0-.5.41l-.36 2.5a7.3 7.3 0 0 0-1.68.97l-2.36-.95a.5.5 0 0 0-.6.22L2.45 8.83a.5.5 0 0 0 .12.62l2 1.58a7.7 7.7 0 0 0 0 1.94l-2 1.58a.5.5 0 0 0-.12.62l1.9 3.28a.5.5 0 0 0 .6.22l2.36-.95a7.3 7.3 0 0 0 1.68.97l.36 2.5a.5.5 0 0 0 .5.41h3.8a.5.5 0 0 0 .5-.41l.36-2.5a7.3 7.3 0 0 0 1.68-.97l2.36.95a.5.5 0 0 0 .6-.22l1.9-3.28a.5.5 0 0 0-.12-.62Z"
+          />
+        </svg>
+      </button>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-tab="fit" role="tab">Fitting room</button>
+      <button class="tab" data-tab="lookbook" role="tab">
+        Lookbook <span class="pillcount" id="lookCount" hidden></span>
+      </button>
+    </nav>
+
+    <main>
+      <!-- ───────────────────────────── fitting room ───────────────────────── -->
+      <section id="view-fit" class="view">
+        <div id="setupCard" class="card card--setup" hidden>
+          <h3>One-time setup</h3>
+          <p>
+            Fitting Room renders try-ons with Google's Gemini image model. Paste an API
+            key to get started — it stays on this computer.
+          </p>
+          <div class="row">
+            <input
+              id="setupKey"
+              type="password"
+              class="input"
+              placeholder="AIza…"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button id="setupSave" class="btn btn--primary">Save</button>
+          </div>
+          <p class="hint">
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer"
+              >Get a free key from Google AI Studio →</a
+            >
+          </p>
+          <p id="setupError" class="error" hidden></p>
+        </div>
+
+        <div class="block">
+          <div class="block__head">
+            <h2>You</h2>
+            <button id="manageBodies" class="link">Manage</button>
+          </div>
+          <div id="bodyStrip" class="strip"></div>
+          <p id="bodyHint" class="hint" hidden>
+            Add a clear, well-lit, full-length photo of yourself to try things on.
+          </p>
+        </div>
+
+        <div class="block">
+          <div class="block__head">
+            <h2>Garment</h2>
+            <button id="clearGarment" class="link" hidden>Clear</button>
+          </div>
+
+          <div id="garmentDrop" class="drop" tabindex="0">
+            <img id="garmentPreview" alt="Selected garment" hidden />
+            <div id="garmentEmpty" class="drop__empty">
+              <strong>Hover any product photo</strong> and hit “Try this on”, or drop an
+              image here.
+            </div>
+          </div>
+          <p id="garmentMeta" class="meta" hidden></p>
+
+          <div class="row row--tight">
+            <button id="scanPage" class="btn btn--ghost">Grab from page</button>
+            <button id="uploadGarment" class="btn btn--ghost">Upload</button>
+          </div>
+
+          <div id="pickerWrap" class="picker" hidden>
+            <div class="picker__head">
+              <span id="pickerTitle">Images on this page</span>
+              <button id="pickerClose" class="link">Close</button>
+            </div>
+            <div id="picker" class="picker__grid"></div>
+          </div>
+        </div>
+
+        <details class="block block--details" id="optionsBlock">
+          <summary>Fit &amp; scene</summary>
+          <label class="field">
+            <span>Fit</span>
+            <select id="optFit" class="input"></select>
+          </label>
+          <label class="field">
+            <span>Framing</span>
+            <select id="optFraming" class="input"></select>
+          </label>
+          <label class="field">
+            <span>Background</span>
+            <select id="optBackground" class="input"></select>
+          </label>
+          <label class="field field--stack">
+            <span>Notes for the model</span>
+            <textarea
+              id="optNotes"
+              class="input"
+              rows="2"
+              placeholder="e.g. tuck the shirt in, sleeves rolled"
+            ></textarea>
+          </label>
+        </details>
+
+        <button id="tryOn" class="btn btn--primary btn--big">Try it on</button>
+        <p id="hint" class="hint hint--center"></p>
+
+        <div id="error" class="error" hidden></div>
+
+        <div id="result" class="result" hidden>
+          <div class="result__stage">
+            <img id="resultImg" alt="You wearing the selected garment" />
+            <img id="compareImg" class="result__compare" alt="Your original photo" hidden />
+            <div id="busy" class="busy" hidden>
+              <div class="busy__spinner"></div>
+              <p id="busyLabel">Dressing you…</p>
+              <p class="busy__timer" id="busyTimer">0s</p>
+              <button id="cancel" class="link">Cancel</button>
+            </div>
+          </div>
+          <div class="row row--tight">
+            <button id="compareBtn" class="btn btn--ghost">Hold to compare</button>
+            <button id="downloadBtn" class="btn btn--ghost">Save</button>
+            <button id="regenBtn" class="btn btn--ghost">Again</button>
+          </div>
+          <p id="savedNote" class="hint hint--center"></p>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── lookbook ─────────────────────────── -->
+      <section id="view-lookbook" class="view" hidden>
+        <div class="block__head block__head--bar">
+          <h2>Lookbook</h2>
+          <div class="row row--tight">
+            <button id="compareMode" class="link">Compare</button>
+            <button id="clearLooks" class="link link--danger">Clear all</button>
+          </div>
+        </div>
+
+        <p id="compareHelp" class="hint" hidden>
+          Pick two or three looks to see them side by side.
+        </p>
+        <div id="compareStrip" class="comparestrip" hidden></div>
+
+        <div id="lookGrid" class="grid"></div>
+        <p id="lookEmpty" class="empty" hidden>
+          Nothing saved yet. Every try-on you generate lands here.
+        </p>
+      </section>
+    </main>
+
+    <!-- full-screen look detail -->
+    <div id="detail" class="detail" hidden>
+      <div class="detail__bar">
+        <button id="detailClose" class="link">← Back</button>
+        <div class="row row--tight">
+          <button id="detailReuse" class="link">Try again</button>
+          <button id="detailDownload" class="link">Save</button>
+          <button id="detailDelete" class="link link--danger">Delete</button>
+        </div>
+      </div>
+      <img id="detailImg" class="detail__img" alt="Saved look" />
+      <div class="detail__meta">
+        <p id="detailTitle"></p>
+        <a id="detailLink" class="link" target="_blank" rel="noreferrer" hidden
+          >Open product page →</a
+        >
+        <p id="detailDate" class="meta"></p>
+      </div>
+    </div>
+
+    <input id="filePicker" type="file" accept="image/*" hidden />
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>
