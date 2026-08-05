@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Toolbox",
+    "slug": "toolbox",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0f1115",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "The flashlight uses the camera's torch."
+      }
+    },
+    "android": {
+      "package": "com.toolbox.app",
+      "permissions": ["CAMERA", "FLASHLIGHT"]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "The flashlight uses the camera's torch."
+        }
+      ]
+    ]
+  }
+}
