@@ -1,0 +1,138 @@
+/*
+ * Provisional palette. KICKOFF directs the visual language to come from
+ * `kernel/legacy-ui-reference.jsx`; when that lands, take the palette and type scale
+ * from it rather than keeping two competing systems.
+ */
+:root {
+  --bg: #0f1115;
+  --panel: #161a21;
+  --line: #262d38;
+  --ink: #e6eaf0;
+  --ink-dim: #8b96a7;
+  --accent: #4a9eff;
+  --warn: #f0a848;
+  --bad: #e05c5c;
+  --ok: #4fb477;
+
+  color-scheme: dark;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+.shell {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 4rem;
+}
+
+.shell__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+}
+
+.shell__sub {
+  margin: 0.4rem 0 0;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+}
+
+.shell__head {
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 2rem;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.card--warn {
+  border-left: 3px solid var(--warn);
+}
+
+.card__title {
+  margin: 0 0 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.card__body {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--ink);
+}
+
+.checklist,
+.missing {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.checklist__item {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.checklist__item:last-child {
+  border-bottom: 0;
+}
+
+.checklist__state {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.is-done .checklist__mark {
+  color: var(--ok);
+}
+
+.is-blocked .checklist__mark {
+  color: var(--bad);
+}
+
+.is-todo .checklist__mark {
+  color: var(--ink-dim);
+}
+
+.is-blocked .checklist__label {
+  color: var(--ink-dim);
+}
+
+.missing {
+  font-size: 0.8rem;
+  line-height: 1.9;
+  color: var(--ink-dim);
+  margin-bottom: 0.85rem;
+}
+
+.missing code {
+  color: var(--accent);
+}
