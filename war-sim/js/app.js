@@ -76,6 +76,7 @@
       mobilizationB: $("mobB").value,
       support: $("support").value,
       startMonth: +$("season").value,
+      localSupport: +$("local").value,
       allies: $("allies").checked,
       nuclearAllowed: $("nukes").checked,
       surprise: $("surprise").checked,
@@ -315,11 +316,24 @@
   }
 
   /* ── Campaign timeline ──────────────────────────────────────────────────── */
+  // Last tick of each elapsed month. The model runs weekly; a 96-month war is
+  // 417 points, which is neither readable as a line nor useful as a table.
+  function monthly(timeline) {
+    const out = [];
+    let seen = -1;
+    timeline.forEach((x) => {
+      const m = Math.ceil(x.month);
+      if (m !== seen) { out.push(x); seen = m; }
+      else out[out.length - 1] = x;
+    });
+    return out;
+  }
+
   function campaign(R, aN, bN) {
-    const t = R.medianRun.timeline;
+    const t = monthly(R.medianRun.timeline);
     const s = panel("How the campaign runs",
       `A single representative run, month by month — not an average of incompatible trajectories. ` +
-      `It ends in ${R.medianRun.months} month${R.medianRun.months === 1 ? "" : "s"} with ${outcomeLabel(R.medianRun.outcome, R)}.`);
+      `It ends after ${duration(R.medianRun.months)} with ${outcomeLabel(R.medianRun.outcome, R)}.`);
 
     const mk = (title, legend, cfg, tableHead, tableRows) => {
       const head = document.createElement("div");
@@ -346,7 +360,7 @@
         ],
       },
       ["Month", R.defender.name + " territory", R.attacker.name + " air control", "Force ratio"],
-      t.map((x) => [x.month, pct(x.territoryB * 100), pct(x.airControlA * 100), x.forceRatio.toFixed(2) + " : 1"]));
+      t.map((x) => [Math.ceil(x.month), pct(x.territoryB * 100), pct(x.airControlA * 100), x.forceRatio.toFixed(2) + " : 1"]));
 
     mk("Artillery ammunition remaining",
       `<span><i class="swatch" style="background:${C.a}"></i>${esc(aN)}</span>
@@ -361,7 +375,7 @@
       },
       ["Month", R.attacker.name + " shells", R.defender.name + " shells",
        R.attacker.name + " firepower", R.defender.name + " firepower"],
-      t.map((x) => [x.month, pct(Math.min(1, x.shellsA) * 100), pct(Math.min(1, x.shellsB) * 100),
+      t.map((x) => [Math.ceil(x.month), pct(Math.min(1, x.shellsA) * 100), pct(Math.min(1, x.shellsB) * 100),
         pct(x.fireA * 100), pct(x.fireB * 100)]));
 
     mk("Political will",
@@ -376,7 +390,7 @@
         ],
       },
       ["Month", R.attacker.name + " will", R.defender.name + " will", R.attacker.name + " dead", R.defender.name + " dead"],
-      t.map((x) => [x.month, pct(x.willA * 100), pct(x.willB * 100), people(x.casA * 1000), people(x.casB * 1000)]));
+      t.map((x) => [Math.ceil(x.month), pct(x.willA * 100), pct(x.willB * 100), people(x.casA * 1000), people(x.casB * 1000)]));
 
     return s;
   }
@@ -397,9 +411,10 @@
     const t = R.medianRun.timeline, run = R.medianRun, D = R.derived;
     const s = panel("What actually happens", null);
     const ph = [];
-    const at = (i) => t[Math.min(i, t.length - 1)];
+    // By elapsed month, not by array position — the timeline is weekly now.
+    const at = (m) => t.find((x) => x.month >= m) || t[t.length - 1];
 
-    const m1 = at(0);
+    const m1 = at(1);
     ph.push(["Days 1–30",
       `${R.opts.surprise ? "<b>Strategic surprise achieved.</b> " : ""}Opening strikes and the fight for the sky. ` +
       `${R.attacker.name} holds <b>${pct(m1.airControlA * 100)}</b> of the air. ` +
@@ -407,9 +422,9 @@
       (D.needsAmphib ? `The theatre is across water: ${R.attacker.name} must fight its way in with a lift capacity of about <b>${num(R.profiles.a.lift, 0)}k troops per month</b>, and only in proportion to the sea control it wins. ` : "") +
       `Ground forces engage at a force ratio of <b>${m1.forceRatio.toFixed(2)} : 1</b> against a defender multiplier of ${D.defenderEdge.toFixed(2)}× from terrain and prepared positions.`]);
 
-    if (t.length >= 3) {
-      const m3 = at(2);
-      ph.push([`Months 2–${Math.min(6, t.length)}`,
+    if (run.months >= 2) {
+      const m3 = at(Math.min(4, run.months));
+      ph.push([`Months 2–${Math.min(6, Math.ceil(run.months))}`,
         `Air control ${m3.airControlA > m1.airControlA ? "consolidates" : "slips"} to <b>${pct(m3.airControlA * 100)}</b>. ` +
         `${R.defender.name} holds <b>${pct(m3.territoryB * 100)}</b> of its territory. ` +
         `Combined military dead pass <b>${people((m3.casA + m3.casB) * 1000)}</b>. ` +
@@ -418,9 +433,9 @@
           : "Neither side's partners enter. ")]);
     }
 
-    if (t.length >= 8) {
-      const mid = at(Math.floor(t.length / 2));
-      ph.push([`Month ${mid.month}`,
+    if (run.months >= 8) {
+      const mid = at(run.months / 2);
+      ph.push([`Month ${Math.ceil(mid.month)}`,
         `The war has become a contest of replacement rates. ${R.attacker.name} regenerates <b>${pct(R.profiles.a.sust.replacement * 100, 1)}</b> of committed force per month against ${R.defender.name}'s <b>${pct(R.profiles.b.sust.replacement * 100, 1)}</b>. ` +
         `Political will stands at <b>${pct(mid.willA * 100)}</b> and <b>${pct(mid.willB * 100)}</b>. ` +
         (R.defender.oilSelfSufficiency < 0.8 && R.defender.coast > 400
@@ -443,7 +458,7 @@
         (run.nuclear.exchange ? "The other side retaliates. " : "There is no retaliation in kind. ") +
         `Prompt fatalities on the order of <b>${people(run.nuclear.deathsA * 1e6)}</b> and <b>${people(run.nuclear.deathsB * 1e6)}</b>. There is no winner.`;
     }
-    ph.push([`Month ${last.month} — end`, end]);
+    ph.push([`Month ${Math.ceil(last.month)} — end`, end]);
 
     const ul = document.createElement("ul");
     ul.className = "phases";
@@ -508,6 +523,8 @@
       { label: "Attacker achieves surprise", o: { surprise: !R.opts.surprise } },
       { label: "Defender fully mobilised", o: { mobilizationB: "full" } },
       { label: "Attacker fully mobilised", o: { mobilizationA: "full" } },
+      { label: "Population welcomes the attacker", o: { localSupport: 0.85 } },
+      { label: "Population resists the attacker", o: { localSupport: 0.05 } },
       { label: "Foreign materiel support to defender", o: { support: "b" } },
       { label: "Foreign materiel support to attacker", o: { support: "a" } },
       { label: "War of total conquest", o: { warAim: "conquest" } },
@@ -653,6 +670,17 @@ maxAdvance    = 0.030 + 0.34 · manoeuvre²      → <b>${pct((0.030 + 0.34 * Ma
           ${D.chokepoints.onB.map((k) => `<tr><td>${k.name}</td><td class="a">${esc(R.attacker.name)}</td><td>tightens the blockade on ${esc(R.defender.name)}</td></tr>`).join("")}
         </tbody></table>`));
     }
+
+    s.appendChild(block("Two wills: society and regime", `
+      <p class="note">A society's capacity to absorb loss and a regime's willingness to keep spending it are different things, and conflating them was this model's one diagnosed structural failure — any single setting that let the Iran–Iraq War run eight years also made every short decisive war too long. Society exhausts on casualties; the regime decides; how much of the first reaches the second is set by how far the government depends on consent.</p>
+      <div class="formula">transmission = 0.16 + 0.84 · (openness / 100)^0.85</div>
+      <table><thead><tr><th></th><th>${esc(aN)}</th><th>${esc(bN)}</th></tr></thead><tbody>
+        <tr><td>Openness (dependence on consent)</td><td class="a">${num(a.openness)}</td><td class="b">${num(b.openness)}</td></tr>
+        <tr><td>Exhaustion reaching the decision</td><td class="a">${pct(a.will.transmission * 100)}</td><td class="b">${pct(b.will.transmission * 100)}</td></tr>
+        <tr><td>Casualty tolerance</td><td class="a">${pct(a.will.tolerance * 100, 2)}</td><td class="b">${pct(b.will.tolerance * 100, 2)}</td></tr>
+        <tr><td><b>Casualties before society is spent</b></td><td class="a"><b>${people(R.attacker.fit * 1e6 * a.will.tolerance)}</b></td><td class="b"><b>${people(R.defender.fit * 1e6 * b.will.tolerance)}</b></td></tr>
+      </tbody></table>
+      <p class="note">An accountable government has to stop when its population has had enough. A coercive one does not, which is why Iran and Iraq could spend eight years and something over a million casualties on a war neither population chose. Local support of <strong>${pct(D.localSupport * 100)}</strong> also cuts the garrison the attacker must leave behind by ${pct(D.localSupport * 90)} — India did not have to occupy East Pakistan in 1971, it handed the territory to a government the population had just voted for.</p>`));
 
     s.appendChild(block("Occupation arithmetic", `
       <div class="formula">troops needed = population × 20 per 1,000 inhabitants
@@ -813,8 +841,9 @@ maxAdvance    = 0.030 + 0.34 · manoeuvre²      → <b>${pct((0.030 + 0.34 * Ma
         note.className = "note";
         note.style.maxWidth = "80ch";
         note.innerHTML =
-          "<strong>What the failures are telling you.</strong> The Six-Day War lasted six days and the model works in months — it cannot be right about that one and it is included to show the floor rather than hidden. The Iran–Iraq War and Russia–Ukraine share a single structural failure: the model cannot sustain a multi-year attritional war, because it has one political-will mechanism and any setting of it that keeps an eight-year war going also makes every short decisive war too long. That was tested directly — a saturating will function moved Iran–Iraq from 7 months to 10 against an actual 96, while pushing the 2003 invasion of Iraq from 3.5 months to 14 and dropping casualty accuracy from 4/9 to 1/9. It was reverted. " +
-          "Treat long attritional matchups in the report above as the model's weakest ground.";
+          "<strong>What the failures are telling you.</strong> The model calls the <em>outcome</em> of most of these wars and is poor at how long they take and how many they kill. The error is systematic and in one direction: short decisive campaigns run far too long, and because casualties accumulate per week, the casualty counts inherit that error. The mechanism has not been identified — supply culmination and garrison drag were both investigated and neither was the cause. " +
+          "<br><br>Six of these fifteen are held back from the coefficient fitter and scored separately, and the split is stratified by duration after a first attempt accidentally put almost every short war on one side. " +
+          "<strong>Fitting the twelve free coefficients does not help.</strong> Bounded to physically defensible ranges and regularised toward their priors, the search reliably improves the fitting score by 12–17% and makes the held-out score 6–12% <em>worse</em>, across four different configurations. The remaining error is structural, not a matter of the constants, so the hand-set values are what ships. That negative result is the most useful thing this backtest has produced.";
 
         box.innerHTML = "";
         box.append(tiles, t, note);

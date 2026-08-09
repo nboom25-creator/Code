@@ -1,6 +1,6 @@
 # Theatre — a war simulator built on real force structures
 
-Pick two countries and a scenario. The model fights the war month by month — air
+Pick two countries and a scenario. The model fights the war week by week — air
 superiority, ground manoeuvre, sea control, magazines, industrial replacement,
 fuel, casualties and political will all feeding back into each other — a few
 thousand times, and reports the distribution of outcomes rather than a single
@@ -9,11 +9,13 @@ answer.
 74 countries. Order of battle, economy, demography, logistics, energy, industry,
 geography, munitions stocks, nuclear forces, and a set of qualitative indices.
 
-**It is graded.** Nine historical wars with known outcomes run through the same
-simulation, in the app, on demand. Current score: **6 of 9 outcomes called
-correctly, 4 of 9 durations within 3×, 4 of 9 casualty counts within 4×**, with
-a mean 67% of probability mass on what actually happened. The failures are
-listed below rather than hidden.
+**It is graded.** Fifteen historical wars with known outcomes run through the same
+simulation, in the app, on demand. Current score: **9 of 15 outcomes called
+correctly, 4 of 15 durations within 3x, 1 of 15 casualty counts within 4x**, with
+a mean 58% of probability mass on what actually happened. Six of the fifteen are
+held out from coefficient fitting and scored separately. The failures are listed
+below rather than hidden, and one of them is a result in its own right: **fitting
+the model's free coefficients does not improve out-of-sample accuracy.**
 
 ## Running it
 
@@ -32,8 +34,8 @@ python3 -m http.server -d war-sim 8000   # then visit http://localhost:8000
 
 ## What the model does
 
-**There is no single "power score."** Wars are resolved as a month-by-month
-campaign. Each month the model contests the air, contests the sea if the sea
+**There is no single "power score."** Wars are resolved as a week-by-week
+campaign. Each tick the model contests the air, contests the sea if the sea
 matters, fights on the ground, burns ammunition, applies attrition, regenerates
 what industry can replace, spends money, kills people, and updates each side's
 willingness to keep going. A side can win every battle and still lose the war.
@@ -62,6 +64,18 @@ continuous, mutually supporting line exists and there are no flanks; below about
 0.12 the front is a screen with holes and armies move at the speed of their fuel
 trucks. This is the difference between 1916 and 1940 at similar odds.
 
+**Two wills, not one.** A society's capacity to absorb loss and a regime's
+willingness to keep spending it are different variables. Society exhausts on
+casualties; the regime decides; how much of the first reaches the second is set
+by how far the government depends on consent. This is why Iran and Iraq could
+spend eight years on a war neither population chose, and why the United States
+left Vietnam having won almost every engagement.
+
+**The population's stance is a variable.** India did not garrison East Pakistan
+in 1971 — it handed the territory to a government the population had just voted
+for. Treating every population as hostile makes wars of liberation come out as
+occupations.
+
 **Mobilisation is slow and equipment-limited.** Reserves are called up over
 months and can only be armed from what is in storage. A country with three
 million reservists and equipment for four hundred thousand fields an army the
@@ -83,7 +97,7 @@ urban warfare; seasonal tempo by climate (rasputitsa, monsoon, desert summer);
 airbase vulnerability to missile attack; maritime chokepoints; multi-front border
 commitments weighted by what the neighbour could actually do; killed vs wounded
 vs captured, with most of the wounded returning to duty; unit cohesion collapse
-distinct from national will; and nuclear escalation checked monthly against each
+distinct from national will; and nuclear escalation checked against each
 state's doctrinal threshold.
 
 Every parameter a planner would be uncertain about — leadership competence,
@@ -98,6 +112,7 @@ is sampled per run. The output is a distribution.
 | **Mobilisation** | Per side. Governs how much of the reserve is called up and how far the economy goes onto a war footing. |
 | **Foreign materiel support** | Shells, vehicles, interceptors and intelligence from a patron who does not send troops. Modern wars are shaped by this more than by formal alliances. |
 | **Alliances** | Treaty partners drawn in probabilistically, weighted per pact (NATO 0.82, CSTO 0.45, GCC 0.38). |
+| **Local population** | Whether the people on the ground resist the attacker, are divided, or welcome them. Sets how much of the army the captured ground ties down, and whether an occupation is feasible at all. |
 | **Season** | Which month the war starts in. Matters more than it sounds. |
 | **Nuclear escalation** | Toggle off to see the conventional result — a fiction wherever a nuclear state faces defeat. |
 | **Surprise** | A first-month strike that also destroys aircraft on the ground. |
@@ -107,39 +122,73 @@ assumption changed at a time, so you can see which of them the answer rests on.
 
 ## The backtest
 
-`js/backtest.js` holds nine wars with period-accurate force data and documented
-outcomes, run through the same `simulate()` the live app uses. Two conventions
-matter for reading it: expeditionary forces are placed at their staging base
-rather than their capital (the 1991 coalition is modelled as the force in Saudi
-Arabia), and the model's resolution is one month.
+`js/backtest.js` holds fifteen wars with period-accurate force data and
+documented outcomes, run through the same `simulate()` the live app uses. Two
+conventions matter: expeditionary forces are placed at their staging base rather
+than their capital (the 1991 coalition is modelled as the force in Saudi Arabia),
+and the model ticks weekly.
 
-| War | Model | Actual | Notes |
+| War | Model | Actual | |
 |---|---|---|---|
-| Gulf War 1991 | attacker, 1.9 mo | attacker, 1.5 mo | ✓ outcome ✓ duration ✓ casualties |
-| Invasion of Iraq 2003 | attacker, 3.5 mo | attacker, 1.5 mo | ✓ ✓ — occupation correctly flagged as failing |
-| Falklands 1982 | attacker, 10.4 mo | attacker, 2.5 mo | ✓ outcome, far too slow |
-| Yom Kippur 1973 | defender | defender, 0.7 mo | ✓ outcome; below time resolution |
-| Six-Day War 1967 | defender | attacker, 0.2 mo | ✗ — six days is below the model's floor |
-| Iran–Iraq 1980–88 | defender, 7.3 mo | stalemate, 96 mo | ✗ — see below |
-| Nagorno-Karabakh 2020 | attacker, 9.7 mo | attacker, 1.5 mo | ✓ outcome ✓ casualties |
-| Winter War 1939–40 | attacker, 1.6 mo | attacker, 3.5 mo | ✓ ✓; Soviet casualties far too low |
-| Russia–Ukraine 2022– | attacker | stalemate | ✗ — see below |
+| Gulf War 1991 | attacker, 4.9 mo | attacker, 1.5 mo | outcome ✓ |
+| Invasion of Iraq 2003 | attacker, 15.9 mo | attacker, 1.5 mo | outcome ✓, occupation correctly fails |
+| Falklands 1982 | attacker, 19.9 mo | attacker, 2.5 mo | outcome ✓ |
+| Yom Kippur 1973 | defender | defender, 0.7 mo | outcome ✓ |
+| Six-Day War 1967 | defender | attacker, 0.2 mo | ✗ |
+| Iran–Iraq 1980–88 | defender, 25 mo | stalemate, 96 mo | ✗ |
+| Nagorno-Karabakh 2020 | attacker, 16.5 mo | attacker, 1.5 mo | outcome ✓ |
+| Winter War 1939–40 | attacker, 1.4 mo | attacker, 3.5 mo | outcome ✓ duration ✓ |
+| Vietnam 1965–73 | attacker | defender, 96 mo | ✗ |
+| Korea 1950–53 | stalemate, 37 mo | stalemate, 37 mo | outcome ✓ duration ✓ |
+| Indo-Pakistani 1971 | attacker, 18.5 mo | attacker, 0.45 mo | outcome ✓ |
+| Kosovo 1999 | stalemate | attacker, 2.6 mo | ✗ |
+| Russo-Georgian 2008 | attacker, 0.5 mo | attacker, 0.17 mo | outcome ✓ duration ✓ |
+| Kargil 1999 | stalemate | defender, 2.5 mo | ✗ |
+| Russia–Ukraine 2022– | attacker | stalemate | ✗ |
 
-**What the failures are telling you.** The Six-Day War lasted six days; a model
-working in whole months cannot be right about it, and it is included to show the
-floor rather than hidden. Iran–Iraq and Russia–Ukraine share one structural
-failure: **the model cannot sustain a multi-year attritional war.** It has a
-single political-will mechanism, and any setting of it that keeps an eight-year
-war going also makes every short decisive war too long. That was tested
-directly — a saturating will function moved Iran–Iraq from 7 months to 10 against
-an actual 96, while pushing the 2003 invasion from 3.5 months to 14 and dropping
-casualty accuracy from 4/9 to 1/9. It was reverted, and the attempt is documented
-in the code. Treat long attritional matchups as the model's weakest ground.
+**What the failures say.** The model calls the *outcome* of most of these wars
+and is poor at how long they take and how many they kill. The error is
+systematic and in one direction: short decisive campaigns run far too long, and
+because casualties accumulate per week, the casualty counts inherit that error.
+The mechanism has not been identified — supply culmination and garrison drag were
+both investigated and neither was the cause. Until it is, treat durations and
+casualty figures as much weaker than the outcome verdict.
 
-Building the backtest immediately found several real bugs that eyeballing had
-missed, including a theatre-deployment fraction that was never applied to combat
-power (attackers were fighting with 100% of their army at any distance) and an
-equipment ceiling that let Finland field 45,000 men in 1939.
+### Fitting does not help, and that is the finding
+
+`tools/fit.js` searches the twelve genuinely free coefficients (`K` in
+`js/model.js`) by coordinate descent against a continuous objective — log-ratio
+error on duration and casualties plus probability mass on the true outcome.
+It is bounded to physically defensible ranges, regularised toward the hand-set
+priors, and scored on nine cases while six are held back.
+
+```
+node tools/fit.js --sweeps 3 --iters 250 --reg 0.35
+```
+
+Across four configurations — unbounded, bounded, regularised, and with a
+duration-stratified holdout — the result is the same: **the fitting score
+improves 12–17% and the held-out score gets 6–12% worse.** The coefficients are
+not the binding constraint; the remaining error is structural. The hand-set
+values are therefore what ships, and the fitter exists to keep proving that
+rather than to tune the model.
+
+Two things worth stealing from this even if you disagree with the model:
+
+- The first holdout split was picked by hand and turned out to contain almost
+  every short war, leaving all four multi-year conflicts in the fitting half.
+  That alone produced a large apparent overfitting gap. Stratify the split.
+- Unbounded, the search drove unit cohesion to "an army breaks after losing 9%
+  of its strength" because it shaved a little off the objective. Bounds are not
+  bureaucracy; a coefficient outside what you could defend in words is the
+  optimiser exploiting your loss function.
+
+Building the backtest, and then fitting against it, found several real bugs that
+eyeballing had missed: a theatre-deployment fraction that was never applied to
+combat power (attackers fought with 100% of their army at any distance), an
+equipment ceiling that let Finland field 45,000 men in 1939, materiel attrition
+that let a routed army keep its equipment, and a fragile-state clause keyed to a
+field name that did not exist.
 
 ## Data
 
@@ -180,7 +229,9 @@ table and in "show your work."
 is calibrated against the backtest rather than measured, and the code says so
 where that is true.
 
-**Long attritional wars are the weak ground** — see the backtest section.
+**Durations and casualty counts are much weaker than the outcome verdict.**
+Short decisive wars run far too long and the casualty figures inherit that error.
+See the backtest section; the cause is not yet identified.
 
 **The nuclear module is deliberately crude.** It exists so the model refuses to
 report a tidy conventional victory over a nuclear-armed state facing collapse —
@@ -195,7 +246,8 @@ css/styles.css    dark theme; the three series colours are validated (see below)
 js/data.js        the dataset — 74 countries, alliances, chokepoints, stocks
 js/model.js       the model: force quality, projection, magazines, the campaign
                   loop, geometry, attrition, occupation, escalation, Monte Carlo
-js/backtest.js    nine historical wars, period force data, and the scoring
+js/backtest.js    fifteen historical wars, period force data, and the scoring
+tools/fit.js      coefficient search with a held-out validation set
 js/charts.js      two SVG chart forms with hover layers and table fallbacks
 js/app.js         controls and the report
 ```

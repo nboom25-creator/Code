@@ -1227,6 +1227,29 @@ const STOCK_OVERRIDES_2 = {
   fra: { droneProd: 22 }, kor: { droneProd: 34 }, jpn: { droneProd: 20 },
 };
 
+/* ── Openness ─────────────────────────────────────────────────────────────────
+ * How far the government depends on popular consent to keep fighting. This is
+ * the variable that separates a society's exhaustion from a regime's decision:
+ * an accountable government has to stop when its population has had enough, a
+ * coercive one does not, and that difference is why Iran and Iraq could spend
+ * eight years and a million casualties on a war neither population chose.
+ *
+ * Roughly a V-Dem/Polity liberal-democracy ranking, coarsened to a 0-100 scale.
+ * Countries not listed default to 50.
+ */
+const OPENNESS = {
+  usa: 82, gbr: 88, fra: 86, deu: 90, ita: 84, esp: 85, nld: 93, swe: 94,
+  fin: 94, nor: 95, dnk: 95, che: 92, aut: 88, prt: 88, grc: 80, cze: 84,
+  pol: 72, rou: 70, bgr: 68, hun: 52, srb: 46, can: 90, aus: 90, nzl: 93,
+  jpn: 86, kor: 80, twn: 84, isr: 66, ind: 58, bra: 72, arg: 74, chl: 82,
+  col: 62, per: 58, mex: 60, zaf: 68, nga: 46, gha: 66, tur: 34, ukr: 58,
+  idn: 58, phl: 52, mys: 48, tha: 40, sgp: 42, mmr: 8, bgd: 34, pak: 34,
+  lka: 55, kaz: 18, aze: 12, arm: 55, geo: 52, irq: 32, jor: 26, mar: 34,
+  egy: 16, dza: 22, sau: 6, are: 8, qat: 10, kwt: 26, omn: 10, irn: 14,
+  rus: 12, blr: 6, chn: 5, prk: 2, vnm: 8, cub: 8, ven: 14, syr: 4,
+  lby: 12, sdn: 8, eth: 22,
+};
+
 /* Arid belt. The seasonal-tempo model needs to know where the enemy is heat
  * and dust rather than mud and snow; there is no rainfall field to infer it
  * from, so it is an explicit list rather than a bad proxy. */
@@ -1263,6 +1286,7 @@ function makeCountry(raw) {
   Object.assign(c, deriveStocks(c), STOCK_OVERRIDES[c.id] || {},
     STOCK_OVERRIDES_2[c.id] || {}, explicit);
   c.urban = raw.urban ?? URBAN[c.id] ?? 60;
+  c.openness = raw.openness ?? OPENNESS[c.id] ?? 50;
   if (raw.climate) c.forceClimate = raw.climate;
 
   // Climate band, from latitude. Drives the seasonal tempo of ground
@@ -1318,6 +1342,6 @@ const chokeAgainst = (holder, subject) =>
 
 window.WarData = {
   COUNTRIES, BY_ID, ALLIANCES, PLATFORM_VALUES, PLATFORM_LABELS,
-  NUCLEAR_DOCTRINE, CHOKEPOINTS, URBAN,
+  NUCLEAR_DOCTRINE, CHOKEPOINTS, URBAN, OPENNESS,
   alliancesOf, alliesOf, sharedAlliance, chokeAgainst, makeCountry,
 };
