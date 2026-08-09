@@ -1100,10 +1100,147 @@ const CAPITALS = {
   cub: [23.11, -82.37],
 };
 
+/* ── Urbanisation ─────────────────────────────────────────────────────────────
+ * Share of population in cities. Cities are where a defender's advantage is
+ * largest and an attacker's casualties multiply — Grozny, Mariupol, Mosul.
+ * Source: UN World Urbanization Prospects. */
+const URBAN = {
+  usa: 83, chn: 65, rus: 75, ind: 36, gbr: 84, fra: 82, deu: 78, ukr: 70,
+  pol: 60, ita: 72, esp: 81, tur: 77, nld: 93, swe: 89, fin: 86, nor: 84,
+  dnk: 88, grc: 80, rou: 54, cze: 74, prt: 67, che: 74, aut: 60, hun: 72,
+  bgr: 76, srb: 57, blr: 80, jpn: 92, kor: 81, prk: 63, twn: 80, aus: 86,
+  nzl: 87, idn: 58, vnm: 39, tha: 53, phl: 48, mys: 78, sgp: 100, mmr: 32,
+  bgd: 40, kaz: 58, isr: 93, irn: 77, sau: 84, are: 87, qat: 99, kwt: 100,
+  omn: 88, irq: 71, jor: 92, syr: 56, aze: 57, arm: 63, geo: 60, pak: 38,
+  egy: 43, dza: 75, mar: 65, nga: 54, zaf: 68, eth: 23, sdn: 36, lby: 81,
+  can: 82, mex: 81, bra: 88, arg: 92, col: 82, chl: 88, ven: 88, per: 78,
+  cub: 77,
+};
+
+/* ── Maritime chokepoints ─────────────────────────────────────────────────────
+ * A handful of straits gate most of the world's naval movement and seaborne
+ * trade. `gates` lists the states whose maritime access runs through them, so
+ * a defender who controls one can strangle an attacker's approach — and an
+ * attacker who controls one can strangle the defender's imports. */
+const CHOKEPOINTS = [
+  { id: "hormuz", name: "Strait of Hormuz", controllers: ["irn", "omn", "are"],
+    gates: ["sau", "are", "qat", "kwt", "irq", "irn", "omn"] },
+  { id: "malacca", name: "Strait of Malacca", controllers: ["idn", "mys", "sgp"],
+    gates: ["chn", "jpn", "kor", "twn", "vnm", "phl", "tha"] },
+  { id: "turkish", name: "Turkish Straits", controllers: ["tur"],
+    gates: ["rus", "ukr", "rou", "bgr", "geo"] },
+  { id: "suez", name: "Suez Canal", controllers: ["egy"],
+    gates: ["ita", "esp", "grc", "isr", "jor", "sau", "ind", "tur"] },
+  { id: "gibraltar", name: "Strait of Gibraltar", controllers: ["esp", "mar", "gbr"],
+    gates: ["ita", "grc", "tur", "dza", "lby", "isr", "egy", "syr"] },
+  { id: "danish", name: "Danish Straits", controllers: ["dnk", "swe"],
+    gates: ["rus", "fin", "pol", "deu", "ltu", "lva", "est"] },
+  { id: "taiwan", name: "Taiwan Strait", controllers: ["chn", "twn"],
+    gates: ["twn", "kor", "jpn"] },
+  { id: "bosporus_kerch", name: "Kerch Strait", controllers: ["rus", "ukr"],
+    gates: ["ukr"] },
+];
+
+/* ── Derived war-fighting stocks ──────────────────────────────────────────────
+ * Fifteen more hand-entered fields across 74 countries would be a thousand
+ * numbers, most of which I would be inventing. These are derived from figures
+ * that ARE sourced — steel, arms-industry tier, PPP budget, technology — and
+ * then overridden for the states where the derived value is known to be wrong.
+ * The overrides are the interesting part; the derivation just stops the rest
+ * of the world from being zero.
+ *
+ *   shellProd  thousands of artillery rounds per month
+ *   shellStock thousands of rounds held at the outbreak
+ *   pgmStock   precision-guided munitions, 0-100 index of magazine depth
+ *   pgmProd    share of that magazine replaced per month
+ *   intStock   surface-to-air interceptors, 0-100 index
+ *   intProd    share of interceptor magazine replaced per month
+ *   mobRate    share of the reserve pool activated and equipped per month
+ *   store      stored/mothballed major equipment, as a multiple of active kit
+ *   droneProd  attritable-drone output, 0-100 index
+ */
+function deriveStocks(c) {
+  const steel = Math.pow(Math.max(c.steel, 0.05), 0.45);
+  const arms = Math.pow(Math.max(c.arms, 3) / 40, 1.25);
+  const money = Math.pow(Math.max(c.budPpp, 0.3) / 30, 0.4);
+
+  const shellProd = Math.max(0.15, 3.2 * steel * arms * money);
+  return {
+    shellProd,
+    shellStock: Math.max(2, shellProd * 7),
+    // Precision munitions scale with money and technology, not with steel —
+    // they are microelectronics and seekers, not forgings.
+    pgmStock: Math.min(100, 2.4 * Math.pow(c.budPpp, 0.42) * Math.pow(c.tech / 60, 1.1)),
+    pgmProd: Math.min(0.09, 0.006 + 0.0011 * Math.pow(c.arms, 0.85)),
+    // Interceptor depth follows the air-defence investment far more than the
+    // headline budget — a rich country that never bought SAMs has none.
+    intStock: Math.min(100, 4.5 * Math.pow(c.budPpp, 0.40) * (0.15 + 1.15 * (c.ad / 100))),
+    intProd: Math.min(0.10, 0.008 + 0.0013 * Math.pow(c.arms, 0.8)),
+    // A society that already trains a large reserve can call it up fast.
+    mobRate: Math.min(0.45, 0.03 + 0.30 * (c.trn / 100) * Math.pow(c.res / Math.max(c.act, 1), 0.28)),
+    store: 0.25 + 0.9 * Math.pow(c.arms / 70, 1.2),
+    // Attritable mass drones are their own industry, and not the one the big
+    // defence budgets built. Russia, Ukraine, Iran and China out-produce
+    // richer countries by a wide margin.
+    droneProd: Math.min(100, 5.5 * Math.pow(c.budPpp, 0.34) * (0.3 + 0.9 * (c.tech / 100)) + c.uav * 0.015),
+  };
+}
+
+/* Where the derivation is known to be wrong. Artillery output in particular is
+ * not a function of GDP — North Korea out-produces most of NATO, and Europe's
+ * shell shortage after 2022 was a capacity problem, not a money problem. */
+const STOCK_OVERRIDES = {
+  rus: { shellProd: 250, shellStock: 2600, store: 2.2, mobRate: 0.09, droneProd: 78 },
+  usa: { shellProd: 40, shellStock: 520, pgmStock: 100, intStock: 82, store: 1.5, mobRate: 0.12 },
+  chn: { shellProd: 230, shellStock: 2200, store: 1.1, droneProd: 92 },
+  prk: { shellProd: 55, shellStock: 3400, store: 1.6, mobRate: 0.22, pgmStock: 14 },
+  ukr: { shellProd: 22, shellStock: 120, store: 0.3, mobRate: 0.12, droneProd: 88 },
+  kor: { shellProd: 50, shellStock: 900, store: 0.9, mobRate: 0.30 },
+  ind: { shellProd: 22, shellStock: 300, store: 0.8, mobRate: 0.07 },
+  irn: { shellProd: 16, shellStock: 260, store: 0.9, droneProd: 74, pgmStock: 34 },
+  isr: { shellProd: 10, shellStock: 130, intStock: 96, intProd: 0.05, mobRate: 0.55, store: 2.2 },
+  tur: { shellProd: 16, shellStock: 190, droneProd: 66, store: 0.8 },
+  pol: { shellProd: 10, shellStock: 130, store: 0.5, mobRate: 0.10 },
+  deu: { shellProd: 16, shellStock: 110, store: 0.25, mobRate: 0.06 },
+  fra: { shellProd: 8, shellStock: 70, store: 0.3, mobRate: 0.06 },
+  gbr: { shellProd: 6, shellStock: 60, store: 0.3, mobRate: 0.06 },
+  fin: { shellProd: 6, shellStock: 300, store: 3.0, mobRate: 0.38 },
+  che: { mobRate: 0.40, store: 3.0 },
+  twn: { shellProd: 8, shellStock: 240, store: 0.8, mobRate: 0.16 },
+  pak: { shellProd: 12, shellStock: 180, store: 0.7, mobRate: 0.08 },
+  egy: { shellProd: 9, shellStock: 200, store: 1.2 },
+  jpn: { shellProd: 8, shellStock: 90, store: 0.5, mobRate: 0.08 },
+  sau: { shellProd: 3, shellStock: 90, store: 0.4, mobRate: 0.04 },
+  bra: { shellProd: 7, shellStock: 60, store: 0.5 },
+  vnm: { shellProd: 8, shellStock: 300, store: 1.1, mobRate: 0.20 },
+  // Drone and interceptor outliers the derivation cannot see.
+  aze: { droneProd: 48 },
+  nzl: { droneProd: 6 },
+};
+// Applied after the block above so these win where they overlap.
+const STOCK_OVERRIDES_2 = {
+  usa: { droneProd: 52 },              // exquisite UAVs, thin attritable mass
+  isr: { droneProd: 62, pgmStock: 58 },
+  twn: { droneProd: 24, intStock: 34 },
+  prk: { intStock: 28 },               // obsolete, but a great deal of it
+  deu: { droneProd: 18 }, pol: { droneProd: 16 }, gbr: { droneProd: 22 },
+  fra: { droneProd: 22 }, kor: { droneProd: 34 }, jpn: { droneProd: 20 },
+};
+
+/* Arid belt. The seasonal-tempo model needs to know where the enemy is heat
+ * and dust rather than mud and snow; there is no rainfall field to infer it
+ * from, so it is an explicit list rather than a bad proxy. */
+const ARID = new Set([
+  "sau", "are", "qat", "kwt", "omn", "irq", "jor", "syr", "isr", "irn",
+  "egy", "dza", "lby", "mar", "sdn", "kaz", "aus", "mex",
+]);
+
 // ── Normalisation ───────────────────────────────────────────────────────────
 // Fill defaults, then derive a handful of convenience fields every consumer
 // wants. Freezing catches accidental mutation during a Monte Carlo run.
-const COUNTRIES = RAW_COUNTRIES.map((raw) => {
+// Exported as a factory so the historical backtest can build period-accurate
+// countries that go through exactly the same derivation as the modern ones.
+function makeCountry(raw) {
   const c = Object.assign({}, DEFAULTS, raw);
   if (CAPITALS[c.id]) { c.centroid = [c.lat, c.lon]; [c.lat, c.lon] = CAPITALS[c.id]; }
   c.borders = (raw.borders || []).slice();
@@ -1115,8 +1252,43 @@ const COUNTRIES = RAW_COUNTRIES.map((raw) => {
   c.burden = (c.bud / c.gdp) * 100; // military spending as % of GDP
   c.oilSelfSufficiency = c.oilc > 0 ? Math.min(2.5, c.oilp / c.oilc) : 1;
   c.doctrine = NUCLEAR_DOCTRINE[c.id] || null;
+
+  // Derivation, then per-country overrides, then anything the caller stated
+  // explicitly — an explicit figure always wins, which is what lets the
+  // historical backtest supply period-accurate stocks.
+  const STOCK_KEYS = ["shellProd", "shellStock", "pgmStock", "pgmProd", "intStock",
+    "intProd", "mobRate", "store", "droneProd"];
+  const explicit = {};
+  STOCK_KEYS.forEach((k) => { if (raw[k] !== undefined) explicit[k] = raw[k]; });
+  Object.assign(c, deriveStocks(c), STOCK_OVERRIDES[c.id] || {},
+    STOCK_OVERRIDES_2[c.id] || {}, explicit);
+  c.urban = raw.urban ?? URBAN[c.id] ?? 60;
+  if (raw.climate) c.forceClimate = raw.climate;
+
+  // Climate band, from latitude. Drives the seasonal tempo of ground
+  // operations: the spring and autumn thaw stops armour in continental
+  // Europe and Russia, the monsoon does the same in South and Southeast Asia,
+  // and summer heat blunts operations in the desert belt.
+  const absLat = Math.abs(c.lat);
+  c.climate = c.forceClimate ? c.forceClimate
+    : ARID.has(c.id) ? "arid"
+    : absLat >= 48 ? "continental"
+    : absLat >= 30 ? "temperate"
+    : absLat >= 12 ? "monsoon" : "tropical";
+
+  // Airfields are the air force's real vulnerability. A country flying from a
+  // handful of known bases can be shut down by a missile salvo; one with
+  // hundreds of dispersal options cannot.
+  c.airbaseResilience = Math.min(1.25, Math.max(0.35, Math.log10(1 + c.air) / 2.4));
+
+  // Chokepoints this country controls, and those its own sea access depends on.
+  c.controls = CHOKEPOINTS.filter((k) => k.controllers.includes(c.id)).map((k) => k.id);
+  c.gatedBy = CHOKEPOINTS.filter((k) => k.gates.includes(c.id)).map((k) => k.id);
+
   return Object.freeze(c);
-});
+}
+
+const COUNTRIES = RAW_COUNTRIES.map(makeCountry);
 
 const BY_ID = Object.fromEntries(COUNTRIES.map((c) => [c.id, c]));
 
@@ -1140,7 +1312,12 @@ const alliesOf = (id) => {
 const sharedAlliance = (a, b) =>
   alliancesOf(a).find((al) => al.members.includes(b)) || null;
 
+// Chokepoints controlled by `holder` that gate `subject`'s sea access.
+const chokeAgainst = (holder, subject) =>
+  CHOKEPOINTS.filter((k) => k.controllers.includes(holder) && k.gates.includes(subject));
+
 window.WarData = {
   COUNTRIES, BY_ID, ALLIANCES, PLATFORM_VALUES, PLATFORM_LABELS,
-  NUCLEAR_DOCTRINE, alliancesOf, alliesOf, sharedAlliance,
+  NUCLEAR_DOCTRINE, CHOKEPOINTS, URBAN,
+  alliancesOf, alliesOf, sharedAlliance, chokeAgainst, makeCountry,
 };

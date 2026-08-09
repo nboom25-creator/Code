@@ -36,6 +36,9 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+  const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"];
+
   /* ── Populate controls ──────────────────────────────────────────────────── */
   const sorted = [...COUNTRIES].sort((x, y) => x.name.localeCompare(y.name));
   function fillCountries(sel, selectedId) {
@@ -57,6 +60,9 @@
       .map(([k, v]) => `<option value="${k}"${k === "partial" ? " selected" : ""}>${v.label}</option>`).join("");
   });
 
+  $("season").innerHTML = MONTH_NAMES
+    .map((m, i) => `<option value="${i}"${i === 2 ? " selected" : ""}>${m}</option>`).join("");
+
   $("swap").addEventListener("click", () => {
     const a = $("atk").value;
     $("atk").value = $("def").value;
@@ -69,6 +75,7 @@
       mobilizationA: $("mobA").value,
       mobilizationB: $("mobB").value,
       support: $("support").value,
+      startMonth: +$("season").value,
       allies: $("allies").checked,
       nuclearAllowed: $("nukes").checked,
       surprise: $("surprise").checked,
@@ -117,6 +124,7 @@
     out.appendChild(showWork(R, aN, bN));
     out.appendChild(comparison(R, aN, bN));
     out.appendChild(caveats());
+    out.appendChild(backtestPanel());
     wrapTables(out);
     out.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -208,12 +216,31 @@
     const occ = R.medianRun.occupation;
     const items = [
       { k: "Duration", v: duration(e.months), s: `median run: ${duration(R.medianRun.months)}` },
-      { k: `${R.attacker.flag} military dead`, v: people(e.casualtiesA), s: `${pct((e.casualtiesA / (R.attacker.fit * 1e6)) * 100, 2)} of fit-for-service pool` },
-      { k: `${R.defender.flag} military dead`, v: people(e.casualtiesB), s: `${pct((e.casualtiesB / (R.defender.fit * 1e6)) * 100, 2)} of fit-for-service pool` },
+      { k: `${R.attacker.flag} military dead`, v: people(e.killedA),
+        s: `${people(e.casualtiesA)} total casualties · ${pct((e.casualtiesA / (R.attacker.fit * 1e6)) * 100, 2)} of pool` },
+      { k: `${R.defender.flag} military dead`, v: people(e.killedB),
+        s: `${people(e.casualtiesB)} total casualties · ${pct((e.casualtiesB / (R.defender.fit * 1e6)) * 100, 2)} of pool` },
       { k: "Civilian dead", v: people(e.civA + e.civB), s: `${people(e.civB)} in ${R.defender.name}` },
       { k: "Direct cost", v: money(e.econA + e.econB), s: `${money(e.econA)} attacker / ${money(e.econB)} defender` },
       { k: `${R.defender.flag} territory lost`, v: pct(e.territoryLostB * 100), s: R.derived.aim.label + " requires " + pct(R.derived.aim.territory * 100) },
+      { k: "Front width", v: num(R.derived.frontKm) + " km",
+        s: R.medianRun.density > 0
+          ? num(R.medianRun.density, 2) + "k defenders/km — " +
+            (R.medianRun.manoeuvre > 0.6 ? "open, manoeuvre possible"
+              : R.medianRun.manoeuvre > 0.35 ? "thin but continuous" : "solid line, no flanks")
+          : "no continuous land front" },
     ];
+    const mg = R.magazines;
+    if (mg.shellsDryB > 5 || mg.shellsDryA > 5) {
+      items.push({ crit: mg.shellsDryB > 50 || mg.shellsDryA > 50,
+        k: "Artillery ammunition", v: pct(Math.max(mg.shellsDryA, mg.shellsDryB)),
+        s: `of runs end with ${mg.shellsDryA >= mg.shellsDryB ? R.attacker.name : R.defender.name} out of shells` });
+    }
+    if (mg.interceptorsDryB > 5) {
+      items.push({ crit: mg.interceptorsDryB > 50, k: "Interceptor magazine",
+        v: pct(mg.interceptorsDryB),
+        s: `of runs leave ${R.defender.name}'s air defences dry` });
+    }
     if (R.nuclearRisk > 0.5) {
       items.push({ crit: true, k: "☢ Nuclear use", v: pct(R.nuclearRisk, 1), s: "probability across all runs" });
     }
@@ -320,6 +347,22 @@
       },
       ["Month", R.defender.name + " territory", R.attacker.name + " air control", "Force ratio"],
       t.map((x) => [x.month, pct(x.territoryB * 100), pct(x.airControlA * 100), x.forceRatio.toFixed(2) + " : 1"]));
+
+    mk("Artillery ammunition remaining",
+      `<span><i class="swatch" style="background:${C.a}"></i>${esc(aN)}</span>
+       <span><i class="swatch" style="background:${C.b}"></i>${esc(bN)}</span>`,
+      {
+        yMax: 1, yFmt: (v) => Math.round(v * 100) + "%", height: 200,
+        ariaLabel: "Artillery ammunition stocks by month, as a share of what each side started with",
+        series: [
+          { name: R.attacker.name + " shells", color: C.a, points: t.map((x) => Math.min(1, x.shellsA)) },
+          { name: R.defender.name + " shells", color: C.b, points: t.map((x) => Math.min(1, x.shellsB)) },
+        ],
+      },
+      ["Month", R.attacker.name + " shells", R.defender.name + " shells",
+       R.attacker.name + " firepower", R.defender.name + " firepower"],
+      t.map((x) => [x.month, pct(Math.min(1, x.shellsA) * 100), pct(Math.min(1, x.shellsB) * 100),
+        pct(x.fireA * 100), pct(x.fireB * 100)]));
 
     mk("Political will",
       `<span><i class="swatch" style="background:${C.a}"></i>${esc(aN)}</span>
@@ -560,6 +603,57 @@ tolerance  = 0.004 + 0.052 · base^1.6   → share of fit-for-service pool</div>
       </tbody></table>
       <p class="note">Defending your own territory adds 0.28 to the will base — the single largest intangible in the model, and the one with the strongest historical support. A war of conquest fought far from home is additionally discounted by 18%: it is the easiest kind of war for a society to walk away from.</p>`));
 
+    s.appendChild(block("Magazines: shells, precision munitions and interceptors", `
+      <p class="note">The constraint that decides most modern wars and appears in none of the headline force comparisons. Artillery consumes roughly 0.30 thousand rounds per thousand engaged troops per month at full intensity; precision munitions are the first thing an air campaign exhausts and the slowest to replace; and an integrated air defence with an empty magazine is scrap metal, which is exactly what cheap drones are for.</p>
+      <table><thead><tr><th>Magazine</th><th>${esc(aN)}</th><th>${esc(bN)}</th></tr></thead><tbody>
+        <tr><td>Artillery stock at outbreak</td><td class="a">${num(R.attacker.shellStock)}k rounds</td><td class="b">${num(R.defender.shellStock)}k rounds</td></tr>
+        <tr><td>Artillery production</td><td class="a">${num(R.attacker.shellProd)}k / month</td><td class="b">${num(R.defender.shellProd)}k / month</td></tr>
+        <tr><td>Precision munitions (0–100)</td><td class="a">${num(R.attacker.pgmStock)}</td><td class="b">${num(R.defender.pgmStock)}</td></tr>
+        <tr><td>…replaced per month</td><td class="a">${pct(R.attacker.pgmProd * 100, 1)}</td><td class="b">${pct(R.defender.pgmProd * 100, 1)}</td></tr>
+        <tr><td>Interceptors (0–100)</td><td class="a">${num(R.attacker.intStock)}</td><td class="b">${num(R.defender.intStock)}</td></tr>
+        <tr><td>Attritable drone output (0–100)</td><td class="a">${num(R.attacker.droneProd)}</td><td class="b">${num(R.defender.droneProd)}</td></tr>
+        <tr><td><b>Runs ending with shells dry</b></td><td class="a"><b>${pct(R.magazines.shellsDryA, 1)}</b></td><td class="b"><b>${pct(R.magazines.shellsDryB, 1)}</b></td></tr>
+        <tr><td><b>Runs ending with SAMs dry</b></td><td class="a">—</td><td class="b"><b>${pct(R.magazines.interceptorsDryB, 1)}</b></td></tr>
+      </tbody></table>`));
+
+    s.appendChild(block("Theatre geometry and force-to-space", `
+      <div class="formula">front width   ≈ <b>${num(D.frontKm)} km</b>
+density       = engaged defenders / front width
+lineIntegrity = (density − 0.12) / 0.55        → <b>${num(R.medianRun.timeline.length ? R.medianRun.timeline[R.medianRun.timeline.length - 1].lineIntegrity : 0, 2)}</b>
+maxAdvance    = 0.030 + 0.34 · manoeuvre²      → <b>${pct((0.030 + 0.34 * Math.pow(R.medianRun.manoeuvre, 2)) * 100, 1)} of the country per month</b></div>
+      <p class="note">The same force ratio produces breakthrough on an empty front and deadlock on a full one. Above roughly <strong>0.7 thousand defenders per kilometre</strong> a continuous, mutually supporting line exists and there are no flanks to turn; below about <strong>0.12</strong> the front is a screen with holes in it and armies move at the speed of their fuel trucks. This is the difference between 1916 and 1940 at similar odds, and it is why the flat advance ceiling an earlier version of this model used compressed every campaign into the same duration.</p>
+      <p class="note">Defensive terrain is <strong>${R.defender.terrain}/100</strong> and urbanisation <strong>${R.defender.urban}%</strong>, giving a maximum urban drag of ${D.urbanDragMax.toFixed(2)}× as the attacker pushes into the built-up areas where the population — and therefore the objectives — are.</p>`));
+
+    s.appendChild(block("Mobilisation, equipment and closure", `
+      <p class="note">Reserves do not appear on day one. They are called up, trained, and — the binding constraint almost everywhere — equipped from whatever is in storage. A country with three million reservists and equipment for four hundred thousand fields an army the size of its equipment park.</p>
+      <table><thead><tr><th></th><th>${esc(aN)}</th><th>${esc(bN)}</th></tr></thead><tbody>
+        <tr><td>Active</td><td class="a">${num(R.attacker.act * 1000)}</td><td class="b">${num(R.defender.act * 1000)}</td></tr>
+        <tr><td>Reserve pool called</td><td class="a">${num(D.mobilisation.a.pool * 1000)}</td><td class="b">${num(D.mobilisation.b.pool * 1000)}</td></tr>
+        <tr><td>Call-up rate</td><td class="a">${pct(D.mobilisation.a.rate * 100, 1)} / month</td><td class="b">${pct(D.mobilisation.b.rate * 100, 1)} / month</td></tr>
+        <tr><td>Stored equipment (× active)</td><td class="a">${D.mobilisation.a.store.toFixed(2)}</td><td class="b">${D.mobilisation.b.store.toFixed(2)}</td></tr>
+        <tr><td><b>Ceiling on troops that can be armed</b></td><td class="a"><b>${num(D.mobilisation.a.equipCap * 1000)}</b></td><td class="b"><b>${num(D.mobilisation.b.equipCap * 1000)}</b></td></tr>
+        <tr><td>Peak force actually fielded</td><td class="a">${num(R.medianRun.peakMobA * 1000)}</td><td class="b">${num(R.medianRun.peakMobB * 1000)}</td></tr>
+        <tr><td>Theatre closure rate</td><td class="a">${pct(D.closure.a * 100)} / month</td><td class="b">${pct(D.closure.b * 100)} / month</td></tr>
+        <tr><td>Other frontiers to cover</td><td class="a">−${pct(D.multiFront.a * 100, 1)}</td><td class="b">−${pct(D.multiFront.b * 100, 1)}</td></tr>
+      </tbody></table>
+      <p class="note">Force closes on a theatre over months rather than appearing in it: Desert Shield took six before Desert Storm. Every frontier a country is <em>not</em> fighting on still has to be covered, weighted by what the neighbour on it could actually do — a border with Moldova costs nothing, a border with China costs a great deal.</p>`));
+
+    s.appendChild(block("Season and weather", `
+      <p class="note">The theatre takes the defender's climate: <strong>${D.season.climate}</strong>. The war begins in <strong>${MONTH_NAMES[D.season.start]}</strong>. Tempo multipliers by calendar month:</p>
+      <div class="formula">${MONTH_NAMES.map((m, i) =>
+        (i === D.season.start ? "▸" : " ") + m.slice(0, 3) + " " +
+        D.season.profile[i].toFixed(2)).join("   ")}</div>
+      <p class="note">The spring and autumn thaw has stopped more offensives in eastern Europe than any army has; the monsoon does the same job in South and Southeast Asia; desert summer blunts everything. Tempo scales the rate of advance, amphibious throughput and sortie generation.</p>`));
+
+    if (D.chokepoints.onA.length || D.chokepoints.onB.length) {
+      s.appendChild(block("Maritime chokepoints", `
+        <p class="note">A handful of straits gate most naval movement and seaborne trade. A defender holding one can throttle an approach before a shot is fired; an attacker holding one can strangle the defender's imports.</p>
+        <table><thead><tr><th>Strait</th><th>Held by</th><th>Effect</th></tr></thead><tbody>
+          ${D.chokepoints.onA.map((k) => `<tr><td>${k.name}</td><td class="b">${esc(R.defender.name)}</td><td>throttles ${esc(R.attacker.name)}'s approach</td></tr>`).join("")}
+          ${D.chokepoints.onB.map((k) => `<tr><td>${k.name}</td><td class="a">${esc(R.attacker.name)}</td><td>tightens the blockade on ${esc(R.defender.name)}</td></tr>`).join("")}
+        </tbody></table>`));
+    }
+
     s.appendChild(block("Occupation arithmetic", `
       <div class="formula">troops needed = population × 20 per 1,000 inhabitants
               = ${R.defender.pop.toFixed(0)}M × 20  →  <b>${num(D.occupationNeed / 1000, 2)}M troops</b></div>
@@ -659,6 +753,80 @@ tolerance  = 0.004 + 0.052 · base^1.6   → share of fit-for-service pool</div>
     return wrap;
   }
 
+
+  /* ── Backtest ─────────────────────────────────────────────────────────────
+   * The model's own scorecard. Runs on demand because nine wars at several
+   * hundred iterations each takes a few seconds.
+   */
+  function backtestPanel() {
+    const s = panel("Does this model actually work?",
+      "Nine conflicts with known outcomes, period-accurate force data, and exactly the same simulation the report above uses. Where the model is wrong, this says so.");
+
+    const btn = document.createElement("button");
+    btn.className = "run";
+    btn.type = "button";
+    btn.style.marginTop = "0";
+    btn.textContent = "Run the historical backtest";
+    const box = document.createElement("div");
+    s.append(btn, box);
+
+    btn.addEventListener("click", () => {
+      btn.disabled = true;
+      btn.textContent = "Re-fighting nine wars…";
+      setTimeout(() => {
+        const rows = window.WarBacktest.run(500);
+        const sum = window.WarBacktest.summary(rows);
+        const tick = (ok) => ok
+          ? '<span style="color:var(--good)">✓</span>'
+          : '<span style="color:var(--critical)">✗</span>';
+
+        const tiles = document.createElement("div");
+        tiles.className = "tiles";
+        tiles.style.margin = "18px 0";
+        tiles.innerHTML = [
+          { k: "Outcome called correctly", v: `${sum.outcomes} / ${sum.n}`, s: "attacker wins, defender holds, or stalemate" },
+          { k: "Duration within 3×", v: `${sum.durations} / ${sum.n}`, s: "the model works in whole months" },
+          { k: "Casualties within 4×", v: `${sum.casualties} / ${sum.n}`, s: "several of these are disputed by a factor of two" },
+          { k: "Probability on the truth", v: pct(sum.meanMass), s: "mean mass the model put on what happened" },
+        ].map((i) => `<div class="tile"><div class="k">${i.k}</div><div class="v">${i.v}</div><div class="s">${i.s}</div></div>`).join("");
+
+        const t = document.createElement("table");
+        t.innerHTML =
+          `<thead><tr><th>War</th><th>Model says</th><th>Actually</th><th>Prob.</th>
+            <th>Months</th><th>Attacker dead</th><th>Defender dead</th><th>✓</th></tr></thead><tbody>` +
+          rows.map((r) => {
+            const c = r.case, k = r.score;
+            return `<tr>
+              <td>${esc(c.name)} <span style="color:var(--text-muted)">${esc(c.when)}</span></td>
+              <td>${k.predicted}</td><td>${k.actualOutcome}</td>
+              <td>${pct(k.mass)}</td>
+              <td>${k.months.toFixed(1)} <span style="color:var(--text-muted)">(${c.actual.months})</span></td>
+              <td>${people(k.killedA)} <span style="color:var(--text-muted)">(${people(c.actual.killedA)})</span></td>
+              <td>${people(k.killedB)} <span style="color:var(--text-muted)">(${people(c.actual.killedB)})</span></td>
+              <td>${tick(k.outcomeOk)}${tick(k.durationOk)}${tick(k.casualtiesOk)}</td>
+            </tr>` +
+            `<tr><td colspan="8" style="border-bottom-color:var(--axis);color:var(--text-muted);font-size:12.5px;padding-top:0">
+              ${esc(c.blurb)} ${c.note ? "<em>" + esc(c.note) + "</em>" : ""}</td></tr>`;
+          }).join("") + "</tbody>";
+
+        const note = document.createElement("p");
+        note.className = "note";
+        note.style.maxWidth = "80ch";
+        note.innerHTML =
+          "<strong>What the failures are telling you.</strong> The Six-Day War lasted six days and the model works in months — it cannot be right about that one and it is included to show the floor rather than hidden. The Iran–Iraq War and Russia–Ukraine share a single structural failure: the model cannot sustain a multi-year attritional war, because it has one political-will mechanism and any setting of it that keeps an eight-year war going also makes every short decisive war too long. That was tested directly — a saturating will function moved Iran–Iraq from 7 months to 10 against an actual 96, while pushing the 2003 invasion of Iraq from 3.5 months to 14 and dropping casualty accuracy from 4/9 to 1/9. It was reverted. " +
+          "Treat long attritional matchups in the report above as the model's weakest ground.";
+
+        box.innerHTML = "";
+        box.append(tiles, t, note);
+        wrapTables(box);
+        btn.textContent = "Re-run the backtest";
+        btn.disabled = false;
+      }, 30);
+    });
+
+    return s;
+  }
+
   /* ── Caveats ────────────────────────────────────────────────────────────── */
   function caveats() {
     const s = panel("What this model cannot do", null);
@@ -672,8 +840,20 @@ tolerance  = 0.004 + 0.052 · base^1.6   → share of fit-for-service pool</div>
       <p class="note" style="max-width:80ch">
         <strong>The inputs are estimates.</strong> Platform counts drift constantly and several states publish
         nothing reliable. The 0–100 indices — technology, training, experience, C4ISR, morale, stability — are
-        analyst judgement calls, not measurements, and they carry a lot of weight in the result. Change them and
-        the answer changes.
+        analyst judgement calls, not measurements, and they carry a lot of weight in the result. Munitions
+        stocks, mobilisation rates and equipment storage are derived from sourced figures with overrides where
+        the derivation is known to be wrong. Change any of them and the answer changes.
+      </p>
+      <p class="note" style="max-width:80ch">
+        <strong>Several constants are fitted, not derived.</strong> Casualty tolerance in particular is
+        calibrated against the historical backtest below rather than measured from anything. The code says so
+        where that is true.
+      </p>
+      <p class="note" style="max-width:80ch">
+        <strong>Long attritional wars are the weakest ground.</strong> The model has one political-will
+        mechanism, and any setting of it that sustains an eight-year war also makes every short decisive war
+        too long. It gets the Iran–Iraq War badly wrong for exactly this reason. Run the backtest below and
+        read the failures before trusting a multi-year result.
       </p>
       <p class="note" style="max-width:80ch">
         <strong>The nuclear module is deliberately crude.</strong> It exists so that the model refuses to report a

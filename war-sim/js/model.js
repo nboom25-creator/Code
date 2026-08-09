@@ -188,7 +188,13 @@
     if (isDefendingHome) base = clamp(base + 0.28, 0, 1.15);
     // A war of choice a long way from home is the easiest kind to abandon.
     if (!isDefendingHome && (warAim === "conquest" || warAim === "regime")) base *= 0.82;
-    const tolerance = 0.004 + 0.052 * Math.pow(base, 1.6); // share of `fit` pool
+    // Total casualties, as a share of the fit-for-service pool, that this
+    // society will absorb before the war becomes politically unsurvivable.
+    // The constants are FITTED against the historical backtest, not derived:
+    // raising them threefold on the theory that they should scale with total
+    // casualties rather than deaths made every short war too long and every
+    // casualty count too high. Treat them as a calibration, not a measurement.
+    const tolerance = 0.004 + 0.052 * Math.pow(base, 1.6);
     return { base, tolerance };
   }
 
@@ -205,6 +211,49 @@
     partial:   { label: "Partial mobilisation", reserveCall: 0.45, econ: 1.6, delay: 2 },
     full:      { label: "Full mobilisation",  reserveCall: 0.90, econ: 2.6, delay: 1 },
   };
+
+  /* ── Theatre geometry ─────────────────────────────────────────────────────
+   * The width of the contact line is one of the most important numbers in a
+   * land war and one of the most commonly ignored. The same force ratio
+   * produces breakthrough on a 200 km front and trench deadlock on a
+   * 1,200 km one — or the reverse, depending on who has enough troops to fill
+   * it. Approximated from the defender's area for a land border, and from its
+   * usable coastline for an opposed landing.
+   */
+  function frontWidth(B, adjacent, amphibious) {
+    if (amphibious) return clamp(0.28 * B.coast, 50, 1100);
+    return clamp(1.2 * Math.sqrt(B.area * 1000), 80, 2200);
+  }
+
+  /* Seasonal tempo of ground operations, by calendar month (0 = January).
+   * The spring and autumn thaw has stopped more offensives in eastern Europe
+   * than any army has; the monsoon does the same job in Asia; desert summer
+   * heat blunts everything. The theatre takes the defender's climate. */
+  const SEASON = {
+    continental: [0.78, 0.80, 0.58, 0.55, 0.92, 1.05, 1.08, 1.08, 1.02, 0.66, 0.60, 0.82],
+    temperate:   [0.88, 0.90, 0.98, 1.02, 1.05, 1.05, 1.02, 1.00, 1.02, 0.98, 0.92, 0.88],
+    arid:        [1.00, 1.02, 1.05, 1.00, 0.92, 0.82, 0.78, 0.78, 0.88, 1.00, 1.05, 1.02],
+    monsoon:     [1.02, 1.05, 1.02, 0.95, 0.80, 0.62, 0.58, 0.60, 0.72, 0.95, 1.02, 1.05],
+    tropical:    [0.95, 0.95, 0.90, 0.85, 0.80, 0.78, 0.78, 0.80, 0.82, 0.85, 0.90, 0.95],
+  };
+  const seasonTempo = (climate, calendarMonth) =>
+    (SEASON[climate] || SEASON.temperate)[((calendarMonth % 12) + 12) % 12];
+
+  /* Every hostile border you are *not* fighting on still has to be covered.
+   * Russia has fourteen neighbours; Poland has seven but four of them are
+   * allies. This is why large states with many frontiers cannot commit the
+   * force their raw totals suggest. */
+  function multiFrontTax(c, foeId) {
+    const friends = new Set(window.WarData.alliesOf(c.id));
+    const own = Math.max(domainScores(c).land, 1e-6);
+    let load = 0;
+    c.borders.forEach((b) => {
+      if (b === foeId || friends.has(b) || !BY_ID[b]) return;
+      // A frontier costs what the neighbour on it could actually do to you.
+      load += Math.min(1, domainScores(BY_ID[b]).land / own);
+    });
+    return clamp(0.09 * load, 0, 0.34);
+  }
 
   /* ── Pre-computed, scenario-independent side profile ────────────────────── */
   function profile(c) {
@@ -228,6 +277,7 @@
 
     const adjacent = A.borders.includes(B.id) || B.borders.includes(A.id);
     const distance = opts._distance;
+    const startMonth = opts.startMonth ?? 2; // March, unless told otherwise
 
     // Coalition entry is a coin weighted by treaty reliability, resolved once.
     const coalition = { a: [], b: [] };
@@ -247,7 +297,8 @@
     // Allied contribution: partners send a slice, discounted by their own
     // distance from the theatre. Nobody sends everything.
     function coalitionBonus(ids, theaterCountry) {
-      let land = 0, air = 0, sea = 0, strike = 0, ad = 0, replacement = 0, gdp = 0;
+      let land = 0, air = 0, sea = 0, strike = 0, ad = 0, replacement = 0,
+          shells = 0, interceptors = 0;
       ids.forEach((id) => {
         const ally = BY_ID[id];
         const s = domainScores(ally);
@@ -257,9 +308,10 @@
         land += s.land * f; air += s.air * f; sea += s.sea * f;
         strike += s.strike * f; ad += s.airDefense * f * 0.5;
         replacement += sustainment(ally).replacement * 0.25;
-        gdp += ally.gdp;
+        shells += ally.shellProd * 0.30;
+        interceptors += ally.intProd * 0.25;
       });
-      return { land, air, sea, strike, ad, replacement, gdp };
+      return { land, air, sea, strike, ad, replacement, shells, interceptors };
     }
 
     const cbA = coalitionBonus(coalition.a, B);
@@ -272,17 +324,51 @@
     const SUPPORT = 0.022; // added to monthly replacement rate
     const supA = (opts.support === "a" || opts.support === "both") ? SUPPORT : 0;
     const supB = (opts.support === "b" || opts.support === "both") ? SUPPORT : 0;
+    // A patron also ships ammunition, which is usually the binding constraint.
+    const supShellA = supA ? Math.max(25, A.shellProd * 1.4) : 0;
+    const supShellB = supB ? Math.max(25, B.shellProd * 1.4) : 0;
+    const supIntA = supA ? 0.030 : 0, supIntB = supB ? 0.030 : 0;
 
     // ── Theatre access ────────────────────────────────────────────────────
-    // The defender is at home; the attacker has to get there.
-    const fracA = deployFraction(A, distance, adjacent) * aim.commit * jitter(rng, 0.10);
-    const fracB = 0.90 * jitter(rng, 0.06); // home garrison + other borders
+    // Every border you are not fighting on still needs covering.
+    const taxA = multiFrontTax(A, B.id), taxB = multiFrontTax(B, A.id);
+
+    // A defender who controls a strait the attacker's shipping must transit
+    // can throttle the approach before a shot is fired.
+    const chokeOnA = window.WarData.chokeAgainst(B.id, A.id).length +
+      coalition.b.reduce((n, id) => n + window.WarData.chokeAgainst(id, A.id).length, 0);
+    const chokeOnB = window.WarData.chokeAgainst(A.id, B.id).length +
+      coalition.a.reduce((n, id) => n + window.WarData.chokeAgainst(id, B.id).length, 0);
+    const chokePenaltyA = adjacent ? 1 : clamp(1 - 0.22 * chokeOnA, 0.5, 1);
+
+    const targetFracA = deployFraction(A, distance, adjacent) * aim.commit *
+      (1 - taxA) * chokePenaltyA * jitter(rng, 0.10);
+    const targetFracB = 0.94 * (1 - taxB) * jitter(rng, 0.06);
+
+    // Force does not appear in theatre — it closes. Desert Shield took six
+    // months before Desert Storm; an instantaneous deployment flatters
+    // expeditionary powers enormously and denies the defender the window it
+    // historically gets to prepare.
+    const closureA = adjacent ? 0.50 : clamp(0.05 + 0.40 * (pa.proj.index / 150), 0.04, 0.45);
+    const closureB = 0.62;
+    let arrivedA = adjacent ? 0.45 : 0.10, arrivedB = 0.55;
 
     const surprise = opts.surprise ? clamp(0.55 + rng() * 0.5, 0, 1.15) : 0;
+    if (surprise) { arrivedA = Math.min(1, arrivedA + 0.30); arrivedB = 0.32; }
 
-    // Mobilised manpower pools, in thousands.
-    const poolA = A.act + A.res * mobA.reserveCall + A.par * 0.3;
-    const poolB = B.act + B.res * mobB.reserveCall + B.par * 0.5;
+    // ── Mobilisation ──────────────────────────────────────────────────────
+    // Reserves do not appear on day one. They are called up, trained and —
+    // the binding constraint almost everywhere — equipped from whatever is in
+    // storage. A country with three million reservists and no stored rifles
+    // fields an army the size of its equipment park, not its manpower.
+    const reservePoolA = A.res * mobA.reserveCall, reservePoolB = B.res * mobB.reserveCall;
+    // You can field as many soldiers as you have equipment sets for. Stored
+    // kit scales with the active establishment, and a reserve system carries
+    // its own - that is what makes it a reserve rather than a phone list.
+    const equipCap = (c) => c.act * (1 + c.store) + c.res * 0.25;
+    const equipCapA = equipCap(A), equipCapB = equipCap(B);
+    let mobilisedA = Math.min(A.act + A.par * 0.30, equipCapA);
+    let mobilisedB = Math.min(B.act + B.par * 0.50, equipCapB);
 
     const willA = willProfile(A, false, opts.warAim);
     const willB = willProfile(B, true, opts.warAim);
@@ -298,238 +384,364 @@
 
     const S = {
       a: {
-        land: (pa.scores.land + cbA.land) * fracA * compA,
-        air: (pa.scores.air + cbA.air) * Math.max(fracA, 0.25) * compA,
-        sea: (pa.scores.sea + cbA.sea) * Math.max(fracA, 0.30) * compA,
+        land: (pa.scores.land + cbA.land) * compA,
+        air: (pa.scores.air + cbA.air) * compA,
+        sea: (pa.scores.sea + cbA.sea) * compA,
         strike: (pa.scores.strike + cbA.strike) * compA,
         ad: pa.scores.airDefense + cbA.ad,
-        pool: poolA, spent: 0, casualties: 0, civ: 0,
-        will: 1, econ: 0, industry: (pa.sust.replacement + cbA.replacement + supA) * indA,
+        shells: A.shellStock, pgm: A.pgmStock, interceptors: A.intStock,
+        casualties: 0, killed: 0, wounded: 0, captured: 0, civ: 0,
+        will: 1, econ: 0,
+        industry: (pa.sust.replacement + cbA.replacement + supA) * indA,
         fuel: pa.sust.fuel, territory: 1,
       },
       b: {
-        land: (pb.scores.land + cbB.land) * fracB * compB,
+        land: (pb.scores.land + cbB.land) * compB,
         air: (pb.scores.air + cbB.air) * compB,
         sea: (pb.scores.sea + cbB.sea) * compB,
         strike: (pb.scores.strike + cbB.strike) * compB,
         ad: pb.scores.airDefense + cbB.ad,
-        pool: poolB, spent: 0, casualties: 0, civ: 0,
-        will: 1, econ: 0, industry: (pb.sust.replacement + cbB.replacement + supB) * indB,
+        shells: B.shellStock, pgm: B.pgmStock, interceptors: B.intStock,
+        casualties: 0, killed: 0, wounded: 0, captured: 0, civ: 0,
+        will: 1, econ: 0,
+        industry: (pb.sust.replacement + cbB.replacement + supB) * indB,
         fuel: pb.sust.fuel, territory: 1,
       },
     };
     const start = { a: { ...S.a }, b: { ...S.b } };
 
-    // Terrain and prepared defence. The classic 1.5:1 attacker requirement,
-    // scaled by how bad the ground is.
+    // Terrain, prepared defence and the fact that cities have to be taken one
+    // building at a time. The classic 1.5:1 attacker requirement is a local
+    // tactical ratio, not a theatre-wide one, so the base is set below it and
+    // terrain and urbanisation carry the rest.
     const terrainMult = 1 + 0.55 * (B.terrain / 100);
     const defenderEdge = 1.30 * terrainMult * (opts.warAim === "conquest" ? 1.08 : 1.0);
 
     // Amphibious ceiling: an island (or a defender with no shared border and
     // no land route) can only be invaded as fast as you can land people.
-    const needsAmphib = !adjacent && (B.island === 1 || distance > 900);
+    const needsAmphib = !adjacent && (B.island === 1 || B.borders.length === 0);
     const liftPerMonth = pa.lift * jitter(rng, 0.15);
+    const frontKm = frontWidth(B, adjacent, needsAmphib);
+
+    // Counter-drone competence: electronic warfare, networks and enough
+    // industrial attention to take the problem seriously.
+    const cdA = clamp(0.20 + 0.55 * (A.cyb / 100) * (0.5 + 0.5 * (A.tech / 100)), 0, 0.85);
+    const cdB = clamp(0.20 + 0.55 * (B.cyb / 100) * (0.5 + 0.5 * (B.tech / 100)), 0, 0.85);
+
+    // Unit cohesion: the share of its fielded strength a force can lose before
+    // it stops functioning as an army rather than merely being smaller. Morale
+    // and training carry it; a well-trained motivated force fights on at a
+    // fraction of its establishment, a demoralised conscript one does not.
+    const cohesion = (c) => clamp(0.30 + 0.55 * (c.mor / 100) * (0.4 + 0.6 * (c.trn / 100)), 0.28, 0.90);
+    const cohesionA = cohesion(A), cohesionB = cohesion(B);
 
     const timeline = [];
     let month = 0, outcome = null, nuclear = null;
     let seaControlA = 0.5, airControlA = 0.5;
-    let landedA = 0; // thousands of troops ashore, for amphibious operations
+    let landedA = 0;              // thousands of troops ashore, amphibious ops
+    const woundedQueue = { a: [], b: [] }; // wounded returning to duty, by month
 
-    const maxMonths = Math.min(opts.maxMonths ?? aim.months, aim.months);
+    const maxMonths = opts.maxMonths != null ? opts.maxMonths : aim.months;
 
     while (month < maxMonths) {
       month++;
+      const calendar = (startMonth + month - 1) % 12;
+      const tempo = seasonTempo(B.climate, calendar);
 
-      // ── 1. Cyber / EW opening. Degrades the other side's networked
-      //        effectiveness, hardest in the first weeks.
+      // ── 1. Closure and mobilisation ───────────────────────────────────────
+      arrivedA = Math.min(1, arrivedA + closureA);
+      arrivedB = Math.min(1, arrivedB + closureB);
+      mobilisedA = Math.min(equipCapA, mobilisedA + reservePoolA * A.mobRate);
+      mobilisedB = Math.min(equipCapB, mobilisedB + reservePoolB * B.mobRate);
+      // Wounded coming back to the line, about three months behind.
+      mobilisedA += woundedQueue.a.shift() || 0;
+      mobilisedB += woundedQueue.b.shift() || 0;
+
+      const poolA = mobilisedA, poolB = mobilisedB;
+      const fracA = targetFracA * arrivedA, fracB = targetFracB * arrivedB;
+
+      // ── 2. Cyber / EW opening ─────────────────────────────────────────────
       const cyberEdge = Math.tanh((A.cyb - B.cyb) / 45) * (month <= 2 ? 0.14 : 0.05);
       const netA = 1 + Math.max(0, cyberEdge) * 0.5 - Math.max(0, -cyberEdge);
       const netB = 1 - Math.max(0, cyberEdge) + Math.max(0, -cyberEdge) * 0.5;
 
-      // ── 2. Air superiority. Missiles suppress air defences; they do not win
-      //        air superiority, so long-range strike is weighted lightly here.
-      //        Ground-based air defence is attrited statefully further down —
-      //        it is not decayed again here.
-      const offA = (S.a.air + S.a.strike * 0.15) * netA * (1 + surprise * (month === 1 ? 0.35 : 0));
-      const offB = (S.b.air + S.b.strike * 0.15) * netB;
-      const defB = S.b.air * 0.35 + S.b.ad;
+      // ── 3. Magazines ──────────────────────────────────────────────────────
+      // Precision munitions are the first thing to run out in a modern air
+      // campaign, and the slowest to replace. When the magazine empties the
+      // air force falls back on unguided weapons: less effective per sortie,
+      // more losses, and far more civilian deaths.
+      const pgmDemandA = 3.2 * (0.4 + 0.6 * airControlA) *
+        (opts.warAim === "punitive" ? 1.5 : 1);
+      const pgmDemandB = 2.4 * (0.4 + 0.6 * (1 - airControlA));
+      const pgmA = clamp(S.a.pgm / Math.max(pgmDemandA, 1e-6), 0, 1);
+      const pgmB = clamp(S.b.pgm / Math.max(pgmDemandB, 1e-6), 0, 1);
+      const strikeEffA = 0.42 + 0.58 * Math.min(1, pgmA);
+      const strikeEffB = 0.42 + 0.58 * Math.min(1, pgmB);
+      S.a.pgm = clamp(S.a.pgm - Math.min(S.a.pgm, pgmDemandA) + start.a.pgm * A.pgmProd, 0, start.a.pgm);
+      S.b.pgm = clamp(S.b.pgm - Math.min(S.b.pgm, pgmDemandB) + start.b.pgm * B.pgmProd, 0, start.b.pgm);
+
+      // Interceptors. An integrated air defence with an empty magazine is
+      // scrap metal, and cheap drones are very good at emptying it.
+      const intDemandB = (S.a.strike * 0.055 + A.droneProd * 0.030) * (1 - cdB * 0.4);
+      const intDemandA = (S.b.strike * 0.055 + B.droneProd * 0.030) * (1 - cdA * 0.4);
+      const intB = clamp(S.b.interceptors / Math.max(intDemandB, 1e-6), 0, 1);
+      const intA = clamp(S.a.interceptors / Math.max(intDemandA, 1e-6), 0, 1);
+      const adAmmoB = 0.22 + 0.78 * Math.min(1, intB);
+      const adAmmoA = 0.22 + 0.78 * Math.min(1, intA);
+      S.b.interceptors = clamp(S.b.interceptors - Math.min(S.b.interceptors, intDemandB)
+        + start.b.interceptors * (B.intProd + supIntB), 0, start.b.interceptors);
+      S.a.interceptors = clamp(S.a.interceptors - Math.min(S.a.interceptors, intDemandA)
+        + start.a.interceptors * (A.intProd + supIntA), 0, start.a.interceptors);
+
+      // ── 4. Air superiority ────────────────────────────────────────────────
+      // Airfields are the air force's real vulnerability: a force flying from
+      // a handful of known bases can be shut down by a missile salvo.
+      const suppA = clamp((S.b.strike / 100) * 0.42 * strikeEffB / A.airbaseResilience, 0, 0.55);
+      const suppB = clamp((S.a.strike / 100) * 0.42 * strikeEffA / B.airbaseResilience, 0, 0.55);
+      const sortieA = (1 - suppA) * (0.85 + 0.15 * tempo);
+      const sortieB = (1 - suppB) * (0.85 + 0.15 * tempo);
+
+      // Air and naval forces close on a theatre faster and from further than
+      // armies do — tankers and hulls move without a road network — so they
+      // are less discounted than ground forces, but not undiscounted.
+      const airFracA = clamp(fracA * 1.7, 0.12, 1), airFracB = clamp(fracB * 1.1, 0.30, 1);
+      const seaFracA = clamp(fracA * 1.5, 0.15, 1), seaFracB = clamp(fracB * 1.1, 0.30, 1);
+
+      if (month === 1 && surprise) {
+        // A surprise attack on airfields destroys aircraft on the ground -
+        // Operation Focus took out most of the Egyptian air force in three
+        // hours. A month-one multiplier on sortie rate cannot express that.
+        const wipe = clamp(0.30 * surprise * (1 - B.airbaseResilience * 0.4), 0, 0.45);
+        S.b.air *= 1 - wipe;
+      }
+      // Uncountered drones buy air superiority cheaply.
+      const droneAirA = (A.droneProd / 100) * (1 - cdB) * 22 * adAmmoB;
+      const droneAirB = (B.droneProd / 100) * (1 - cdA) * 22 * adAmmoA;
+      const offA = (S.a.air * airFracA * sortieA + S.a.strike * 0.15 * strikeEffA
+        + droneAirA) * netA * (1 + surprise * (month === 1 ? 0.35 : 0));
+      const offB = (S.b.air * airFracB * sortieB + S.b.strike * 0.15 * strikeEffB
+        + droneAirB) * netB;
+      const defB = S.b.air * airFracB * 0.35 * sortieB + S.b.ad * adAmmoB;
       const airRatio = (offA + 1) / (offB * 0.35 + defB + 1);
       airControlA = clamp(Math.pow(airRatio, 1.5) / (1 + Math.pow(airRatio, 1.5)), 0.02, 0.98);
 
-      // ── 3. Sea control, when the sea matters at all.
+      // ── 5. Sea control ────────────────────────────────────────────────────
       const maritime = needsAmphib || B.coast > 400 || opts.warAim === "blockade";
       if (maritime) {
-        const seaRatio = (S.a.sea * (0.6 + 0.4 * airControlA) + 1) /
-          (S.b.sea * (0.6 + 0.4 * (1 - airControlA)) + S.b.strike * 0.25 + 1);
+        const seaRatio = (S.a.sea * seaFracA * (0.6 + 0.4 * airControlA) + 1) /
+          (S.b.sea * seaFracB * (0.6 + 0.4 * (1 - airControlA)) + S.b.strike * 0.25 * strikeEffB + 1);
         seaControlA = clamp(Math.pow(seaRatio, 1.3) / (1 + Math.pow(seaRatio, 1.3)), 0.02, 0.98);
       }
 
-      // ── 4. Ground combat. Air control is the biggest single modifier on
-      //        modern ground operations, worth roughly a 2:1 swing.
+      // ── 6. Ground combat ──────────────────────────────────────────────────
       const airMultA = 0.55 + 0.95 * airControlA;
       const airMultB = 0.55 + 0.95 * (1 - airControlA);
 
-      // Depth of penetration is what actually stops most invasions — not the
-      // enemy's remaining divisions but the attacker's own supply lines
-      // stretching past what its logistics can carry, while an ever-larger
-      // share of the army is tied down holding what it already took.
       const depth = 1 - S.b.territory;
-      // How deep an advance this attacker's logistics can support before it
-      // culminates, scaled against the size of the country being invaded —
-      // 40% of Belgium is a different problem from 40% of Russia.
       const theatreScale = Math.pow(Math.max(B.area, 20) / 800, 0.22);
       const reachDepth = clamp(
         (0.10 + 0.42 * pa.sust.transport * clamp(pa.sust.fuel, 0.2, 1.2) * (A.log / 70)) / theatreScale,
         0.06, 1.2);
       const supplyStrain = 1 / (1 + Math.pow(depth / reachDepth, 1.7));
-      const garrisonNeed = depth * B.pop * 20;                        // thousands
+      const garrisonNeed = depth * B.pop * 20;
       const garrisonDrag = clamp(garrisonNeed / Math.max(poolA * aim.commit, 1), 0, 0.85);
 
-      let groundA = S.a.land * airMultA * supplyStrain * (1 - garrisonDrag);
-      if (needsAmphib) {
-        // Sealift into a contested strait is a target list, not a landing.
-        // Surviving throughput is gated by sea control, by the defender's
-        // anti-ship and coastal-strike inventory, and by who owns the sky.
-        const interdiction = clamp(
-          1 - (S.b.strike * 0.010 + S.b.sea * 0.006 + (1 - airControlA) * 0.35), 0.03, 1);
-        landedA += liftPerMonth * Math.pow(seaControlA, 1.6) * interdiction;
-        // Ashore forces cap how much of the army is actually in the fight.
-        const ashoreCap = clamp(landedA / Math.max(poolA * aim.commit, 1), 0, 1);
-        groundA *= ashoreCap;
-      }
-      const groundB = S.b.land * airMultB * defenderEdge;
+      // Artillery ammunition. Roughly 600 rounds per thousand engaged troops
+      // per month at full intensity, which reproduces the ~10,000 rounds a day
+      // both sides have sustained in Ukraine. Fires are where most casualties
+      // come from, so a shell shortage is close to disarmament.
+      const engagedA = poolA * (needsAmphib ? clamp(landedA / Math.max(poolA, 1), 0, 1) : fracA);
+      const engagedB = poolB * fracB;
+      // 0.30 thousand rounds per thousand engaged troops per month at full
+      // intensity — only a fraction of a mobilised army is ever in contact.
+      // At the scales here that reproduces the ~10,000 rounds a day both sides
+      // have sustained in Ukraine.
+      const shellNeedA = engagedA * 0.30, shellNeedB = engagedB * 0.22;
+      // Drone superiority suppresses the other side's guns as well as killing
+      // its vehicles - counter-battery by loitering munition.
+      const dSupA = clamp(1 - 0.30 * (B.droneProd / 100) * (1 - cdA), 0.6, 1);
+      const dSupB = clamp(1 - 0.30 * (A.droneProd / 100) * (1 - cdB), 0.6, 1);
+      const fireA = (0.45 + 0.55 * clamp(S.a.shells / Math.max(shellNeedA, 1e-6), 0, 1)) * dSupA;
+      const fireB = (0.55 + 0.45 * clamp(S.b.shells / Math.max(shellNeedB, 1e-6), 0, 1)) * dSupB;
+      S.a.shells = Math.max(0, S.a.shells - Math.min(S.a.shells, shellNeedA)) + A.shellProd + cbA.shells + supShellA;
+      S.b.shells = Math.max(0, S.b.shells - Math.min(S.b.shells, shellNeedB)) + B.shellProd + cbB.shells + supShellB;
 
+      // Cities have to be taken one building at a time, and they are where
+      // the population — and therefore the objectives — are.
+      const urbanDrag = 1 + 0.9 * (B.urban / 100) * Math.min(1, depth * 2.5);
+
+      if (needsAmphib) {
+        const interdiction = clamp(
+          1 - (S.b.strike * 0.010 * strikeEffB + S.b.sea * 0.006 + (1 - airControlA) * 0.35), 0.03, 1);
+        landedA += liftPerMonth * Math.pow(seaControlA, 1.6) * interdiction * tempo;
+      }
+      // Ashore, the fighting force is what got ashore — not that share of a
+      // force already discounted for distance.
+      const groundFracA = needsAmphib ? clamp(landedA / Math.max(poolA, 1), 0, 1) : fracA;
+      let groundA = S.a.land * groundFracA * airMultA * supplyStrain * (1 - garrisonDrag) * fireA;
+      const groundB = S.b.land * fracB * airMultB * defenderEdge * urbanDrag * fireB;
       const forceRatio = groundA / Math.max(groundB, 1e-6);
 
-      // Territory changes hands as a function of how far the ratio exceeds
-      // parity. Below parity the term goes negative and the defender takes
-      // ground back — the model produces counter-offensives rather than only
-      // ever grinding one way.
+      // Force-to-space. A defender with enough troops per kilometre holds a
+      // continuous, mutually supporting line and the war becomes a grinding
+      // push; one spread too thin has gaps, and gaps are what turn a force
+      // ratio into a breakthrough. This is the difference between 1916 and
+      // 1940 at similar odds.
+      const density = engagedB / frontKm;                 // thousands per km
+      const lineIntegrity = clamp((density - 0.12) / 0.55, 0, 1);
+      const manoeuvre = 1 - 0.78 * lineIntegrity;
+      const spaceFactor = 0.70 + 0.45 * manoeuvre;
+
       const fr = Math.pow(forceRatio, 1.7);
-      const advance = 0.040 * ((fr - 1) / (1 + fr)) * (0.6 + 0.8 * airControlA);
+      const maxAdvance = 0.030 + 0.34 * Math.pow(manoeuvre, 2);
+      const advance = maxAdvance * ((fr - 1) / (1 + fr)) * (0.6 + 0.8 * airControlA)
+        * spaceFactor * tempo;
       S.b.territory = clamp(S.b.territory - advance * jitter(rng, 0.35), 0, 1);
 
-      // ── 5. Attrition. Casualties peak when the two sides are evenly matched
-      //        — lopsided fights are short and, for the stronger side, cheap.
-      //        `contact` collapses toward zero when one side cannot reach the
-      //        other at all, which is why an attacker with no way to get there
-      //        inflicts nothing.
+      // ── 7. Attrition ──────────────────────────────────────────────────────
       const contact = clamp(2 / (forceRatio + 1 / forceRatio), 0.02, 1);
-      const lethalA = 0.009 * (1 - 0.35 * (A.tech / 100));
-      const lethalB = 0.009 * (1 - 0.35 * (B.tech / 100));
-      // fracA already carries the war aim's commitment cap — do not apply it
-      // a second time here.
-      const engagedA = poolA * (needsAmphib ? clamp(landedA / poolA, 0, 1) : fracA);
-      const engagedB = poolB * fracB;
+      // Casualties, not deaths. Killed is roughly a quarter of the total in a
+      // modern army with functioning casualty evacuation; most of the wounded
+      // come back. Reporting only the dead understates losses about fourfold
+      // and overstates how fast an army is actually destroyed.
+      const rateA = 0.030 * (1 - 0.30 * (A.tech / 100));
+      const rateB = 0.030 * (1 - 0.30 * (B.tech / 100));
+      // Exchange ratio. A total mismatch is not 2:1, it is closer to 50:1 —
+      // Desert Storm and the 2003 invasion both ran at roughly that. The
+      // clamp has to be wide enough to express it.
+      const qualEdge = (qualityMult(A) * c4Mult(A)) / (qualityMult(B) * c4Mult(B));
+      const exchange = Math.pow(clamp(forceRatio, 0.05, 40), 0.5) *
+        Math.pow(clamp(qualEdge, 0.2, 5), 0.75);
+      const urbanBlood = 1 + 0.8 * (B.urban / 100) * Math.min(1, depth * 2.5);
+      // Casualties fall off with mismatch, but far more slowly than `contact`
+      // itself: a one-sided war is short, not bloodless. Left linear, this
+      // term had the 2003 invasion of Iraq killing fewer than a thousand
+      // Iraqi soldiers.
+      const bite = Math.pow(contact, 0.45);
 
-      // Exchange ratio. Being outmatched costs you more, but not linearly —
-      // a stalled attacker digs in rather than feeding men into a meat grinder
-      // at ten times the defender's rate.
-      const exchange = Math.pow(clamp(forceRatio, 0.15, 5), 0.5);
-      const casA = engagedA * lethalA * contact * (1 / exchange) * jitter(rng, 0.4);
-      const casB = engagedB * lethalB * contact * exchange * jitter(rng, 0.4);
-      S.a.casualties += casA; S.b.casualties += casB;
+      const assaultCost = (0.55 + 0.45 * defenderEdge) * (1 + 0.6 * lineIntegrity);
+      const casA = engagedA * rateA * bite * (1 / exchange) * urbanBlood * assaultCost * jitter(rng, 0.4);
+      const casB = engagedB * rateB * bite * exchange * jitter(rng, 0.4);
+      const split = (c, tech) => {
+        const kia = c * (0.30 - 0.09 * (tech / 100));
+        const pow = c * 0.06;
+        return { kia, pow, wia: c - kia - pow };
+      };
+      const sa = split(casA, A.tech), sb = split(casB, B.tech);
+      S.a.casualties += casA; S.a.killed += sa.kia; S.a.wounded += sa.wia; S.a.captured += sa.pow;
+      S.b.casualties += casB; S.b.killed += sb.kia; S.b.wounded += sb.wia; S.b.captured += sb.pow;
+      mobilisedA = Math.max(0, mobilisedA - casA);
+      mobilisedB = Math.max(0, mobilisedB - casB);
+      // About 55% of the wounded return to duty, roughly three months later.
+      woundedQueue.a[2] = (woundedQueue.a[2] || 0) + sa.wia * 0.55;
+      woundedQueue.b[2] = (woundedQueue.b[2] || 0) + sb.wia * 0.55;
 
-      // Civilian deaths from strategic strike, in millions per month. Calibrated
-      // against the direct civilian toll of recent air campaigns rather than
-      // against total excess mortality — it counts people killed by ordnance,
-      // not the much larger number who die of everything a war causes.
-      S.b.civ += S.a.strike * 0.00008 * airControlA * (opts.warAim === "punitive" ? 1.6 : 1) * jitter(rng, 0.5);
-      S.a.civ += S.b.strike * 0.00008 * (1 - airControlA) * jitter(rng, 0.5);
+      // Civilian deaths from strategic strike, in millions per month. An empty
+      // precision magazine drives this up sharply — unguided weapons hit far
+      // more of what was not aimed at.
+      const dumbA = 1 + 1.4 * (1 - Math.min(1, pgmA));
+      const dumbB = 1 + 1.4 * (1 - Math.min(1, pgmB));
+      S.b.civ += S.a.strike * 0.00008 * airControlA * dumbA *
+        (opts.warAim === "punitive" ? 1.6 : 1) * jitter(rng, 0.5);
+      S.a.civ += S.b.strike * 0.00008 * (1 - airControlA) * dumbB * jitter(rng, 0.5);
 
-      // Materiel losses, partly replaced by industry. This is the phase where
-      // wars are actually decided: whoever can regenerate faster wins the long
-      // one regardless of who won the opening battles.
-      // Materiel attrition. The force-ratio term is deliberately damped: a
-      // linear one is a runaway feedback loop in which whoever pulls ahead
-      // compounds their lead until the model can only ever produce total
-      // victory or total stalemate. Real defenders trade space for time and
-      // shorten their lines as they fall back. Being dug in also costs the
-      // defender less equipment per unit of fighting.
+      // ── 8. Materiel losses and replacement ────────────────────────────────
+      // Cheap attritable drones now do a large share of the killing of
+      // vehicles, and they are produced by an industry the big defence
+      // budgets mostly did not build.
+      const droneA = clamp(0.016 * (A.droneProd / 100) * (1 - cdB), 0, 0.035);
+      const droneB = clamp(0.016 * (B.droneProd / 100) * (1 - cdA), 0, 0.035);
+
       const frLoss = Math.pow(clamp(forceRatio, 0.3, 3), 0.45);
-      const lossRateA = (0.045 * contact) / frLoss;
-      const lossRateB = (0.045 * contact * frLoss) / Math.sqrt(defenderEdge);
-      // Fuel gates how much of the industrial base can actually be turned into
-      // fielded equipment. It can only ever throttle regeneration, never
-      // amplify it — an oil surplus does not build extra tanks.
+      const lossRateA = (0.045 * contact) / frLoss + droneB;
+      const lossRateB = (0.045 * contact * frLoss) / Math.sqrt(defenderEdge) + droneA;
+
       const fuelFactorA = clamp(S.a.fuel, 0.25, 1.0);
       const fuelFactorB = clamp(
         S.b.fuel - (maritime ? seaControlA * 0.55 * (1 - clamp(B.oilSelfSufficiency, 0, 1)) : 0),
         0.15, 1.0);
 
-      // Replacement makes good losses; it does not conjure an army. Regeneration
-      // is capped just above the loss rate, so a strong industrial base means a
-      // force that holds its strength (and grows slowly under mobilisation),
-      // not one that quintuples over a long war — which is what an earlier,
-      // uncapped version of this line produced.
+      // Replacement makes good losses; it does not conjure an army. Stored
+      // equipment is drawn down to do it, which is why a country with deep
+      // Soviet-era parks can absorb losses that would finish a Western army
+      // with none — until the parks are empty.
+      const storeA = clamp(0.5 + 0.5 * (A.store / 1.5), 0.4, 1.5);
+      const storeB = clamp(0.5 + 0.5 * (B.store / 1.5), 0.4, 1.5);
       const regen = (industry, loss, fuel, cap) => Math.min(industry * fuel, loss * cap);
       const ceilA = start.a.land * 1.8, ceilB = start.b.land * 1.8;
 
-      S.a.land = Math.min(ceilA, S.a.land * (1 - lossRateA + regen(S.a.industry, lossRateA, fuelFactorA, 1.25)));
-      S.b.land = Math.min(ceilB, S.b.land * (1 - lossRateB + regen(S.b.industry, lossRateB, fuelFactorB, 1.25)));
-      S.a.air = Math.min(start.a.air * 1.4, S.a.air * (1 - lossRateA * 0.55 + regen(S.a.industry * 0.5, lossRateA * 0.55, fuelFactorA, 1.1)));
+      S.a.land = Math.min(ceilA, S.a.land * (1 - lossRateA + regen(S.a.industry * storeA, lossRateA, fuelFactorA, 1.25)));
+      S.b.land = Math.min(ceilB, S.b.land * (1 - lossRateB + regen(S.b.industry * storeB, lossRateB, fuelFactorB, 1.25)));
+      // Flying against an air defence that has run out of missiles is much
+      // safer, and that is exactly when an air force starts operating freely.
+      const sanctuaryA = adAmmoB < 0.45 ? 0.7 : 1;
+      const airLossA = lossRateA * 0.55 * sanctuaryA;
+      S.a.air = Math.min(start.a.air * 1.4, S.a.air * (1 - airLossA + regen(S.a.industry * 0.5, airLossA, fuelFactorA, 1.1)));
       S.b.air = Math.min(start.b.air * 1.4, S.b.air * (1 - lossRateB * 0.75 + regen(S.b.industry * 0.5, lossRateB * 0.75, fuelFactorB, 1.1)));
       S.a.sea *= 1 - (maritime ? 0.02 * (1 - seaControlA) : 0.002);
       S.b.sea *= 1 - (maritime ? 0.02 * seaControlA : 0.002);
-      // Magazines deplete far faster than they refill — the defining
-      // constraint on modern long-range strike.
-      S.a.strike = Math.min(start.a.strike, S.a.strike * (0.88 + Math.min(S.a.industry * 1.6, 0.11)));
-      S.b.strike = Math.min(start.b.strike, S.b.strike * (0.88 + Math.min(S.b.industry * 1.6, 0.11)));
-      // Ground-based air defence is worn down by SEAD, but never to zero:
-      // mobile launchers and shoulder-fired systems survive campaigns that
-      // destroy every fixed site.
+      // Launcher inventory, distinct from the magazine tracked above.
+      S.a.strike = Math.min(start.a.strike, S.a.strike * (0.94 + Math.min(S.a.industry * 1.6, 0.06)));
+      S.b.strike = Math.min(start.b.strike, S.b.strike * (0.94 + Math.min(S.b.industry * 1.6, 0.06)));
       S.a.ad = Math.max(S.a.ad * 0.985, start.a.ad * 0.30);
       S.b.ad = Math.max(S.b.ad * (1 - 0.05 * airControlA), start.b.ad * 0.30);
 
-      // Blockade bites the import-dependent side over time.
+      // A blockade bites harder when the blockading side also holds the strait
+      // the defender's imports have to transit.
       if (maritime && B.oilSelfSufficiency < 1) {
-        S.b.fuel = clamp(S.b.fuel - seaControlA * 0.05, 0.1, 2);
+        S.b.fuel = clamp(S.b.fuel - seaControlA * 0.05 * (1 + 0.5 * chokeOnB), 0.1, 2);
       }
 
-      // ── 6. Economic cost, in USD billions. This is the *incremental* cost of
-      //        fighting — mobilisation and combat spending above the peacetime
-      //        budget, which would have been spent anyway. Charging the whole
-      //        defence budget to the war overstates it several-fold.
+      // ── 9. Economic cost, USD billions (incremental over peacetime) ───────
       S.a.econ += (A.bud / 12) * (mobA.econ - 1 + 1.1 * contact * fracA);
       S.b.econ += (B.bud / 12) * (mobB.econ - 1 + 1.1 * contact * fracB)
         + B.gdp * 0.012 * (1 - S.b.territory);
 
-      // ── 7. Political will. Casualties measured against what each society
-      //        can bear, plus impatience on the attacker's side and the
-      //        rallying effect of losing ground on the defender's.
+      // ── 10. Political will ────────────────────────────────────────────────
+      // Linear in casualties against the tolerance threshold. A saturating
+      // form was tried, on the reasonable theory that a society which has
+      // already absorbed heavy losses has shown it will keep going. It length-
+      // ened every war: the Iran-Iraq case improved from 7 months to 10 against
+      // an actual 96, while the 2003 invasion went from 3.5 months to 14 and
+      // backtest casualty accuracy fell from 4/9 to 1/9. The model cannot
+      // produce a multi-year attritional war without breaking short decisive
+      // ones, and that is a real limitation of having one will mechanism
+      // rather than a reason to keep tuning this line.
       const burnA = S.a.casualties / (A.fit * 1000 * willA.tolerance * tolA);
       const burnB = S.b.casualties / (B.fit * 1000 * willB.tolerance * tolB);
-      // A war that is going nowhere is the one an attacking public stops
-      // supporting. Impatience is scaled by how little progress there is
-      // toward the stated objective, not by elapsed time alone.
       const progress = clamp(depth / Math.max(aim.territory, 0.05), 0, 1);
-      const stall = (Math.min(month, 48) / 12) * (1 - progress) * 0.13;
+      const stall = (Math.min(month, 36) / 12) * (1 - progress) * 0.09;
       S.a.will = clamp(1 - burnA - stall - Math.max(0, 1 - S.a.land / start.a.land) * 0.25, 0, 1);
-      // Losing ground hardens a defender — until the loss is deep enough that
-      // the government itself is going under.
       S.b.will = clamp(1 - burnB * (1 - 0.25 * depth) - Math.max(0, depth - 0.6) * 0.9, 0, 1);
-      if (B.stability < 40 && S.b.territory < 0.7) S.b.will *= 0.97; // fragile states crack
+      if (B.stability < 40 && S.b.territory < 0.7) S.b.will *= 0.97;
 
       timeline.push({
-        month, airControlA, seaControlA: maritime ? seaControlA : null,
+        month, calendar, tempo, airControlA,
+        seaControlA: maritime ? seaControlA : null,
         forceRatio, territoryB: S.b.territory,
         casA: S.a.casualties, casB: S.b.casualties,
+        kiaA: S.a.killed, kiaB: S.b.killed,
         willA: S.a.will, willB: S.b.will,
         landA: S.a.land / start.a.land, landB: S.b.land / start.b.land,
+        shellsA: S.a.shells / Math.max(start.a.shells, 1),
+        shellsB: S.b.shells / Math.max(start.b.shells, 1),
+        pgmA: S.a.pgm / Math.max(start.a.pgm, 1),
+        pgmB: S.b.pgm / Math.max(start.b.pgm, 1),
+        intA: S.a.interceptors / Math.max(start.a.interceptors, 1),
+        intB: S.b.interceptors / Math.max(start.b.interceptors, 1),
+        fireA, fireB, density, lineIntegrity, manoeuvre,
+        mobA: mobilisedA, mobB: mobilisedB, arrivedA, arrivedB,
       });
 
-      // ── 8. Nuclear escalation check ───────────────────────────────────────
+      // ── 11. Nuclear escalation ────────────────────────────────────────────
       if (opts.nuclearAllowed) {
         const check = (X, st, foeHasNukes) => {
           if (!X.nuke || !X.doctrine) return 0;
-          // Existential pressure: ground lost + will collapsing + army destroyed.
           const pressure = X === B
             ? clamp((1 - st.territory) * 1.1 + (1 - st.will) * 0.6, 0, 2)
             : clamp((1 - st.will) * 0.9, 0, 2);
           const over = pressure - X.doctrine.threshold;
           if (over <= 0) return 0;
-          // Mutual deterrence: the more the other side can retaliate with, the
-          // more the decision is delayed, not avoided.
           const restraint = foeHasNukes ? 0.35 : 1.0;
           return clamp(over * 0.16 * restraint, 0, 0.5);
         };
@@ -540,8 +752,6 @@
         if (nuclear) {
           const retaliates = (nuclear.by === B.id ? A : B).nuke > 0;
           nuclear.exchange = retaliates;
-          // Deliberately coarse: prompt fatalities from a counter-value
-          // exchange, scaled by deployed warheads and urban population.
           const wA = Math.min(A.dep || A.nuke * 0.35, 900);
           const wB = Math.min(B.dep || B.nuke * 0.35, 900);
           nuclear.deathsA = retaliates || nuclear.by === B.id ? Math.min(A.pop * 0.45, wB * 0.55) : 0;
@@ -551,52 +761,52 @@
         }
       }
 
-      // ── 9. Termination ────────────────────────────────────────────────────
+      // ── 12. Termination ───────────────────────────────────────────────────
       if (S.b.territory <= 1 - aim.territory && aim.territory > 0) { outcome = "attackerObjective"; break; }
       if (opts.warAim === "punitive" && month >= 3 && S.b.air / start.b.air < 0.55) { outcome = "attackerObjective"; break; }
       if (opts.warAim === "blockade" && S.b.fuel < 0.3 && month >= 6) { outcome = "attackerObjective"; break; }
       if (S.a.will <= 0.12) { outcome = "attackerCollapse"; break; }
       if (S.b.will <= 0.12) { outcome = "defenderCollapse"; break; }
-      if (S.b.land / start.b.land < 0.08 && S.b.territory < 0.5) { outcome = "defenderCollapse"; break; }
-      if (S.a.land / start.a.land < 0.08) { outcome = "attackerCollapse"; break; }
+      if (S.b.land / start.b.land < 1 - cohesionB) { outcome = "defenderCollapse"; break; }
+      if (S.a.land / start.a.land < 1 - cohesionA) { outcome = "attackerCollapse"; break; }
     }
     if (!outcome) outcome = "stalemate";
 
     // ── Occupation feasibility ─────────────────────────────────────────────
-    // Winning the war and holding the country are different problems. The
-    // ~20-per-1,000 counter-insurgency ratio is a blunt instrument but it is
-    // the one that keeps being right.
     let occupation = null;
     if (aim.occupy && (outcome === "attackerObjective" || outcome === "defenderCollapse")) {
       const held = (1 - S.b.territory);
-      const needed = B.pop * held * 20;                      // thousands of troops
-      // No state garrisons a conquest with its entire army — home defence,
-      // other borders and rotation take the rest. An expeditionary occupation
-      // costs roughly three troops in the rotation base for every one standing
-      // in the country, which is why distant occupations fail at force levels
-      // that would be comfortable next door.
+      const needed = B.pop * held * 20 * (0.75 + 0.5 * (B.urban / 100));
       const rotation = adjacent ? 1 : 1 / (1.6 + 1.4 * clamp(distance / 8000, 0, 1));
-      const available = (poolA * 0.6 - S.a.casualties) * rotation;
+      const available = (mobilisedA * 0.6) * rotation;
       const ratio = available / Math.max(needed, 1);
       occupation = {
         needed, available, ratio,
         sustainable: ratio >= 1,
-        // Insurgency intensity scales with the shortfall and the population's
-        // cohesion and willingness to keep fighting after the army is gone.
         intensity: clamp((1 - ratio) * (0.4 + 0.6 * (B.mor / 100)), 0, 1),
       };
       if (!occupation.sustainable) outcome = "pyrrhic";
     }
 
+    const last = timeline[timeline.length - 1] || {};
     return {
       outcome, months: month, timeline, nuclear, occupation,
-      coalition, distance, adjacent, needsAmphib,
+      coalition, distance, adjacent, needsAmphib, frontKm,
+      startMonth, chokeOnA, chokeOnB, taxA, taxB,
       airControlA, seaControlA: (needsAmphib || B.coast > 400) ? seaControlA : null,
       final: S, start,
       casualtiesA: S.a.casualties * 1000, casualtiesB: S.b.casualties * 1000,
+      killedA: S.a.killed * 1000, killedB: S.b.killed * 1000,
+      capturedA: S.a.captured * 1000, capturedB: S.b.captured * 1000,
       civA: S.a.civ * 1e6, civB: S.b.civ * 1e6,
       econA: S.a.econ, econB: S.b.econ,
       territoryLostB: 1 - S.b.territory,
+      density: last.density ?? 0, manoeuvre: last.manoeuvre ?? 1,
+      shellsLeftA: last.shellsA ?? 1, shellsLeftB: last.shellsB ?? 1,
+      pgmLeftA: last.pgmA ?? 1, pgmLeftB: last.pgmB ?? 1,
+      intLeftA: last.intA ?? 1, intLeftB: last.intB ?? 1,
+      peakMobA: Math.max(...timeline.map((t) => t.mobA), 0),
+      peakMobB: Math.max(...timeline.map((t) => t.mobB), 0),
     };
   }
 
@@ -608,14 +818,19 @@
     attackerCollapse: "b", stalemate: "draw", pyrrhic: "pyrrhic", nuclear: "none",
   };
 
-  function simulate(attackerId, defenderId, userOpts = {}) {
-    const A = BY_ID[attackerId], B = BY_ID[defenderId];
+  // Accepts either country ids or fully-built country objects, so the
+  // historical backtest can feed period force structures through the same
+  // model the live app uses — no parallel implementation to drift out of sync.
+  function simulate(attacker, defender, userOpts = {}) {
+    const A = typeof attacker === "string" ? BY_ID[attacker] : attacker;
+    const B = typeof defender === "string" ? BY_ID[defender] : defender;
     if (!A || !B) throw new Error("Unknown country");
 
     const opts = {
       warAim: "limited", allies: true, nuclearAllowed: true, surprise: false, support: "none",
+      startMonth: 2,
       mobilizationA: "partial", mobilizationB: "partial",
-      iterations: 2000, seed: 20260809, maxMonths: 60, ...userOpts,
+      iterations: 2000, seed: 20260809, maxMonths: null, ...userOpts,
     };
     opts._pa = profile(A);
     opts._pb = profile(B);
@@ -626,7 +841,9 @@
     const byOutcome = {};
     const runs = [];
     let nuclearRuns = 0, sumMonths = 0, sumCasA = 0, sumCasB = 0,
-        sumCivA = 0, sumCivB = 0, sumEconA = 0, sumEconB = 0, sumTerr = 0;
+        sumCivA = 0, sumCivB = 0, sumEconA = 0, sumEconB = 0, sumTerr = 0,
+        sumKiaA = 0, sumKiaB = 0, sumPowA = 0, sumPowB = 0,
+        dryShellA = 0, dryShellB = 0, dryPgmA = 0, dryIntB = 0;
 
     for (let i = 0; i < opts.iterations; i++) {
       const r = runOnce(A, B, opts, rng);
@@ -638,6 +855,14 @@
       sumCivA += r.civA; sumCivB += r.civB;
       sumEconA += r.econA; sumEconB += r.econB;
       sumTerr += r.territoryLostB;
+      sumKiaA += r.killedA; sumKiaB += r.killedB;
+      sumPowA += r.capturedA; sumPowB += r.capturedB;
+      // How often each magazine actually ran dry — the answer is usually
+      // "more than anyone plans for".
+      if (r.shellsLeftA < 0.05) dryShellA++;
+      if (r.shellsLeftB < 0.05) dryShellB++;
+      if (r.pgmLeftA < 0.10) dryPgmA++;
+      if (r.intLeftB < 0.10) dryIntB++;
       if (i < 400) runs.push({ months: r.months, casA: r.casualtiesA, casB: r.casualtiesB, outcome: r.outcome });
     }
 
@@ -664,9 +889,15 @@
       expected: {
         months: sumMonths / n,
         casualtiesA: sumCasA / n, casualtiesB: sumCasB / n,
+        killedA: sumKiaA / n, killedB: sumKiaB / n,
+        capturedA: sumPowA / n, capturedB: sumPowB / n,
         civA: sumCivA / n, civB: sumCivB / n,
         econA: sumEconA / n, econB: sumEconB / n,
         territoryLostB: sumTerr / n,
+      },
+      magazines: {
+        shellsDryA: pct(dryShellA), shellsDryB: pct(dryShellB),
+        pgmDryA: pct(dryPgmA), interceptorsDryB: pct(dryIntB),
       },
       runs, medianRun,
       profiles: { a: opts._pa, b: opts._pb },
@@ -689,20 +920,42 @@
       will: willProfile(c, isDef, opts.warAim),
       alliance: window.WarData.alliancesOf(c.id),
     });
+    const needsAmphib = !adjacent && (B.island === 1 || B.borders.length === 0);
+    const front = frontWidth(B, adjacent, needsAmphib);
     return {
       a: side(A, pa, false), b: side(B, pb, true),
       distance: d, adjacent,
       terrainMult: 1 + 0.55 * (B.terrain / 100),
       defenderEdge: 1.30 * (1 + 0.55 * (B.terrain / 100)) * (opts.warAim === "conquest" ? 1.08 : 1.0),
-      needsAmphib: !adjacent && (B.island === 1 || d > 900),
-      occupationNeed: B.pop * 20,
+      urbanDragMax: 1 + 0.9 * (B.urban / 100),
+      needsAmphib,
+      frontKm: front,
+      occupationNeed: B.pop * 20 * (0.75 + 0.5 * (B.urban / 100)),
       sharedAlliance: sharedAlliance(A.id, B.id),
+      multiFront: { a: multiFrontTax(A, B.id), b: multiFrontTax(B, A.id) },
+      chokepoints: {
+        onA: window.WarData.chokeAgainst(B.id, A.id),
+        onB: window.WarData.chokeAgainst(A.id, B.id),
+      },
+      closure: {
+        a: adjacent ? 0.50 : clamp(0.05 + 0.40 * (pa.proj.index / 150), 0.04, 0.45),
+        b: 0.62,
+      },
+      mobilisation: {
+        a: { rate: A.mobRate, pool: A.res * MOBILIZATION[opts.mobilizationA].reserveCall,
+             equipCap: A.act * (1 + A.store) + A.res * 0.25, store: A.store },
+        b: { rate: B.mobRate, pool: B.res * MOBILIZATION[opts.mobilizationB].reserveCall,
+             equipCap: B.act * (1 + B.store) + B.res * 0.25, store: B.store },
+      },
+      season: { climate: B.climate, start: opts.startMonth ?? 2,
+                profile: SEASON[B.climate] || SEASON.temperate },
       aim,
     };
   }
 
   window.WarModel = {
-    simulate, domainScores, projection, sustainment,
+    simulate, domainScores, projection, sustainment, frontWidth,
+    seasonTempo, multiFrontTax, SEASON,
     greatCircle, deployFraction, amphibiousLift, qualityMult, trainingMult,
     experienceMult, c4Mult, willProfile,
     WAR_AIMS, MOBILIZATION, rngFactory,
