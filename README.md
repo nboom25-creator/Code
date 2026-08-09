@@ -3,6 +3,10 @@
 A simple, minimal Snake arcade game built with **React Native + Expo**. Runs on
 iOS, Android, and the web from a single codebase.
 
+> Also in this repo: **[`war-sim/`](war-sim/)** — *Theatre*, a conflict model
+> built on real order-of-battle data for 74 countries. No build step; open
+> `war-sim/index.html` in a browser.
+
 ## Play
 
 - **Swipe** anywhere on the board to steer the snake (up / down / left / right).

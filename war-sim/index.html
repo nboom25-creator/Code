@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theatre — a war simulator built on real force structures</title>
+<meta name="description" content="Simulate a war between any two countries using real order-of-battle, economic, logistical and demographic data.">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <h1>Theatre</h1>
+    <p class="sub">
+      A conflict model built on real order-of-battle data. Pick two countries and a scenario;
+      the model fights the war month by month — air superiority, ground manoeuvre, sea control,
+      industrial replacement, fuel, casualties and political will all feeding back into each
+      other — a few thousand times, and reports the distribution of outcomes.
+    </p>
+    <p class="vintage">Force data ≈ 2025–26 · Spending: SIPRI (Apr 2026) · Warheads: FAS (2026) · Order of battle: IISS / Janes</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ── Setup ─────────────────────────────────────────────────────────── -->
+  <section class="panel">
+    <h2>Belligerents</h2>
+    <p class="panel-note">
+      The attacker must reach the defender; the defender fights at home. Which side is which
+      changes the answer more than almost anything else in this model.
+    </p>
+    <div class="matchup">
+      <div class="side-pick attacker">
+        <label for="atk">Attacker</label>
+        <select id="atk"></select>
+      </div>
+      <button class="swap" id="swap" title="Swap sides" aria-label="Swap attacker and defender">⇄</button>
+      <div class="side-pick defender">
+        <label for="def">Defender</label>
+        <select id="def"></select>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="control">
+        <label for="aim">War aim</label>
+        <select id="aim"></select>
+      </div>
+      <div class="control">
+        <label for="mobA">Attacker mobilisation</label>
+        <select id="mobA"></select>
+      </div>
+      <div class="control">
+        <label for="mobB">Defender mobilisation</label>
+        <select id="mobB"></select>
+      </div>
+      <div class="control">
+        <label for="support">Foreign materiel support</label>
+        <select id="support">
+          <option value="none" selected>None</option>
+          <option value="b">To the defender</option>
+          <option value="a">To the attacker</option>
+          <option value="both">To both sides</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="iter">Monte Carlo runs</label>
+        <select id="iter">
+          <option value="500">500 — fast</option>
+          <option value="2000" selected>2,000 — default</option>
+          <option value="8000">8,000 — tight intervals</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="toggles">
+      <label class="toggle"><input type="checkbox" id="allies" checked> Alliances may be drawn in</label>
+      <label class="toggle"><input type="checkbox" id="nukes" checked> Nuclear escalation possible</label>
+      <label class="toggle"><input type="checkbox" id="surprise"> Attacker achieves strategic surprise</label>
+    </div>
+
+    <button class="run" id="run">Simulate the war</button>
+  </section>
+
+  <div id="out"></div>
+
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/model.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

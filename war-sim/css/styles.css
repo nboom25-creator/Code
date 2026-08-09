@@ -1,0 +1,277 @@
+/* =============================================================================
+ * styles.css — war room. Dark, dense, tabular.
+ *
+ * Colour roles are declared once here and referenced by role everywhere else.
+ * The three series colours were validated with the data-viz palette checker
+ * against this exact surface (all-pairs, dark): worst normal-vision ΔE 16.9,
+ * worst CVD ΔE 10.2. Do not substitute by eye.
+ * ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  --plane:        #0d0e11;   /* page background */
+  --surface-1:    #14161a;   /* panels, chart surface */
+  --surface-2:    #1b1e24;   /* raised rows, inputs */
+  --surface-3:    #23272e;   /* hover */
+
+  --text-primary:   #f2f3f5;
+  --text-secondary: #b6bac1;
+  --text-muted:     #898781;
+
+  --grid:     #23262b;
+  --axis:     #33373e;
+  --border:   rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  --attacker: #3987e5;   /* categorical slot 1 */
+  --defender: #c98500;   /* categorical slot 4 */
+  --neutral:  #898781;   /* "neither side" — a neutral, never a series hue */
+  --critical: #d03b3b;   /* status: nuclear / catastrophic */
+  --good:     #0ca30c;   /* status: sustainable */
+  --warning:  #fab219;
+
+  --attacker-dim: rgba(57, 135, 229, 0.16);
+  --defender-dim: rgba(201, 133, 0, 0.16);
+  --critical-dim: rgba(208, 59, 59, 0.14);
+
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --r: 6px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--plane);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 96px; }
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+header.top {
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #14161a 0%, #0d0e11 100%);
+  padding: 28px 0 22px;
+  margin-bottom: 28px;
+}
+header.top h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  font-weight: 650;
+}
+header.top .sub { color: var(--text-secondary); font-size: 14px; max-width: 70ch; margin: 0; }
+header.top .vintage {
+  margin-top: 12px; font-size: 12px; color: var(--text-muted);
+  font-family: var(--mono);
+}
+
+/* ── Panels ───────────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.panel > h2 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.panel > .panel-note {
+  margin: 0 0 18px; font-size: 13px; color: var(--text-secondary); max-width: 78ch;
+}
+
+/* ── Combatant pickers ────────────────────────────────────────────────────── */
+.matchup { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: end; }
+.side-pick label {
+  display: block; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+  font-weight: 700; margin-bottom: 7px;
+}
+.side-pick.attacker label { color: var(--attacker); }
+.side-pick.defender label { color: var(--defender); }
+
+select, input[type="number"] {
+  width: 100%;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  font-size: 15px;
+  font-family: inherit;
+}
+select:focus-visible, input:focus-visible, button:focus-visible {
+  outline: 2px solid var(--attacker); outline-offset: 2px;
+}
+
+.swap {
+  background: var(--surface-2); color: var(--text-secondary);
+  border: 1px solid var(--border-strong); border-radius: var(--r);
+  padding: 10px 14px; cursor: pointer; font-size: 16px; line-height: 1;
+  height: 42px;
+}
+.swap:hover { background: var(--surface-3); color: var(--text-primary); }
+
+/* ── Scenario controls ────────────────────────────────────────────────────── */
+.controls {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);
+}
+.control label {
+  display: block; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 600; margin-bottom: 6px;
+}
+.toggles { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 16px; }
+.toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); cursor: pointer; }
+.toggle input { accent-color: var(--attacker); width: 16px; height: 16px; cursor: pointer; }
+
+button.run {
+  margin-top: 20px; width: 100%;
+  background: var(--attacker); color: #fff; border: 0; border-radius: var(--r);
+  padding: 14px; font-size: 15px; font-weight: 650; letter-spacing: 0.02em;
+  cursor: pointer; font-family: inherit;
+}
+button.run:hover { filter: brightness(1.1); }
+button.run:disabled { opacity: 0.5; cursor: wait; }
+
+/* ── Verdict ──────────────────────────────────────────────────────────────── */
+.verdict { text-align: center; padding: 26px 20px 22px; }
+.verdict .headline {
+  font-size: 27px; font-weight: 650; letter-spacing: -0.02em; margin: 0 0 8px;
+}
+.verdict .detail { color: var(--text-secondary); font-size: 15px; margin: 0 auto; max-width: 74ch; }
+
+/* Probability bar — one stacked row, every segment direct-labelled. */
+.probbar { display: flex; height: 40px; border-radius: var(--r); overflow: hidden; margin: 22px 0 12px; gap: 2px; }
+.probbar div {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 650; color: #fff; min-width: 2px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* A conquest the attacker cannot hold is still the attacker's colour — it won
+   the war — but hatched, so it never reads as a clean victory. Texture rather
+   than a fifth hue, which would fail the palette's separation floors. */
+.striped {
+  background-image: repeating-linear-gradient(
+    135deg, var(--attacker) 0 6px, #1c5cab 6px 12px) !important;
+}
+.problegend { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; font-size: 13px; color: var(--text-secondary); }
+.problegend span { display: flex; align-items: center; gap: 7px; }
+.swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+
+/* ── Stat tiles ───────────────────────────────────────────────────────────── */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 12px; }
+.tile {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 14px 16px;
+}
+.tile .k { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+.tile .v { font-size: 23px; font-weight: 650; margin-top: 5px; letter-spacing: -0.02em; }
+.tile .s { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.tile.crit { border-color: rgba(208, 59, 59, 0.45); background: var(--critical-dim); }
+.tile.crit .v { color: var(--critical); }
+
+/* ── Charts ───────────────────────────────────────────────────────────────── */
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 12px; }
+.chart-title { font-size: 15px; font-weight: 620; }
+.legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--text-secondary); flex-wrap: wrap; }
+.legend span { display: flex; align-items: center; gap: 6px; }
+
+.chart-scroll { overflow-x: auto; }
+svg.chart { display: block; width: 100%; height: auto; }
+svg.chart text { font-family: var(--font); fill: var(--text-secondary); }
+svg.chart .grid { stroke: var(--grid); stroke-width: 1; }
+svg.chart .axis { stroke: var(--axis); stroke-width: 1; }
+svg.chart .tick { font-size: 11px; fill: var(--text-muted); }
+svg.chart .val { font-size: 11.5px; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
+svg.chart .lbl { font-size: 12.5px; fill: var(--text-primary); }
+
+.tt {
+  position: fixed; pointer-events: none; z-index: 50;
+  background: var(--surface-2); border: 1px solid var(--border-strong);
+  border-radius: var(--r); padding: 9px 11px; font-size: 12.5px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55); opacity: 0; transition: opacity .1s;
+  max-width: 260px;
+}
+.tt.on { opacity: 1; }
+.tt .tt-h { font-weight: 650; margin-bottom: 5px; color: var(--text-primary); }
+.tt .tt-r { display: flex; justify-content: space-between; gap: 14px; color: var(--text-secondary); }
+.tt .tt-r b { color: var(--text-primary); font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; }
+thead th { color: var(--text-muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+td { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+td:first-child { color: var(--text-primary); font-variant-numeric: normal; }
+tbody tr:hover { background: var(--surface-2); }
+td.a { color: var(--attacker); font-weight: 600; }
+td.b { color: var(--defender); font-weight: 600; }
+.section-row td { color: var(--text-muted); font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; font-weight: 700; padding-top: 16px; border-bottom-color: var(--axis); }
+
+/* ── Narrative ────────────────────────────────────────────────────────────── */
+.phases { list-style: none; margin: 0; padding: 0; }
+.phases li { display: grid; grid-template-columns: 92px 1fr; gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--grid); }
+.phases li:last-child { border-bottom: 0; }
+.phases .when { font-family: var(--mono); font-size: 12px; color: var(--text-muted); padding-top: 2px; }
+.phases .what { font-size: 14px; color: var(--text-secondary); }
+.phases .what b { color: var(--text-primary); font-weight: 620; }
+
+/* ── Disclosure ───────────────────────────────────────────────────────────── */
+details { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-1); margin-bottom: 12px; }
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-size: 14px; font-weight: 600;
+  list-style: none; display: flex; justify-content: space-between; align-items: center;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::after { content: "▾"; color: var(--text-muted); font-size: 12px; }
+details[open] > summary::after { content: "▴"; }
+details > summary:hover { background: var(--surface-2); }
+details .body { padding: 4px 18px 18px; }
+
+.formula {
+  font-family: var(--mono); font-size: 12.5px; color: var(--text-secondary);
+  background: var(--plane); border: 1px solid var(--grid); border-radius: 4px;
+  padding: 10px 12px; margin: 10px 0; overflow-x: auto; white-space: pre;
+}
+.formula b { color: var(--text-primary); font-weight: 600; }
+
+.note { font-size: 13px; color: var(--text-muted); margin-top: 14px; max-width: 80ch; }
+.note strong { color: var(--text-secondary); }
+
+.btn-sm {
+  background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border-strong);
+  border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.btn-sm:hover { background: var(--surface-3); color: var(--text-primary); }
+.btn-sm[aria-pressed="true"] { background: var(--attacker); color: #fff; border-color: var(--attacker); }
+
+.hidden { display: none !important; }
+.spinner { text-align: center; color: var(--text-muted); padding: 40px; font-size: 14px; }
+
+@media (max-width: 720px) {
+  .matchup { grid-template-columns: 1fr; }
+  .swap { width: 100%; }
+  .verdict .headline { font-size: 21px; }
+  .phases li { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* A table inside a scroll container must keep its natural column widths — if it
+   shrinks to the container the columns squash instead of scrolling. */
+.chart-scroll > table { min-width: max-content; }
+@media (max-width: 560px) { .chart-scroll > table { font-size: 12.5px; } }
