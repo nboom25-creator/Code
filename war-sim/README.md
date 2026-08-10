@@ -148,7 +148,7 @@ assumption changed at a time, so you can see which of them the answer rests on.
 
 ## What the report draws
 
-Nine chart forms, all inline SVG, no libraries, every one with a hover layer
+Ten chart forms, all inline SVG, no libraries, every one with a hover layer
 and most with a table view.
 
 - **Range and bearing** — deliberately *not* a map. The model has no coastlines
@@ -192,6 +192,28 @@ and most with a table view.
   it is usually leadership by a wide margin. The shaded strip through the middle
   is what that many runs could produce from sampling noise alone, so a
   three-point bar is visibly not a finding.
+- **The pecking order** — every pairing among the strongest militaries, fought
+  both ways round, on demand. A row attacks a column, so the grid is
+  deliberately asymmetric: the United States invading Russia and Russia invading
+  the United States are different wars, which is exactly what a single power
+  score cannot say. Several hundred wars, so it fills in progressively and can
+  be stopped, and any cell can be clicked to run that matchup properly.
+
+  A cell carries the **margin** — how much more often the row prevails than the
+  column does — rather than the row's win rate. Encoding one side's share paints
+  two completely different wars identically: Britain attacking France is 0%
+  attacker and 100% defender, while South Korea attacking Japan is 0% attacker
+  and 97% *nobody*, and both would be solid amber. On margin the first goes to
+  the amber end and the second sits at the dark midpoint, which is what "neither
+  of them wins this" should look like.
+
+  The result is worth stating plainly, because it is stark: at a border-seizure
+  aim, **three states have a positive margin against the field and the other
+  nine have none at all**. Most great powers simply cannot reach each other, and
+  a peer attacking a peer overwhelmingly ends with the attacker's own collapse.
+  Russia ranks above the United States here purely because the aim is to seize a
+  border region and Russia has borders worth seizing, which is the sort of thing
+  the grid exists to make visible.
 - **Tug-of-war bars** — share of combined strength by domain, ratio direct-
   labelled on every row.
 
@@ -499,6 +521,14 @@ rather than chosen by eye: attacker `#3987e5`, defender `#c98500`, critical
 ΔE 10.2, both above the floors. "Won the war but cannot hold the ground" is drawn
 in the attacker's colour with a hatch rather than a fifth hue, which would have
 failed those floors. Every chart has a table view.
+
+The pecking-order grid is the one diverging scale in the report, and it is
+built the other way round from the rest: lightness carries the margin and hue
+carries the side, so a one-sided cell glows, an even one sinks into the surface,
+and the grid still reads with the colour taken away. Its midpoint is a dark
+neutral that is deliberately *below* the 3:1 contrast floor — a cell where
+neither side wins is supposed to recede — which is legitimate here because every
+cell has a hover readout and a table view behind it.
 
 The endings chart needed two more slots and both were checked the same way. Its
 second attacker step is `#8fc0f5`, at ΔE 18.5 from the base — a step of one hue,

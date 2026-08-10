@@ -11,6 +11,7 @@
  *   sparkRows()    — small multiples on a shared timeline
  *   endingBands()  — when the wars ended, stacked by how
  *   tornado()      — which uncertain assumption the answer rests on
+ *   matrix()       — who beats whom, every ordered pair
  *
  * Every one ships a hover layer, and the ones carrying numbers a reader might
  * want exactly can render themselves as a table.
@@ -903,6 +904,117 @@
     return svg;
   }
 
+  /* ── Who beats whom ───────────────────────────────────────────────────────
+   * One cell per ordered pair: the row attacks the column. Asymmetric on
+   * purpose — the whole point is that A invading B and B invading A are
+   * different wars, and a symmetric "power score" table cannot say that.
+   *
+   * The scale is diverging rather than sequential, because a win probability is
+   * polar around 50% rather than a magnitude: amber means the defender holds,
+   * blue means the attacker prevails, and the midpoint is a dark neutral that
+   * deliberately recedes into the surface. Lightness carries the margin and hue
+   * carries the side, so a one-sided cell glows and a coin flip disappears —
+   * which is also what makes the grid readable in greyscale.
+   *
+   * Returns a handle rather than drawing once, because the grid is filled in
+   * progressively while several hundred wars are fought.
+   */
+  function matrix(container, cfg) {
+    const { rows, colorFor, onPick, cell = 30, labelW = 158, meanW = 78 } = cfg;
+    const n = rows.length;
+    const padT = 34, padB = 8;
+    const w = labelW + n * cell + meanW, h = padT + n * cell + padB;
+
+    const svg = el("svg", { class: "chart", viewBox: `0 0 ${w} ${h}`,
+      role: "img", "aria-label": cfg.ariaLabel || "Win probability for every pairing, attacker by row" });
+
+    // Column headers: flags only. A 16-column grid has no room for names, and
+    // the tooltip carries them.
+    rows.forEach((r, j) => {
+      const t = el("text", { class: "tick", x: labelW + j * cell + cell / 2, y: padT - 12,
+        "text-anchor": "middle", style: "font-size:15px" });
+      t.textContent = r.flag;
+      svg.appendChild(t);
+    });
+
+    const meanHdr = el("text", { class: "tick", x: labelW + n * cell + 10, y: padT - 12 });
+    meanHdr.textContent = "margin";
+    svg.appendChild(meanHdr);
+
+    const cells = [];
+    rows.forEach((r, i) => {
+      const y = padT + i * cell;
+      const lab = el("text", { class: "tick", x: labelW - 10, y: y + cell / 2 + 4, "text-anchor": "end" });
+      lab.textContent = `${r.flag} ${r.name}`;
+      svg.appendChild(lab);
+
+      cells[i] = [];
+      rows.forEach((c, j) => {
+        const x = labelW + j * cell;
+        if (i === j) {
+          // No country invades itself. Left as surface with a muted dash.
+          const d = el("text", { class: "tick", x: x + cell / 2, y: y + cell / 2 + 4,
+            "text-anchor": "middle", opacity: 0.35 });
+          d.textContent = "·";
+          svg.appendChild(d);
+          cells[i][j] = null;
+          return;
+        }
+        // 2px surface gap between cells, so the grid never reads as one block.
+        const rect = el("rect", { x: x + 1, y: y + 1, width: cell - 2, height: cell - 2, rx: 3,
+          fill: "var(--surface-2)", style: onPick ? "cursor:pointer" : "" });
+        rect.addEventListener("mouseenter", (e) => {
+          const v = rect.__v;
+          rect.setAttribute("stroke", "var(--text-primary)");
+          rect.setAttribute("stroke-width", 1.5);
+          showTip(
+            `<div class="tt-h">${r.flag} ${r.name} attacks ${c.flag} ${c.name}</div>` +
+            (rect.__d == null ? `<div class="tt-r"><span>not fought yet</span></div>`
+              : `<div class="tt-r"><span>${r.name} prevails</span><b>${rect.__d.atk.toFixed(0)}%</b></div>` +
+                `<div class="tt-r"><span>${c.name} holds</span><b>${rect.__d.def.toFixed(0)}%</b></div>` +
+                `<div class="tt-r"><span>neither</span><b>${rect.__d.unres.toFixed(0)}%</b></div>` +
+                `<div class="tt-r" style="margin-top:4px"><span>margin</span>` +
+                `<b>${v > 0 ? "+" : ""}${v.toFixed(0)}</b></div>` +
+                (onPick ? `<div class="tt-r" style="margin-top:4px"><span>click to run it in full</span></div>` : "")),
+            e.clientX, e.clientY);
+        });
+        rect.addEventListener("mouseleave", () => {
+          rect.removeAttribute("stroke"); hideTip();
+        });
+        if (onPick) rect.addEventListener("click", () => onPick(r.id, c.id));
+        svg.appendChild(rect);
+        cells[i][j] = rect;
+      });
+
+      // The ranking itself: mean margin across every opponent in the grid.
+      // Signed points, not a percentage — it is a difference of two shares.
+      const mean = el("text", { class: "val", x: labelW + n * cell + 10, y: y + cell / 2 + 4 });
+      mean.textContent = "—";
+      svg.appendChild(mean);
+      cells[i].mean = mean;
+    });
+
+    container.innerHTML = "";
+    container.appendChild(svg);
+
+    return {
+      // `v` drives the colour; `detail` is the breakdown the tooltip needs,
+      // because a margin alone cannot tell "the defender wins" apart from
+      // "nobody does".
+      setCell(i, j, v, detail) {
+        const rect = cells[i] && cells[i][j];
+        if (!rect) return;
+        rect.__v = v;
+        rect.__d = detail;
+        rect.setAttribute("fill", colorFor(v));
+      },
+      setMean(i, v) {
+        if (!cells[i]) return;
+        cells[i].mean.textContent = v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(0);
+      },
+    };
+  }
+
   /* ── Table fallback for any chart ─────────────────────────────────────── */
   function tableView(headers, rows) {
     const t = document.createElement("table");
@@ -915,6 +1027,6 @@
 
   window.WarCharts = {
     tugBars, lineChart, waterfall, scatter, rangeBearing, frontStrip,
-    stackedArea, sparkRows, endingBands, tornado, tableView, showTip, hideTip,
+    stackedArea, sparkRows, endingBands, tornado, matrix, tableView, showTip, hideTip,
   };
 })();

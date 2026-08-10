@@ -6,7 +6,7 @@
   const { COUNTRIES, BY_ID, PLATFORM_LABELS } = window.WarData;
   const M = window.WarModel;
   const { tugBars, lineChart, waterfall, scatter, rangeBearing,
-          frontStrip, stackedArea, sparkRows, endingBands, tornado } = window.WarCharts;
+          frontStrip, stackedArea, sparkRows, endingBands, tornado, matrix } = window.WarCharts;
 
   // Ordered parts of one whole take steps of a single hue, not categorical
   // colours. These are the blue ramp's ordinal-safe steps on a dark surface.
@@ -38,6 +38,7 @@
     if (months < 24) return months.toFixed(months < 6 ? 1 : 0) + " months";
     return (months / 12).toFixed(1) + " years";
   }
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -141,6 +142,7 @@
     out.appendChild(showWork(R, aN, bN));
     out.appendChild(comparison(R, aN, bN));
     out.appendChild(caveats());
+    out.appendChild(peckingOrder());
     out.appendChild(backtestPanel());
     wrapTables(out);
     out.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1087,6 +1089,210 @@ maxAdvance    = 0.030 + 0.34 · manoeuvre²      → <b>${pct((0.030 + 0.34 * Ma
    * The model's own scorecard. Runs on demand because nine wars at several
    * hundred iterations each takes a few seconds.
    */
+  /* Clicking a cell loads that pairing into the real controls and runs it at
+   * full resolution. The grid is a browsing surface, not an answer: sixty runs
+   * a cell is enough to rank with and not enough to conclude from. */
+  function loadMatchup(attackerId, defenderId, warAim) {
+    $("atk").value = attackerId;
+    $("def").value = defenderId;
+    $("aim").value = warAim;
+    // The grid is fought without alliances or escalation. A matchup opened from
+    // it should be the real thing, so those come back on.
+    $("allies").checked = true;
+    $("nukes").checked = true;
+    document.querySelector(".controls").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("run").click();
+  }
+
+  /* ── The pecking order ────────────────────────────────────────────────────
+   * Every ordered pair among the top N militaries, fought. Several hundred
+   * wars, so it runs in time-boxed chunks with the grid filling in as it goes
+   * and a button to stop it — a spinner in front of a frozen tab would be the
+   * same wait with less to look at.
+   */
+  const GRID_ITERS = 60;
+
+  /* Diverging scale: amber the defender holds, blue the attacker prevails,
+   * dark neutral at a coin flip. Lightness carries the margin and hue carries
+   * the side, so a one-sided cell glows, an even one sinks into the surface,
+   * and the grid still reads with the colour taken away. */
+  const GRID_RAMP = ["#e0a63c", "#b88b42", "#886b46", "#3f434a", "#5e7896", "#789fca", "#8fc0f5"];
+  /* Cells carry the MARGIN — attacker's win share minus defender's — not the
+   * attacker's share alone. Encoding one side's share paints two completely
+   * different wars the same colour: Britain attacking France is 0% attacker and
+   * 100% defender, while South Korea attacking Japan is 0% attacker and 97%
+   * NOBODY, and both would be full amber. On margin the first goes to the amber
+   * end and the second sits at the midpoint, which is what "neither of them
+   * wins this" should look like. The tooltip carries all three numbers. */
+  const gridColor = (m) => {
+    if (m == null) return "var(--surface-2)";
+    const i = Math.round(((clamp(m, -100, 100) + 100) / 200) * (GRID_RAMP.length - 1));
+    return GRID_RAMP[i];
+  };
+
+  function peckingOrder() {
+    const s = panel("The pecking order",
+      `Every pairing among the strongest militaries in the dataset, fought both ways round. ` +
+      `A row attacks a column, so the grid is deliberately asymmetric — the whole point is that ` +
+      `A invading B and B invading A are different wars, which a single power score cannot say. ` +
+      `Click any cell to run that matchup properly.`);
+
+    const bar = document.createElement("div");
+    bar.className = "toggles";
+    bar.style.margin = "4px 0 14px";
+    bar.innerHTML =
+      `<label class="toggle">Grid
+        <select id="grid-n">
+          <option value="8">top 8 — quick</option>
+          <option value="12" selected>top 12</option>
+          <option value="16">top 16 — slow</option>
+        </select></label>
+       <label class="toggle">War aim
+        <select id="grid-aim">
+          <option value="limited" selected>seize a border region</option>
+          <option value="conquest">total conquest</option>
+        </select></label>`;
+
+    const btn = document.createElement("button");
+    btn.className = "run";
+    btn.type = "button";
+    btn.style.marginTop = "0";
+    btn.textContent = "Fight every pairing";
+    const status = document.createElement("p");
+    status.className = "note";
+    status.style.margin = "10px 0 0";
+    const box = document.createElement("div");
+    box.className = "chart-scroll";
+    const tableBox = document.createElement("div");
+    s.append(bar, btn, status, box, tableBox);
+
+    let running = false, stop = false;
+
+    btn.addEventListener("click", () => {
+      if (running) { stop = true; return; }
+
+      const N = +bar.querySelector("#grid-n").value;
+      const warAim = bar.querySelector("#grid-aim").value;
+      /* Ranked by the model's own aggregate of the four fighting domains rather
+       * than by budget. Budget ranks Ukraine fifth in the world, which is true
+       * of its wartime spending and not of what this grid is asking. */
+      const power = (c) => {
+        const d = M.domainScores(c);
+        return d.land + d.air + d.sea + d.strike;
+      };
+      const rows = COUNTRIES.slice().sort((a, b) => power(b) - power(a)).slice(0, N)
+        .map((c) => ({ id: c.id, name: c.name, flag: c.flag }));
+
+      const pairs = [];
+      rows.forEach((a, i) => rows.forEach((b, j) => { if (i !== j) pairs.push([i, j]); }));
+      const win = rows.map(() => []);
+
+      const onPick = (aid, bid) => loadMatchup(aid, bid, warAim);
+      const handle = matrix(box, {
+        rows, colorFor: gridColor,
+        onPick,
+        ariaLabel: "Win probability for every pairing among the top militaries, attacker by row",
+      });
+
+      running = true; stop = false;
+      btn.textContent = "Stop";
+      tableBox.innerHTML = "";
+
+      let k = 0;
+      const t0 = performance.now();
+      const step = () => {
+        // Time-boxed rather than a fixed cell count: a war between two great
+        // powers can cost thirty times what a short one does, and a fixed
+        // chunk would stutter badly on the expensive rows.
+        const slice = performance.now();
+        while (k < pairs.length && performance.now() - slice < 45) {
+          const [i, j] = pairs[k++];
+          const r = M.simulate(rows[i].id, rows[j].id, {
+            warAim, iterations: GRID_ITERS,
+            // Alliances and nuclear release are both off. With alliances on,
+            // every NATO pairing returns the same answer; with escalation on,
+            // the interesting cells all resolve to "nuclear" and the scale
+            // stops meaning anything. Both are stated under the grid.
+            allies: false, nuclearAllowed: false,
+          });
+          const P = r.probability;
+          const atk = P.attacker + P.pyrrhic;
+          win[i][j] = { atk, def: P.defender, unres: P.unresolved, margin: atk - P.defender };
+          handle.setCell(i, j, win[i][j].margin, win[i][j]);
+        }
+        rows.forEach((_, i) => {
+          const vals = win[i].filter((v) => v != null);
+          handle.setMean(i, vals.length
+            ? vals.reduce((x, y) => x + y.margin, 0) / vals.length : null);
+        });
+        const done = k / pairs.length;
+        status.textContent = stop || k >= pairs.length
+          ? `${k.toLocaleString()} wars fought in ${((performance.now() - t0) / 1000).toFixed(1)}s.`
+          : `Fighting ${pairs.length.toLocaleString()} wars — ${Math.round(done * 100)}%…`;
+
+        if (k < pairs.length && !stop) { setTimeout(step, 0); return; }
+
+        running = false;
+        btn.textContent = "Fight every pairing";
+        if (k >= pairs.length) rankGrid(rows, win, box, tableBox, status, onPick);
+      };
+      setTimeout(step, 0);
+    });
+
+    return s;
+  }
+
+  /* Re-rank by mean win rate once every war is fought — the ranking IS the
+   * result, so the grid settles into it rather than being drawn in it. */
+  function rankGrid(rows, win, box, tableBox, status, onPick) {
+    const mean = (i) => {
+      const v = win[i].filter((x) => x != null);
+      return v.length ? v.reduce((a, b) => a + b.margin, 0) / v.length : 0;
+    };
+    const meanWin = (i) => {
+      const v = win[i].filter((x) => x != null);
+      return v.length ? v.reduce((a, b) => a + b.atk, 0) / v.length : 0;
+    };
+    const order = rows.map((_, i) => i).sort((a, b) => mean(b) - mean(a));
+    const ranked = order.map((i) => rows[i]);
+
+    const handle2 = matrix(box, {
+      rows: ranked, colorFor: gridColor, onPick,
+      ariaLabel: "Win probability for every pairing, ranked by mean win rate",
+    });
+    order.forEach((oi, i) => {
+      order.forEach((oj, j) => { if (i !== j) handle2.setCell(i, j, win[oi][oj].margin, win[oi][oj]); });
+      handle2.setMean(i, mean(oi));
+    });
+
+    tableBox.innerHTML = "";
+    tableBox.appendChild(tableToggle(
+      ["Rank", "Country", "Mean margin", "Wins as attacker", "Can take ground from", "Stopped by"],
+      order.map((oi, rank) => {
+        const opp = rows.map((r, j) => ({ r, v: win[oi][j] })).filter((x) => x.v != null);
+        const best = opp.reduce((a, b) => (b.v.margin > a.v.margin ? b : a), opp[0]);
+        const worst = opp.reduce((a, b) => (b.v.margin < a.v.margin ? b : a), opp[0]);
+        // "Wins" counts opponents it beats more often than it loses to, which is
+        // the honest headline when many pairings resolve to nobody winning.
+        const beats = opp.filter((x) => x.v.margin > 0).length;
+        const sign = (v) => (v > 0 ? "+" : "") + v.toFixed(0);
+        return [String(rank + 1), `${rows[oi].flag} ${rows[oi].name}`, sign(mean(oi)),
+                `${beats} of ${opp.length}`,
+                `${best.r.flag} ${sign(best.v.margin)}`, `${worst.r.flag} ${sign(worst.v.margin)}`];
+      })));
+
+    const top = ranked[0], bottom = ranked[ranked.length - 1];
+    status.innerHTML = status.textContent +
+      ` <strong>${esc(top.name)}</strong> comes out ahead across the board; ` +
+      `<strong>${esc(bottom.name)}</strong> worst. A cell is the <em>margin</em> — how much more often ` +
+      `the row prevails than the column does — so the dark middle is not a coin flip so much as a war ` +
+      `neither side wins, which at this scale is most of them. Alliances and nuclear release are both off — ` +
+      `with alliances on every NATO pairing returns the same answer, and with escalation on the ` +
+      `interesting cells all resolve to “nuclear”. Each cell is ${GRID_ITERS} runs, so a single one ` +
+      `carries a few points of sampling error; a row mean over ${ranked.length - 1} opponents is ` +
+      `far steadier, which is why the ranking is the trustworthy part and any one cell is not.`;
+  }
+
   function backtestPanel() {
     const s = panel("Does this model actually work?",
       "Nine conflicts with known outcomes, period-accurate force data, and exactly the same simulation the report above uses. Where the model is wrong, this says so.");
