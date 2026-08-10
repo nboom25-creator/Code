@@ -1311,6 +1311,7 @@ maxAdvance    = 0.030 + 0.34 · manoeuvre²      → <b>${pct((0.030 + 0.34 * Ma
       setTimeout(() => {
         const rows = window.WarBacktest.run(500);
         const sum = window.WarBacktest.summary(rows);
+        const cal = window.WarBacktest.calibration(rows);
         const tick = (ok) => ok
           ? '<span style="color:var(--good)">✓</span>'
           : '<span style="color:var(--critical)">✗</span>';
@@ -1318,12 +1319,43 @@ maxAdvance    = 0.030 + 0.34 · manoeuvre²      → <b>${pct((0.030 + 0.34 * Ma
         const tiles = document.createElement("div");
         tiles.className = "tiles";
         tiles.style.margin = "18px 0";
+        const skill = (v) => (v > 0 ? "+" : "") + (v * 100).toFixed(0) + "%";
         tiles.innerHTML = [
           { k: "Outcome called correctly", v: `${sum.outcomes} / ${sum.n}`, s: "attacker wins, defender holds, or neither" },
           { k: "Duration within 3×", v: `${sum.durations} / ${sum.n}`, s: "the model works in whole months" },
           { k: "Casualties within 4×", v: `${sum.casualties} / ${sum.n}`, s: "several of these are disputed by a factor of two" },
-          { k: "Probability on the truth", v: pct(sum.meanMass), s: "mean mass the model put on what happened" },
-        ].map((i) => `<div class="tile"><div class="k">${i.k}</div><div class="v">${i.v}</div><div class="s">${i.s}</div></div>`).join("");
+          { k: "Skill vs the base rate", v: skill(cal.brierSkill), crit: cal.brierSkill < 0,
+            s: "Brier score against simply knowing how wars usually go" },
+        ].map((i) => `<div class="tile${i.crit ? " crit" : ""}"><div class="k">${i.k}</div>` +
+                     `<div class="v">${i.v}</div><div class="s">${i.s}</div></div>`).join("");
+
+        /* The pass counts flatter the model, and the honest number is next to
+         * them rather than buried: graded as a forecast rather than a guess, it
+         * currently scores worse than the base rate because it is enormously
+         * overconfident. */
+        const cala = document.createElement("div");
+        cala.className = "note";
+        cala.style.cssText = "max-width:80ch;margin:0 0 18px";
+        const p1 = (v) => (v == null ? "n/a" : (v * 100).toFixed(0) + "%");
+        cala.innerHTML =
+          `<strong>Graded as a forecast rather than a guess, it does worse than the base rate.</strong> ` +
+          `Brier ${cal.brier.toFixed(2)} against ${cal.baseBrier.toFixed(2)} for a forecaster who ignores ` +
+          `every force structure and just knows how wars usually go — a skill score of ` +
+          `<strong>${skill(cal.brierSkill)}</strong>. The reason is confidence, not ranking: shrink every ` +
+          `forecast ${Math.round((1 - cal.tempering.t) * 100)}% of the way toward the base rate and the ` +
+          `same model scores <strong>${skill(cal.tempering.brierSkill)}</strong>. It knows something; it ` +
+          `does not know it as certainly as it says. ` +
+          `The real duration landed inside its central 50% band ${p1(cal.duration.cover50)} of the time ` +
+          `(it should be 50%) and inside the 90% band ${p1(cal.duration.cover90)} (it should be 90%).`;
+
+        const rel = document.createElement("table");
+        rel.innerHTML =
+          `<thead><tr><th>When the model said…</th><th>…it happened</th><th>Forecasts</th></tr></thead><tbody>` +
+          cal.reliability.filter((b) => b.count).map((b) =>
+            `<tr><td>${(b.lo * 100).toFixed(0)}–${Math.min(100, b.hi * 100).toFixed(0)}% ` +
+            `<span style="color:var(--text-muted)">(mean ${p1(b.predicted)})</span></td>` +
+            `<td>${p1(b.observed)}</td><td>${b.count}</td></tr>`).join("") +
+          `</tbody>`;
 
         const t = document.createElement("table");
         t.innerHTML =
@@ -1353,7 +1385,7 @@ maxAdvance    = 0.030 + 0.34 · manoeuvre²      → <b>${pct((0.030 + 0.34 * Ma
           "<strong>Fitting the twelve free coefficients does not help.</strong> Bounded to physically defensible ranges and regularised toward their priors, the search reliably improves the fitting score by 12–17% and makes the held-out score 6–12% <em>worse</em>, across four different configurations. The remaining error is structural, not a matter of the constants, so the hand-set values are what ships. That negative result is the most useful thing this backtest has produced.";
 
         box.innerHTML = "";
-        box.append(tiles, t, note);
+        box.append(tiles, cala, rel, t, note);
         wrapTables(box);
         btn.textContent = "Re-run the backtest";
         btn.disabled = false;

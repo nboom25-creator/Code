@@ -583,6 +583,50 @@
     unresolved: "stalemate", nuclear: "nuclear",
   };
 
+  /* ── Scoring a forecast, rather than a guess ──────────────────────────────
+   * The pass/fail counts below are kept because they are legible and because
+   * the README quotes them, but they are a poor way to grade a model that
+   * emits a distribution. "Within 3x of the mean duration" throws away
+   * everything the Monte Carlo produced, and a case sitting near the threshold
+   * flips on iteration count alone — which happened, and is what prompted this.
+   *
+   * The metrics that follow grade the distribution:
+   *
+   *   Brier / log score — proper scoring rules on the outcome. Both are
+   *     minimised only by reporting your true belief, so a model cannot buy a
+   *     better score by hedging or by overclaiming.
+   *   Skill score — the same, expressed against the base rate of outcomes in
+   *     this case set. Zero means "no better than knowing how wars usually go";
+   *     negative means actively worse than that.
+   *   PIT — where in the predicted distribution the real answer landed. Uniform
+   *     across cases means calibrated. Piled up near zero means the model
+   *     systematically over-predicts, which is precisely the duration bias, and
+   *     it measures it as a distribution instead of a pass count.
+   *   Coverage — how often reality fell inside the model's central 50% and 90%
+   *     bands. Should be 50% and 90%. Lower means overconfident.
+   */
+  const CLASSES = ["attacker", "defender", "stalemate", "nuclear"];
+
+  /* Laplace smoothing rather than an arbitrary floor. An outcome that came up
+   * in none of n runs is not impossible, it is under-observed, and the log
+   * score is undefined at zero — so a clamp has to go somewhere. Add-one is the
+   * standard, principled place to put it: p = (k + 1) / (n + classes). At two
+   * thousand runs it moves a genuine zero to about 0.0005 and leaves everything
+   * else alone, so it cannot flatter the model. */
+  function classProbs(breakdown, iterations) {
+    const p = { attacker: 0, defender: 0, stalemate: 0, nuclear: 0 };
+    Object.entries(breakdown).forEach(([k, v]) => {
+      p[OUTCOME_CLASS[k] || "stalemate"] += v / 100;
+    });
+    const n = iterations || 1;
+    CLASSES.forEach((c) => { p[c] = (p[c] * n + 1) / (n + CLASSES.length); });
+    return p;
+  }
+  // Multiclass Brier: 0 is perfect, 2 is confidently wrong.
+  const brierOf = (p, actual) =>
+    CLASSES.reduce((s, c) => s + Math.pow(p[c] - (c === actual ? 1 : 0), 2), 0);
+  const logOf = (p, actual) => -Math.log(Math.max(p[actual] || 0, 1e-9));
+
   function scoreCase(c, result) {
     const modal = Object.entries(result.outcomeBreakdown)
       .reduce((best, kv) => (kv[1] > best[1] ? kv : best), ["stalemate", -1]);
@@ -610,15 +654,125 @@
     const occupationOk = actual.occupationFails === undefined ? null
       : actual.occupationFails === ((result.outcomeBreakdown.pyrrhic || 0) > 40);
 
+    const P = classProbs(result.outcomeBreakdown, result.opts && result.opts.iterations);
+    const D = result.dist || {};
+    const M = window.WarModel;
+    // Where the real answer fell in the predicted distribution, and whether it
+    // fell inside the bands the model claimed.
+    const band = (sorted, v) => {
+      if (!sorted || !sorted.length || !(v > 0)) return { pit: null, in50: null, in90: null };
+      return {
+        pit: M.pit(sorted, v),
+        in50: v >= M.quantile(sorted, 0.25) && v <= M.quantile(sorted, 0.75),
+        in90: v >= M.quantile(sorted, 0.05) && v <= M.quantile(sorted, 0.95),
+      };
+    };
+    const bMonths = band(D.months, actual.months);
+    const bKiaA = band(D.killedA, actual.killedA);
+    const bKiaB = band(D.killedB, actual.killedB);
+
     return {
       predicted, actualOutcome: actual.outcome,
       outcomeOk: predicted === actual.outcome,
+      probs: P,
+      brier: brierOf(P, actual.outcome),
+      logScore: logOf(P, actual.outcome),
+      months50: [M.quantile(D.months || [], 0.25), M.quantile(D.months || [], 0.75)],
+      pitMonths: bMonths.pit, monthsIn50: bMonths.in50, monthsIn90: bMonths.in90,
+      pitKilledA: bKiaA.pit, pitKilledB: bKiaB.pit,
+      killedIn90: [bKiaA.in90, bKiaB.in90].filter((x) => x !== null),
       mass, months, durationOk,
       killedA: result.expected.killedA, killedB: result.expected.killedB,
       ratioA: rA, ratioB: rB, casualtiesOk, occupationOk,
       territoryLost: result.expected.territoryLostB,
       passes: [predicted === actual.outcome, durationOk, casualtiesOk]
         .filter(Boolean).length,
+    };
+  }
+
+  /* Aggregate calibration across the case set.
+   *
+   * The skill scores are measured against the base rate of outcomes in these
+   * fifteen wars — a forecaster who ignores the forces entirely and predicts
+   * "attackers win about half the time" every time. Beating that is the
+   * minimum bar for the model earning its existence, and stating it that way
+   * stops a Brier score of 0.6 from sounding good or bad on its own.
+   */
+  function calibration(rows) {
+    const n = rows.length;
+    const mean = (f) => rows.reduce((s, r) => s + f(r), 0) / n;
+
+    // Climatology: how often each outcome actually occurs in this set.
+    const base = { attacker: 0, defender: 0, stalemate: 0, nuclear: 0 };
+    rows.forEach((r) => { base[r.case.actual.outcome] += 1 / n; });
+    const baseBrier = mean((r) =>
+      CLASSES.reduce((s, c) => s + Math.pow(base[c] - (c === r.case.actual.outcome ? 1 : 0), 2), 0));
+    const baseLog = mean((r) => -Math.log(Math.max(base[r.case.actual.outcome], 0.001)));
+
+    const brier = mean((r) => r.score.brier);
+    const logS = mean((r) => r.score.logScore);
+
+    const defined = (f) => rows.map(f).filter((v) => v != null && !Number.isNaN(v));
+    const share = (a) => (a.length ? a.filter(Boolean).length / a.length : null);
+    const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+
+    const pitM = defined((r) => r.score.pitMonths);
+    const pitK = defined((r) => r.score.pitKilledA).concat(defined((r) => r.score.pitKilledB));
+
+    /* Reliability over every (case, class) forecast rather than only the class
+     * that happened — fifteen cases is thin, sixty forecast-outcome pairs is
+     * merely thin. Bins are wide for the same reason. */
+    const BINS = [[0, 0.05], [0.05, 0.25], [0.25, 0.75], [0.75, 0.95], [0.95, 1.001]];
+    const reliability = BINS.map(([lo, hi]) => {
+      let count = 0, sumP = 0, hits = 0;
+      rows.forEach((r) => CLASSES.forEach((c) => {
+        const p = r.score.probs[c];
+        if (p >= lo && p < hi) { count++; sumP += p; hits += (r.case.actual.outcome === c ? 1 : 0); }
+      }));
+      return { lo, hi, count, predicted: count ? sumP / count : null, observed: count ? hits / count : null };
+    });
+
+    /* How much of the deficit is overconfidence rather than being wrong?
+     * Shrink every forecast toward the base rate by a factor and re-score:
+     * p' = (1-t)·base + t·p. t=1 is the model as it stands, t=0 is pure
+     * climatology. If some intermediate t scores far better than both, the
+     * model's ranking of outcomes is informative and only its certainty is
+     * not — which is a completely different problem from being wrong, and a
+     * much easier one to fix. */
+    let bestT = 1, bestBrier = brier;
+    for (let t = 0; t <= 1.0001; t += 0.05) {
+      const b = mean((r) => {
+        const a = r.case.actual.outcome;
+        return CLASSES.reduce((s, c) => {
+          const p = (1 - t) * base[c] + t * r.score.probs[c];
+          return s + Math.pow(p - (c === a ? 1 : 0), 2);
+        }, 0);
+      });
+      if (b < bestBrier - 1e-9) { bestBrier = b; bestT = t; }
+    }
+    const temperedLog = mean((r) => {
+      const a = r.case.actual.outcome;
+      return -Math.log(Math.max((1 - bestT) * base[a] + bestT * r.score.probs[a], 1e-9));
+    });
+
+    return {
+      n,
+      brier, baseBrier, brierSkill: 1 - brier / baseBrier,
+      tempering: {
+        t: bestT, brier: bestBrier, brierSkill: 1 - bestBrier / baseBrier,
+        logScore: temperedLog, logSkill: 1 - temperedLog / baseLog,
+      },
+      logScore: logS, baseLog, logSkill: 1 - logS / baseLog,
+      duration: {
+        meanPit: avg(pitM),
+        cover50: share(defined((r) => r.score.monthsIn50)),
+        cover90: share(defined((r) => r.score.monthsIn90)),
+      },
+      casualties: {
+        meanPit: avg(pitK),
+        cover90: share(rows.flatMap((r) => r.score.killedIn90)),
+      },
+      reliability,
     };
   }
 
@@ -655,5 +809,5 @@
                            "falklands82", "korea50", "vietnam65"]);
   const isHoldout = (id) => HOLDOUT.has(id);
 
-  window.WarBacktest = { CASES, run, summary, scoreCase, HOLDOUT, isHoldout };
+  window.WarBacktest = { CASES, run, summary, scoreCase, calibration, CLASSES, HOLDOUT, isHoldout };
 })();

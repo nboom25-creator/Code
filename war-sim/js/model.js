@@ -1139,6 +1139,34 @@
     };
   }
 
+  /* ── Reading a distribution ───────────────────────────────────────────────
+   * `quantile` is linear-interpolated on a sorted array. `pit` is the
+   * probability integral transform: the share of the distribution lying below
+   * an observed value. If a forecast is well calibrated, PIT values across many
+   * cases are uniform on [0,1]; if they pile up near zero the model is
+   * systematically over-predicting, and near one, under. It is the single most
+   * informative number you can get out of a probabilistic forecast, and it
+   * costs a binary search.
+   */
+  function quantile(sorted, q) {
+    const n = sorted.length;
+    if (!n) return NaN;
+    const i = clamp(q, 0, 1) * (n - 1);
+    const lo = Math.floor(i), hi = Math.ceil(i);
+    return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+  }
+  function pit(sorted, value) {
+    const n = sorted.length;
+    if (!n) return NaN;
+    let lo = 0, hi = n;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m] < value) lo = m + 1; else hi = m; }
+    let up = lo;
+    while (up < n && sorted[up] === value) up++;
+    // Midpoint of the tied range, so an exact hit lands mid-interval rather
+    // than being charged to one side.
+    return ((lo + up) / 2) / n;
+  }
+
   /* =========================================================================
    * Monte Carlo wrapper.
    * ====================================================================== */
@@ -1253,6 +1281,12 @@
     const tally = { a: 0, b: 0, draw: 0, none: 0, pyrrhic: 0 };
     const byOutcome = {};
     const runs = [];
+    /* The three quantities the backtest judges, kept for every run rather than
+     * collapsed to a mean. A mean duration cannot be scored honestly against a
+     * war that actually happened: "within 3x of the mean" throws away the
+     * distribution the model exists to produce, and turns a graded forecast
+     * into a coin toss at the threshold. */
+    const distMonths = [], distKiaA = [], distKiaB = [];
     // Every run, not just the 400 the scatter draws: the attribution below
     // splits into terciles and wants the samples.
     const draws = [];
@@ -1272,6 +1306,7 @@
       sumEconA += r.econA; sumEconB += r.econB;
       sumTerr += r.territoryLostB;
       sumKiaA += r.killedA; sumKiaB += r.killedB;
+      distMonths.push(r.months); distKiaA.push(r.killedA); distKiaB.push(r.killedB);
       sumPowA += r.capturedA; sumPowB += r.capturedB;
       // How often each magazine actually ran dry — the answer is usually
       // "more than anyone plans for".
@@ -1321,6 +1356,15 @@
         civA: sumCivA / n, civB: sumCivB / n,
         econA: sumEconA / n, econB: sumEconB / n,
         territoryLostB: sumTerr / n,
+      },
+      /* Sorted, so a quantile or a CDF lookup is a binary search. This is what
+       * lets the backtest ask the only question worth asking of a probabilistic
+       * forecast: not "was the average close" but "where in the predicted
+       * distribution did reality actually land". */
+      dist: {
+        months: distMonths.sort((a, b) => a - b),
+        killedA: distKiaA.sort((a, b) => a - b),
+        killedB: distKiaB.sort((a, b) => a - b),
       },
       magazines: {
         shellsDryA: pct(dryShellA), shellsDryB: pct(dryShellB),
@@ -1389,5 +1433,6 @@
     greatCircle, deployFraction, amphibiousLift, qualityMult, trainingMult,
     experienceMult, c4Mult, willProfile,
     WAR_AIMS, MOBILIZATION, rngFactory, WEEKS_PER_MONTH, DT, K,
+    quantile, pit,
   };
 })();

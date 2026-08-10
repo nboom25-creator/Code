@@ -9,13 +9,28 @@ answer.
 74 countries. Order of battle, economy, demography, logistics, energy, industry,
 geography, munitions stocks, nuclear forces, and a set of qualitative indices.
 
-**It is graded.** Fifteen historical wars with known outcomes run through the same
-simulation, in the app or from a terminal, on demand. Current score: **9 of 15
-outcomes called correctly, 5 of 15 durations within 3x, 2 of 15 casualty counts
-within 4x**, with a mean 60% of probability mass on what actually happened. Six
-of the fifteen are held out from coefficient fitting and scored separately. The
-failures are listed below rather than hidden — as is the case where the backtest
-was, until recently, marking its own homework.
+**It is graded, and it does not grade well.** Fifteen historical wars with known
+outcomes run through the same simulation, in the app or from a terminal, on
+demand. It calls **9 of 15 outcomes correctly**, which sounds respectable and is
+the least interesting way to score a model that emits a distribution.
+
+Graded as a *forecast* — proper scoring rules on the whole distribution rather
+than a pass mark on the mean — it is **worse than knowing nothing about the
+forces involved**. Its Brier score is 0.77 against 0.56 for a forecaster who
+ignores every order of battle and predicts the base rate of outcomes: a skill
+score of **−38%**. The real duration falls inside its central 50% band **0%** of
+the time.
+
+The cause is confidence rather than ignorance, and that distinction is
+measurable. Shrink every forecast 70% of the way toward the base rate and the
+same model scores **+9%** — better than climatology. It knows something. It does
+not know it remotely as certainly as it says. Details, and what that implies,
+are in [The model is badly overconfident](#the-model-is-badly-overconfident)
+below.
+
+Six of the fifteen cases are held out from coefficient fitting and scored
+separately. The failures are listed rather than hidden — as is the case where
+the backtest was, until recently, marking its own homework.
 
 ## Running it
 
@@ -287,6 +302,67 @@ The residual error is still large and the remaining failures are specific:
 
 Treat durations and casualty figures as much weaker than the outcome verdict.
 
+### The model is badly overconfident
+
+The pass counts above — 9 of 15, 5 of 15 — are legible and coarse, and they
+flatter the model. "Within 3× of the mean duration" throws away everything the
+Monte Carlo produced, and a case sitting near that threshold flips on iteration
+count alone, which is what prompted looking at this properly. A model whose
+whole claim is that it reports a distribution should be graded on the
+distribution.
+
+Scored that way, with Brier and log scores against the base rate of outcomes in
+these fifteen wars:
+
+| | Brier | skill | log score | skill |
+|---|---|---|---|---|
+| Base rate — ignores the forces entirely | 0.56 | — | 0.95 | — |
+| **The model as it stands** | **0.77** | **−38%** | **2.73** | **−187%** |
+| The same model, tempered toward the base rate at t=0.30 | 0.51 | +9% | 0.90 | +6% |
+
+The reliability table says why in one glance:
+
+| When the model said | it actually happened | forecasts |
+|---|---|---|
+| 0–5% (mean 0%) | **12%** | 43 |
+| 5–25% (mean 8%) | 50% | 2 |
+| 75–95% (mean 92%) | **0%** | 2 |
+| 95–100% (mean 100%) | **69%** | 13 |
+
+Fifty-six of sixty forecasts are at one extreme or the other. When it says
+something is impossible it happens an eighth of the time, and when it says
+something is certain it happens two thirds of the time. A confidently wrong
+forecast is enormously expensive under a log score, which is why that skill
+number is −187% while the pass counts look fine.
+
+The tempering row is the useful part. The model's *ranking* of outcomes carries
+real information — discard 70% of its confidence and it beats climatology — but
+its certainty is close to worthless. Those are different failures with different
+fixes, and the pass counts cannot tell them apart.
+
+**Duration and casualties are worse still.**
+
+| | mean PIT | in the 50% band | in the 90% band |
+|---|---|---|---|
+| Duration | 0.29 | 0% (want 50%) | 20% (want 90%) |
+| Casualties | 0.33 | — | 27% (want 90%) |
+
+PIT is where the real answer landed in the predicted distribution; 0.50 is
+unbiased. At 0.29 the model systematically over-predicts duration — the same
+bias the pass counts show, now measured as a distribution rather than a tally,
+and visible as a single number that any change can be tested against. The
+coverage figures say the spread is far too narrow: a band that should contain
+reality half the time contains it never.
+
+**Why this happens, and what would fix it.** The Monte Carlo samples parameter
+uncertainty — leadership, force quality, industrial output — and nothing else.
+It has no representation of the possibility that the *model* is wrong, so a
+matchup where every sampled parameter points the same way returns 100%. For a
+model that gets 6 of 15 outcomes wrong, no honest forecast should ever read
+100%. The fix is a structural-uncertainty term rather than more tuning of the
+existing coefficients, and until that exists the tempering factor above is a
+fair summary of how much of the confidence to believe.
+
 ### The horizon was doing the work, and one case was marking its own homework
 
 Drawing the endings chart made something visible that four years of tables had
@@ -478,6 +554,12 @@ table and in "show your work."
 **Several constants are fitted, not derived.** Casualty tolerance in particular
 is calibrated against the backtest rather than measured, and the code says so
 where that is true.
+
+**It is overconfident, and by a measured amount.** When it says an outcome is
+certain, that outcome happens about two thirds of the time; when it says
+impossible, about an eighth. Discount its certainty accordingly — the section on
+calibration above quantifies by how much — and treat the *ranking* of outcomes
+as the part worth reading.
 
 **Durations and casualty counts are much weaker than the outcome verdict.**
 Short decisive wars still run too long and the casualty figures inherit that

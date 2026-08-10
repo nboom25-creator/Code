@@ -40,6 +40,7 @@ const summarise = (rs) => ({
   meanMass: rs.reduce((s, r) => s + r.score.mass, 0) / rs.length,
 });
 
+const cal = WarBacktest.calibration(rows);
 const all = summarise(rows);
 const fit = summarise(rows.filter((r) => !isHoldout(r.case.id)));
 const held = summarise(rows.filter((r) => isHoldout(r.case.id)));
@@ -48,6 +49,7 @@ if (JSON_OUT) {
   console.log(JSON.stringify({
     iterations: ITERS,
     summary: { all, fit, holdout: held },
+    calibration: cal,
     cases: rows.map((r) => ({
       id: r.case.id, name: r.case.name, holdout: isHoldout(r.case.id),
       predicted: r.score.predicted, actual: r.score.actualOutcome,
@@ -95,4 +97,30 @@ const line = (label, s) =>
 console.log(line("all", all));
 console.log(line("fitting", fit));
 console.log(line("holdout", held));
+
+/* The pass counts above are legible and coarse. These grade the distribution
+ * the model actually produces, which is the only fair test of a forecast. */
+const p1 = (v) => (v == null ? "  n/a" : (v * 100).toFixed(0) + "%");
+console.log("\n" + "─".repeat(88));
+console.log("CALIBRATION — grading the distribution, not the mean\n");
+console.log(`  Brier      ${cal.brier.toFixed(3)}   vs base rate ${cal.baseBrier.toFixed(3)}` +
+            `   skill ${(cal.brierSkill * 100).toFixed(0)}%`);
+console.log(`  Log score  ${cal.logScore.toFixed(3)}   vs base rate ${cal.baseLog.toFixed(3)}` +
+            `   skill ${(cal.logSkill * 100).toFixed(0)}%`);
+const T = cal.tempering;
+console.log(`  Tempered toward the base rate at t=${T.t.toFixed(2)}: ` +
+            `Brier ${T.brier.toFixed(3)} (skill ${(T.brierSkill * 100).toFixed(0)}%), ` +
+            `log ${T.logScore.toFixed(3)} (skill ${(T.logSkill * 100).toFixed(0)}%)`);
+console.log(`\n  Duration    mean PIT ${cal.duration.meanPit.toFixed(2)} (0.50 = unbiased)` +
+            `   in 50% band ${p1(cal.duration.cover50)} (want 50%)` +
+            `   in 90% band ${p1(cal.duration.cover90)} (want 90%)`);
+console.log(`  Casualties  mean PIT ${cal.casualties.meanPit.toFixed(2)}` +
+            `                              in 90% band ${p1(cal.casualties.cover90)} (want 90%)`);
+console.log("\n  Reliability — of every case-and-outcome forecast:");
+cal.reliability.forEach((b) => {
+  if (!b.count) return;
+  const lab = `${(b.lo * 100).toFixed(0)}–${Math.min(100, b.hi * 100).toFixed(0)}%`;
+  console.log(`    model said ${lab.padEnd(8)} (mean ${p1(b.predicted).padStart(4)})` +
+              `  →  actually happened ${p1(b.observed).padStart(4)}   n=${b.count}`);
+});
 console.log();
