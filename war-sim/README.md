@@ -120,6 +120,43 @@ is sampled per run. The output is a distribution.
 The report ends with a sensitivity table that re-fights the matchup with one
 assumption changed at a time, so you can see which of them the answer rests on.
 
+## What the report draws
+
+Seven chart forms, all inline SVG, no libraries, every one with a hover layer
+and most with a table view.
+
+- **Range and bearing** — deliberately *not* a map. The model has no coastlines
+  and drawing some would imply knowledge it does not have. An azimuthal plot
+  centred on the attacker shows what it actually uses: true distance as radius,
+  true bearing as angle, each side's reach as a circle, and any strait that
+  gates the approach.
+- **Force-ratio waterfall** — every multiplier applied to the attacker's ground
+  forces, in order, as a floating bar from the running value to the new one,
+  against the defender's committed strength as a threshold line. The step that
+  killed an offensive is the long bar rather than a number in the fifth row of
+  the fourth table.
+- **Monte Carlo scatter** — one mark per simulated war, by duration and cost.
+  The probability bar at the top of the report says how *often* each side
+  prevails; this says whether that means reliably in four months or a coin flip
+  between a rout and a five-year grind.
+- **Small multiples** — seven indicators on one shared timeline, read downward:
+  the magazine empties, firepower falls, the front stops moving, and only then
+  does will start to go. Three separate charts made that sequence something you
+  had to reconstruct by eye.
+- **Front-line strip** — a Hovmöller diagram, one row per week. A grind reads as
+  a slow diagonal, a rout as a cliff, a counter-offensive as the boundary moving
+  back.
+- **Where the army went** — stacked area of still fighting / wounded and out /
+  captured / killed. Ordered parts of one whole, so steps of a single hue rather
+  than categorical colours.
+- **Tug-of-war bars** — share of combined strength by domain, ratio direct-
+  labelled on every row.
+
+On colour: the palette is validated for two series plus a critical red, and the
+marks stay inside it. Where a chart needs more than two bands they are ordered
+parts of a single whole and take steps of one blue ramp, which is the correct
+encoding for that regardless.
+
 ## The backtest
 
 `js/backtest.js` holds fifteen wars with period-accurate force data and

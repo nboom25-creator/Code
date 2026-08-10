@@ -817,6 +817,14 @@
 
       timeline.push({
         week: tick, month, calendar, tempo, airControlA,
+        // The chain, in the order it is applied. Sum of parts, not a summary.
+        chain: {
+          landA: S.a.land, fracA, airMultA, supplyStrain,
+          garrison: 1 - garrisonDrag, fireA, groundFracA, groundA,
+          landB: S.b.land, fracB, airMultB, defenderEdge, urbanDrag, fireB, groundB,
+        },
+        wiaA: S.a.wounded, wiaB: S.b.wounded,
+        powA: S.a.captured, powB: S.b.captured,
         seaControlA: maritime ? seaControlA : null,
         forceRatio, territoryB: S.b.territory,
         casA: S.a.casualties, casB: S.b.casualties,

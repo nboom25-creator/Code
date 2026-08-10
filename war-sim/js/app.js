@@ -5,7 +5,12 @@
 (function () {
   const { COUNTRIES, BY_ID, PLATFORM_LABELS } = window.WarData;
   const M = window.WarModel;
-  const { tugBars, lineChart } = window.WarCharts;
+  const { tugBars, lineChart, waterfall, scatter, rangeBearing,
+          frontStrip, stackedArea, sparkRows } = window.WarCharts;
+
+  // Ordered parts of one whole take steps of a single hue, not categorical
+  // colours. These are the blue ramp's ordinal-safe steps on a dark surface.
+  const RAMP = ["#86b6ef", "#5598e7", "#2a78d6", "#184f95"];
 
   const $ = (id) => document.getElementById(id);
   const out = $("out");
@@ -118,6 +123,9 @@
     out.appendChild(verdict(R, aN, bN));
     out.appendChild(tiles(R));
     out.appendChild(balance(R, aN, bN));
+    out.appendChild(theatre(R, aN, bN));
+    out.appendChild(whyPanel(R, aN, bN));
+    out.appendChild(spread(R, aN, bN));
     out.appendChild(campaign(R, aN, bN));
     out.appendChild(narrative(R, aN, bN));
     if (A.nuke || B.nuke) out.appendChild(nuclearPanel(R, aN, bN));
@@ -315,6 +323,151 @@
     return s;
   }
 
+  function chartBlock(section, title, legend, build, table) {
+    const head = document.createElement("div");
+    head.className = "chart-head";
+    head.innerHTML = `<div class="chart-title">${title}</div><div class="legend">${legend || ""}</div>`;
+    section.appendChild(head);
+    const box = document.createElement("div");
+    box.className = "chart-scroll";
+    box.style.marginBottom = table ? "6px" : "20px";
+    section.appendChild(box);
+    build(box);
+    if (table) section.appendChild(tableToggle(table[0], table[1]));
+    return box;
+  }
+
+  /* ── Range and bearing ──────────────────────────────────────────────────── */
+  function theatre(R, aN, bN) {
+    const D = R.derived, A = R.attacker, B = R.defender;
+    const s = panel("Distance, reach and the approach",
+      `Not a map — the model has no coastlines and drawing some would imply knowledge it does not have. ` +
+      `This is what it actually uses: true distance as radius, true bearing as angle, and each side's ` +
+      `<em>reach</em> — the range at which half its deployable force still arrives — as a circle.`);
+
+    chartBlock(s, "Theatre geometry",
+      `<span><i class="swatch" style="background:${C.a}"></i>${esc(aN)} reach</span>
+       <span><i class="swatch" style="background:${C.b}"></i>${esc(bN)} reach</span>` +
+      (D.chokepoints.onA.length ? `<span><i class="swatch" style="background:${C.crit}"></i>Strait held against the attacker</span>` : ""),
+      (box) => rangeBearing(box, {
+        attacker: A, defender: B, distance: R.distance,
+        reachA: D.a.projection.reach, reachB: D.b.projection.reach,
+        chokepoints: D.chokepoints.onA,
+      }));
+
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.maxWidth = "80ch";
+    note.innerHTML = R.adjacent
+      ? `The two share a border, so the projection curve is largely bypassed — <strong>${pct(D.a.deployFraction * 100, 1)}</strong> of ${esc(A.name)}'s force reaches the theatre, limited by the war aim and by the other frontiers it still has to cover, not by distance.`
+      : `At <strong>${num(R.distance)} km</strong> against a reach of ${num(D.a.projection.reach)} km, the projection curve leaves ${esc(A.name)} committing <strong>${pct(D.a.deployFraction * 100, 1)}</strong> of its force. ` +
+        (D.chokepoints.onA.length
+          ? `It also has to transit ${D.chokepoints.onA.map((k) => k.name).join(" and ")}, held by the defender.`
+          : `No strait held by the defender gates the approach.`);
+    s.appendChild(note);
+    return s;
+  }
+
+  /* ── Why the ground battle came out as it did ───────────────────────────── */
+  function whyPanel(R, aN, bN) {
+    const t = R.medianRun.timeline;
+    // The month the ground war was hottest is the one worth explaining.
+    const pick = t.reduce((best, x) =>
+      (x.chain && x.chain.groundA > (best.chain ? best.chain.groundA : -1)) ? x : best, t[0]);
+    const ch = pick && pick.chain;
+    const s = panel("Where the force ratio came from", null);
+    if (!ch) { s.innerHTML += `<p class="note">No ground engagement in this scenario.</p>`; return s; }
+
+    s.innerHTML += `<p class="panel-note">Every multiplier the model applies to ${esc(R.attacker.name)}'s ground forces, in the order it applies them, at the height of the ground campaign (month ${Math.ceil(pick.month)}). The long bars are the ones that decided it.</p>`;
+
+    const steps = [];
+    let v = ch.landA;
+    steps.push({ label: "Committed ground power", from: 0, to: v, base: true,
+      note: "quality-adjusted, after coalition contributions" });
+    const add = (label, mult, note) => {
+      const from = v; v = v * mult;
+      steps.push({ label, from, to: v, mult, note });
+    };
+    add(R.derived.needsAmphib ? "Put ashore" : "Reaches the theatre", ch.groundFracA,
+      R.derived.needsAmphib ? "share of the army landed so far"
+        : `distance × war aim × other frontiers × closure`);
+    add("Air support", ch.airMultA, `${pct(pick.airControlA * 100)} of the air`);
+    add("Supply culmination", ch.supplyStrain, "how far the logistics reach");
+    add("Garrisoning ground taken", ch.garrison, "troops tied down behind the line");
+    add("Artillery ammunition", ch.fireA, "firepower available");
+
+    chartBlock(s, "Attacker's ground power, step by step",
+      `<span><i class="swatch" style="background:${C.a}"></i>${esc(aN)}</span>
+       <span><i class="swatch" style="background:${C.b}"></i>${esc(bN)} committed strength</span>`,
+      (box) => waterfall(box, {
+        steps, threshold: ch.groundB,
+        thresholdLabel: R.defender.flag + " " + num(ch.groundB, 1),
+        fmt: (x) => x.toFixed(1),
+      }),
+      [["Step", "Multiplier", "Running value"],
+       steps.map((x) => [x.label, x.mult != null ? "×" + x.mult.toFixed(3) : "—", num(x.to, 2)])]);
+
+    const worst = steps.filter((x) => x.mult != null)
+      .reduce((a, b) => (b.mult < a.mult ? b : a), { mult: 2, label: "—" });
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.maxWidth = "80ch";
+    note.innerHTML =
+      `Against ${esc(R.defender.name)}'s committed <strong>${num(ch.groundB, 1)}</strong> — already multiplied by ${R.derived.defenderEdge.toFixed(2)}× for terrain and prepared positions — that is a force ratio of <strong>${(ch.groundA / Math.max(ch.groundB, 1e-9)).toFixed(2)} : 1</strong>. ` +
+      `The single largest reduction is <strong>${esc(worst.label.toLowerCase())}</strong> at ×${worst.mult.toFixed(2)}.`;
+    s.appendChild(note);
+    return s;
+  }
+
+  /* ── The distribution, with shape ───────────────────────────────────────── */
+  function spread(R, aN, bN) {
+    const s = panel("Every war the model fought",
+      `One mark per simulated war. The bar at the top of this report says how <em>often</em> each side ` +
+      `prevails; this says what that actually looks like — whether a 60% chance means reliably in four ` +
+      `months, or a coin flip between a rout and a five-year grind.`);
+
+    const colorFor = (o) =>
+      o === "attackerObjective" || o === "defenderCollapse" ? C.a
+      : o === "pyrrhic" ? C.a
+      : o === "attackerCollapse" ? C.b
+      : o === "nuclear" ? C.crit : C.neutral;
+    const labelFor = (o) => ({
+      attackerObjective: R.attacker.name + " achieves its aims",
+      defenderCollapse: R.defender.name + "'s defence collapses",
+      pyrrhic: R.attacker.name + " wins but cannot hold",
+      attackerCollapse: R.defender.name + " holds",
+      stalemate: "Stalemate", nuclear: "☢ Nuclear exchange",
+    }[o] || o);
+
+    const points = R.runs.map((r) => ({
+      x: r.months, y: r.casA + r.casB,
+      color: colorFor(r.outcome), label: labelFor(r.outcome),
+    }));
+
+    chartBlock(s, `${R.runs.length.toLocaleString()} of the ${R.opts.iterations.toLocaleString()} runs`,
+      `<span><i class="swatch" style="background:${C.a}"></i>${R.attacker.flag} prevails</span>
+       <span><i class="swatch" style="background:${C.b}"></i>${R.defender.flag} holds</span>
+       <span><i class="swatch" style="background:${C.neutral}"></i>Stalemate</span>` +
+      (R.nuclearRisk > 0.2 ? `<span><i class="swatch" style="background:${C.crit}"></i>☢ Nuclear</span>` : ""),
+      (box) => scatter(box, {
+        points, xLabel: "Duration (months)", yLabel: "Military dead, both sides",
+        yFmt: (v) => people(v),
+        ariaLabel: "Each simulated war plotted by how long it lasted and how many it killed",
+      }));
+
+    const months = R.runs.map((r) => r.months).sort((a, b) => a - b);
+    const q = (f) => months[Math.floor(months.length * f)] || 0;
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.maxWidth = "80ch";
+    note.innerHTML =
+      `Half of these wars finish between <strong>${duration(q(0.25))}</strong> and <strong>${duration(q(0.75))}</strong>; ` +
+      `a tenth run past <strong>${duration(q(0.9))}</strong>. A tight cloud means the matchup is decided by the force ` +
+      `structures; a smeared one means it is decided by things the model can only sample.`;
+    s.appendChild(note);
+    return s;
+  }
+
   /* ── Campaign timeline ──────────────────────────────────────────────────── */
   // Last tick of each elapsed month. The model runs weekly; a 96-month war is
   // 417 points, which is neither readable as a line nor useful as a table.
@@ -331,68 +484,88 @@
 
   function campaign(R, aN, bN) {
     const t = monthly(R.medianRun.timeline);
+    const n = t.length;
     const s = panel("How the campaign runs",
-      `A single representative run, month by month — not an average of incompatible trajectories. ` +
+      `A single representative run — not an average of incompatible trajectories. ` +
       `It ends after ${duration(R.medianRun.months)} with ${outcomeLabel(R.medianRun.outcome, R)}.`);
 
-    const mk = (title, legend, cfg, tableHead, tableRows) => {
-      const head = document.createElement("div");
-      head.className = "chart-head";
-      head.innerHTML = `<div class="chart-title">${title}</div><div class="legend">${legend}</div>`;
-      s.appendChild(head);
-      const box = document.createElement("div");
-      box.className = "chart-scroll";
-      box.style.marginBottom = "22px";
-      s.appendChild(box);
-      lineChart(box, cfg);
-      s.appendChild(tableToggle(tableHead, tableRows));
-    };
-
-    mk("Ground held and air control",
-      `<span><i class="swatch" style="background:${C.b}"></i>${esc(bN)} territory held</span>
-       <span><i class="swatch" style="background:${C.a}"></i>${esc(aN)} air control</span>`,
-      {
-        yMax: 1, yFmt: (v) => Math.round(v * 100) + "%",
-        ariaLabel: "Defender territory held and attacker air control by month",
-        series: [
-          { name: R.defender.name + " territory", color: C.b, points: t.map((x) => x.territoryB) },
-          { name: R.attacker.name + " air control", color: C.a, points: t.map((x) => x.airControlA) },
-        ],
-      },
-      ["Month", R.defender.name + " territory", R.attacker.name + " air control", "Force ratio"],
-      t.map((x) => [Math.ceil(x.month), pct(x.territoryB * 100), pct(x.airControlA * 100), x.forceRatio.toFixed(2) + " : 1"]));
-
-    mk("Artillery ammunition remaining",
+    /* Six indicators on one shared timeline rather than three separate charts.
+     * The point is the chain read downward: the magazine empties, firepower
+     * falls, the front stops moving, and only then does will start to go. Three
+     * charts with three x-axes made that sequence something you had to
+     * reconstruct by eye. */
+    chartBlock(s, "The campaign, read top to bottom",
       `<span><i class="swatch" style="background:${C.a}"></i>${esc(aN)}</span>
        <span><i class="swatch" style="background:${C.b}"></i>${esc(bN)}</span>`,
-      {
-        yMax: 1, yFmt: (v) => Math.round(v * 100) + "%", height: 200,
-        ariaLabel: "Artillery ammunition stocks by month, as a share of what each side started with",
-        series: [
-          { name: R.attacker.name + " shells", color: C.a, points: t.map((x) => Math.min(1, x.shellsA)) },
-          { name: R.defender.name + " shells", color: C.b, points: t.map((x) => Math.min(1, x.shellsB)) },
+      (box) => sparkRows(box, {
+        n,
+        rows: [
+          { label: "Air control", color: C.a, yMax: 1,
+            values: t.map((x) => x.airControlA), fmt: (v) => Math.round(v * 100) + "%" },
+          { label: "Artillery ammunition", color: C.a, yMax: 1,
+            values: t.map((x) => Math.min(1, x.shellsA)), fmt: (v) => Math.round(v * 100) + "%" },
+          { label: "…and the defender's", color: C.b, yMax: 1,
+            values: t.map((x) => Math.min(1, x.shellsB)), fmt: (v) => Math.round(v * 100) + "%" },
+          { label: "Defender interceptors", color: C.b, yMax: 1,
+            values: t.map((x) => Math.min(1, x.intB)), fmt: (v) => Math.round(v * 100) + "%" },
+          { label: "Ground held by defender", color: C.b, yMax: 1,
+            values: t.map((x) => x.territoryB), fmt: (v) => Math.round(v * 100) + "%" },
+          { label: "Attacker's will", color: C.a, yMax: 1,
+            values: t.map((x) => x.willA), fmt: (v) => Math.round(v * 100) + "%" },
+          { label: "Defender's will", color: C.b, yMax: 1,
+            values: t.map((x) => x.willB), fmt: (v) => Math.round(v * 100) + "%" },
         ],
-      },
-      ["Month", R.attacker.name + " shells", R.defender.name + " shells",
-       R.attacker.name + " firepower", R.defender.name + " firepower"],
-      t.map((x) => [Math.ceil(x.month), pct(Math.min(1, x.shellsA) * 100), pct(Math.min(1, x.shellsB) * 100),
-        pct(x.fireA * 100), pct(x.fireB * 100)]));
+      }),
+      [["Month", "Air control", `${R.attacker.name} shells`, `${R.defender.name} shells`,
+        "Defender SAMs", "Territory", `${R.attacker.name} will`, `${R.defender.name} will`],
+       t.map((x) => [Math.ceil(x.month), pct(x.airControlA * 100), pct(Math.min(1, x.shellsA) * 100),
+         pct(Math.min(1, x.shellsB) * 100), pct(Math.min(1, x.intB) * 100),
+         pct(x.territoryB * 100), pct(x.willA * 100), pct(x.willB * 100)])]);
 
-    mk("Political will",
-      `<span><i class="swatch" style="background:${C.a}"></i>${esc(aN)}</span>
-       <span><i class="swatch" style="background:${C.b}"></i>${esc(bN)}</span>`,
-      {
-        yMax: 1, yFmt: (v) => Math.round(v * 100) + "%", height: 200,
-        ariaLabel: "Political will of each side by month",
-        series: [
-          { name: R.attacker.name, color: C.a, points: t.map((x) => x.willA) },
-          { name: R.defender.name, color: C.b, points: t.map((x) => x.willB) },
-        ],
-      },
-      ["Month", R.attacker.name + " will", R.defender.name + " will", R.attacker.name + " dead", R.defender.name + " dead"],
-      t.map((x) => [Math.ceil(x.month), pct(x.willA * 100), pct(x.willB * 100), people(x.casA * 1000), people(x.casB * 1000)]));
+    // The front line as a Hovmoller diagram: a grind reads as a slow diagonal,
+    // a rout as a cliff, and a counter-offensive as the boundary moving back.
+    if (R.medianRun.territoryLostB > 0.01) {
+      chartBlock(s, "The front line, week by week",
+        `<span><i class="swatch" style="background:${C.a}"></i>Taken by ${esc(aN)}</span>
+         <span><i class="swatch" style="background:${C.b}"></i>Still held by ${esc(bN)}</span>`,
+        (box) => frontStrip(box, {
+          rows: sampleRows(R.medianRun.timeline, 60),
+          aName: R.attacker.name, bName: R.defender.name,
+        }));
+    }
+
+    // Where an army went. Ordered parts of one whole, so a single-hue ramp.
+    const side = (pfx, name) => ({
+      title: `Where ${name}'s army went`,
+      bands: [
+        { name: "Still fighting", color: RAMP[0], values: t.map((x) => x["mob" + pfx] * 1000) },
+        // 55% of the wounded return to duty and are already inside "still
+        // fighting"; only the rest are permanently out of the war.
+        { name: "Wounded, out", color: RAMP[1], values: t.map((x) => x["wia" + pfx] * 0.45 * 1000) },
+        { name: "Captured", color: RAMP[2], values: t.map((x) => x["pow" + pfx] * 1000) },
+        { name: "Killed", color: RAMP[3], values: t.map((x) => x["kia" + pfx] * 1000) },
+      ],
+    });
+    [side("A", R.attacker.name), side("B", R.defender.name)].forEach((cfg) => {
+      chartBlock(s, cfg.title,
+        cfg.bands.map((b) => `<span><i class="swatch" style="background:${b.color}"></i>${b.name}</span>`).join(""),
+        (box) => stackedArea(box, {
+          bands: cfg.bands, n, height: 230, yFmt: (v) => people(v),
+          ariaLabel: cfg.title,
+        }));
+    });
 
     return s;
+  }
+
+  // Even sampling of a weekly timeline down to at most `max` rows.
+  function sampleRows(timeline, max) {
+    if (timeline.length <= max) return timeline;
+    const step = timeline.length / max;
+    const out = [];
+    for (let i = 0; i < max; i++) out.push(timeline[Math.floor(i * step)]);
+    out.push(timeline[timeline.length - 1]);
+    return out;
   }
 
   /* ── Narrative ──────────────────────────────────────────────────────────── */
