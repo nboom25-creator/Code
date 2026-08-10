@@ -1098,6 +1098,12 @@
     const last = timeline[timeline.length - 1] || {};
     return {
       outcome, months: tick * DT, weeks: tick, timeline, nuclear, occupation,
+      /* The unknowns this run was handed. Every one of these is resampled per
+       * run precisely because it is not knowable, and until now they were drawn,
+       * used and thrown away — which meant the report could show the width of
+       * the distribution but never say which assumption the width came from.
+       * Keeping them costs ten floats a run and buys the attribution below. */
+      draws: { compA, compB, idxA, idxB, morA, morB, indA, indB, tolA, tolB },
       coalition, distance, adjacent, needsAmphib, frontKm,
       startMonth, chokeOnA, chokeOnB, taxA, taxB,
       airControlA, seaControlA: (needsAmphib || B.coast > 400) ? seaControlA : null,
@@ -1126,6 +1132,88 @@
     stalemate: "draw", pyrrhic: "pyrrhic", nuclear: "none",
   };
 
+  /* ── When wars end, and how ───────────────────────────────────────────────
+   * Grouped by who prevailed and, within that, by whether the war was ended by
+   * force or by a decision. That second split is the one worth drawing: a war
+   * lost on the battlefield and a war conceded with an army still in the field
+   * look identical in a win probability and completely different on a
+   * timeline.
+   */
+  const ENDING_BAND = {
+    attackerObjective: "force", defenderCollapse: "force",
+    defenderCapitulates: "concede",
+    pyrrhic: "pyrrhic",
+    attackerCollapse: "defender", attackerWithdraws: "defender",
+    stalemate: "stalemate", nuclear: "nuclear",
+  };
+  const ENDING_ORDER = ["force", "concede", "pyrrhic", "stalemate", "defender", "nuclear"];
+
+  /* Share of all runs finished by week w, per band, as running totals. The top
+   * of the stack at any week is the share decided by then; what is left above
+   * it is the share still fighting. */
+  function endingCurves(rows, iterations) {
+    const maxWeeks = Math.max(1, ...rows.map((r) => r.weeks));
+    const counts = {};
+    ENDING_ORDER.forEach((k) => (counts[k] = new Array(maxWeeks + 1).fill(0)));
+    rows.forEach((r) => {
+      counts[ENDING_BAND[r.outcome] || "stalemate"][Math.min(r.weeks, maxWeeks)]++;
+    });
+    const cumulative = {};
+    ENDING_ORDER.forEach((k) => {
+      let run = 0;
+      cumulative[k] = counts[k].map((v) => { run += v; return (run / iterations) * 100; });
+    });
+    return { weeks: maxWeeks, cumulative };
+  }
+
+  /* ── Which unknown the answer rests on ────────────────────────────────────
+   * Each run independently draws leadership competence, force quality, morale,
+   * industrial output and casualty tolerance for both sides. Because they are
+   * drawn independently, sorting the runs by one of them and comparing the win
+   * rate in the bottom third against the top third is an unbiased estimate of
+   * that factor's own effect — no extra simulation required, just the draws
+   * that were already being discarded.
+   *
+   * This is a main-effects reading, not a full variance decomposition: it will
+   * not show an interaction where two assumptions only matter together. It
+   * answers the question a reader actually has, which is what they would need
+   * to pin down to narrow the answer.
+   */
+  const FACTORS = [
+    { key: "compA", side: "a", label: "leadership" },
+    { key: "compB", side: "b", label: "leadership" },
+    { key: "idxA",  side: "a", label: "force quality" },
+    { key: "idxB",  side: "b", label: "force quality" },
+    { key: "morA",  side: "a", label: "morale and cohesion" },
+    { key: "morB",  side: "b", label: "morale and cohesion" },
+    { key: "indA",  side: "a", label: "industrial output" },
+    { key: "indB",  side: "b", label: "industrial output" },
+    { key: "tolA",  side: "a", label: "casualty tolerance" },
+    { key: "tolB",  side: "b", label: "casualty tolerance" },
+  ];
+
+  function attribution(rows) {
+    const n = rows.length;
+    const cut = Math.floor(n / 3);
+    // Terciles of fewer than ~60 runs put a sampling error of several points on
+    // every bar, which would be drawing noise as a finding.
+    if (cut < 60) return null;
+    const rate = (arr) => (arr.reduce((s, r) => s + (r.win ? 1 : 0), 0) / arr.length) * 100;
+    const baseline = rate(rows);
+    const out = FACTORS.map((f) => {
+      const sorted = rows.slice().sort((x, y) => x[f.key] - y[f.key]);
+      const low = rate(sorted.slice(0, cut));
+      const high = rate(sorted.slice(n - cut));
+      return { ...f, low, high, swing: Math.abs(high - low) };
+    }).sort((a, b) => b.swing - a.swing);
+    /* How big a swing this many runs could produce from luck alone: the 95%
+     * band on the DIFFERENCE between two independent tercile proportions,
+     * variance taken at its p=0.5 maximum so the band is conservative. Drawn on
+     * the chart, because without it a three-point bar reads as a finding. */
+    const noise = 1.96 * Math.sqrt(2 * 0.25 / cut) * 100;
+    return { baseline, rows: out, tercile: cut, noise };
+  }
+
   // Accepts either country ids or fully-built country objects, so the
   // historical backtest can feed period force structures through the same
   // model the live app uses — no parallel implementation to drift out of sync.
@@ -1149,6 +1237,9 @@
     const tally = { a: 0, b: 0, draw: 0, none: 0, pyrrhic: 0 };
     const byOutcome = {};
     const runs = [];
+    // Every run, not just the 400 the scatter draws: the attribution below
+    // splits into terciles and wants the samples.
+    const draws = [];
     let nuclearRuns = 0, sumMonths = 0, sumCasA = 0, sumCasB = 0,
         sumCivA = 0, sumCivB = 0, sumEconA = 0, sumEconB = 0, sumTerr = 0,
         sumKiaA = 0, sumKiaB = 0, sumPowA = 0, sumPowB = 0,
@@ -1173,6 +1264,9 @@
       if (r.pgmLeftA < 0.10) dryPgmA++;
       if (r.intLeftB < 0.10) dryIntB++;
       if (i < 400) runs.push({ months: r.months, casA: r.casualtiesA, casB: r.casualtiesB, outcome: r.outcome });
+      const side = OUTCOME_SIDE[r.outcome];
+      draws.push({ ...r.draws, weeks: r.weeks, outcome: r.outcome,
+                   win: side === "a" || side === "pyrrhic" });
     }
 
     // A representative run for the narrative and the charts: median seed, no
@@ -1194,6 +1288,10 @@
       },
       outcomeBreakdown: Object.fromEntries(
         Object.entries(byOutcome).map(([k, v]) => [k, pct(v)])),
+      // When the wars ended and by which mechanism, and which of the sampled
+      // unknowns the answer actually rests on.
+      endings: endingCurves(draws, n),
+      uncertainty: attribution(draws),
       nuclearRisk: pct(nuclearRuns),
       expected: {
         months: sumMonths / n,

@@ -6,7 +6,7 @@
   const { COUNTRIES, BY_ID, PLATFORM_LABELS } = window.WarData;
   const M = window.WarModel;
   const { tugBars, lineChart, waterfall, scatter, rangeBearing,
-          frontStrip, stackedArea, sparkRows } = window.WarCharts;
+          frontStrip, stackedArea, sparkRows, endingBands, tornado } = window.WarCharts;
 
   // Ordered parts of one whole take steps of a single hue, not categorical
   // colours. These are the blue ramp's ordinal-safe steps on a dark surface.
@@ -16,7 +16,7 @@
   const out = $("out");
 
   const C = {
-    a: "var(--attacker)", b: "var(--defender)",
+    a: "var(--attacker)", a2: "var(--attacker-2)", b: "var(--defender)",
     neutral: "var(--neutral)", crit: "var(--critical)",
   };
 
@@ -126,9 +126,17 @@
     out.appendChild(theatre(R, aN, bN));
     out.appendChild(whyPanel(R, aN, bN));
     out.appendChild(spread(R, aN, bN));
+    // Directly after the scatter: that chart says how long and how costly, this
+    // one says when it was over and what ended it.
+    const ends = endings(R, aN, bN);
+    if (ends) out.appendChild(ends);
     out.appendChild(campaign(R, aN, bN));
     out.appendChild(narrative(R, aN, bN));
     if (A.nuke || B.nuke) out.appendChild(nuclearPanel(R, aN, bN));
+    // Before the one-at-a-time sensitivity table, which answers the narrower
+    // question of what happens if you change a lever by hand.
+    const rests = restsOn(R, aN, bN);
+    if (rests) out.appendChild(rests);
     out.appendChild(sensitivity(R));
     out.appendChild(showWork(R, aN, bN));
     out.appendChild(comparison(R, aN, bN));
@@ -335,6 +343,119 @@
     build(box);
     if (table) section.appendChild(tableToggle(table[0], table[1]));
     return box;
+  }
+
+  /* ── When it ended, and how ─────────────────────────────────────────────── */
+  function endings(R, aN, bN) {
+    const E = R.endings;
+    if (!E || !E.weeks) return null;
+    const s = panel("When these wars ended, and how",
+      `Every run finished somewhere. This is where — cumulative share decided by each week, stacked by ` +
+      `what ended it. The empty space at the top is the share still fighting, so the top edge of the stack ` +
+      `is a survival curve read upside down. A cliff in the first weeks is a rout; a long shallow ramp is ` +
+      `a grind; a stack that never reaches the top is a war this model could not finish.`);
+
+    const cum = E.cumulative;
+    /* Stalemate is deliberately absent from the stack. Those runs did not end,
+     * they hit the model's horizon, and every one of them does so on the same
+     * week — stacked, they draw a wall at the right edge that looks like a
+     * sudden collapse. They belong in the space above the stack. */
+    const bands = [
+      { key: "force",     name: `${aN} — by force`,      color: C.a,       values: cum.force },
+      { key: "concede",   name: `${aN} — by concession`, color: C.a2,      values: cum.concede },
+      { key: "pyrrhic",   name: "won, cannot hold",      color: C.a, hatch: true, values: cum.pyrrhic },
+      { key: "defender",  name: `${bN} holds`,           color: C.b,       values: cum.defender },
+      { key: "nuclear",   name: "☢ nuclear",             color: C.crit,    values: cum.nuclear },
+    ];
+    const last = (k) => cum[k][E.weeks];
+    const shown = bands.filter((b) => last(b.key) > 0.05);
+
+    chartBlock(s, `${R.opts.iterations.toLocaleString()} runs, week by week`,
+      // The hatched band gets a hatched swatch, or the legend shows two
+      // identical blue squares for two different things.
+      shown.map((b) => `<span><i class="swatch${b.hatch ? " striped" : ""}" ` +
+        `style="background:${b.color}"></i>${b.name}</span>`).join("") +
+      (last("stalemate") > 0.05
+        ? `<span><i class="swatch" style="background:transparent;box-shadow:inset 0 0 0 1px var(--border-strong)"></i>never decided</span>`
+        : ""),
+      (box) => endingBands(box, {
+        bands, weeks: E.weeks, weeksPerMonth: M.WEEKS_PER_MONTH,
+        unresolvedLabel: "never decided",
+        ariaLabel: "Share of simulated wars finished by each week, stacked by how they ended",
+      }),
+      [["Ended by", "Share of runs", "Median month it happened"],
+       shown.map((b) => {
+         // First week at which this band passes half its final height.
+         const half = last(b.key) / 2;
+         let w = cum[b.key].findIndex((v) => v >= half);
+         if (w < 0) w = E.weeks;
+         return [b.name, last(b.key).toFixed(1) + "%",
+                 (w / M.WEEKS_PER_MONTH).toFixed(1)];
+       }).concat(last("stalemate") > 0.05
+         ? [["never decided", last("stalemate").toFixed(1) + "%", "—"]] : [])]);
+
+    const decided = shown.reduce((t, b) => t + last(b.key), 0);
+    const byDecision = last("concede");
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.maxWidth = "80ch";
+    note.innerHTML =
+      (decided < 99.5
+        ? `<strong>${(100 - decided).toFixed(0)}%</strong> of runs were still being fought when the model ran out of clock — those are the stalemates. `
+        : "") +
+      (byDecision >= 1
+        ? `<strong>${byDecision.toFixed(0)}%</strong> ended with ${esc(bN)} conceding a position it had not yet lost on the battlefield. `
+          + `That band is the one the model used to be unable to produce at all: every termination test was an accumulator, so no war could end before one filled.`
+        : `No run ended in a negotiated concession here — ${esc(bN)} either holds or is beaten outright.`);
+    s.appendChild(note);
+    return s;
+  }
+
+  /* ── What the answer rests on ───────────────────────────────────────────── */
+  function restsOn(R, aN, bN) {
+    const U = R.uncertainty;
+    if (!U || !U.rows.length) return null;
+    const s = panel("What the answer rests on",
+      `Nine numbers in this model are guesses that get resampled on every run, which is why the result is ` +
+      `a distribution rather than an answer. This asks which of them the spread is actually made of: each ` +
+      `bar runs from the attacker's win rate in the lowest third of that assumption's draws to the rate in ` +
+      `the highest third. The long bar is the thing worth arguing about; the shaded strip is what ` +
+      `${R.opts.iterations.toLocaleString()} runs could produce from luck alone.`);
+
+    const rows = U.rows.map((r) => ({
+      label: `${r.side === "a" ? R.attacker.flag : R.defender.flag} ${r.label}`,
+      low: r.low, high: r.high, swing: r.swing,
+    }));
+
+    chartBlock(s, `Attacker prevails, by tercile of each assumption`,
+      `<span><i class="swatch" style="background:${C.a}"></i>favours ${esc(aN)}</span>
+       <span><i class="swatch" style="background:${C.b}"></i>favours ${esc(bN)}</span>
+       <span><i class="swatch" style="background:var(--text-muted);opacity:.4"></i>sampling noise</span>`,
+      (box) => tornado(box, {
+        rows, baseline: U.baseline, noise: U.noise,
+        xLabel: `${aN} prevails (% of runs)`,
+        ariaLabel: "Effect of each uncertain assumption on the attacker's chances of prevailing",
+      }),
+      [["Assumption", "Lowest third", "Highest third", "Swing"],
+       rows.map((r) => [r.label, r.low.toFixed(0) + "%", r.high.toFixed(0) + "%",
+                        r.swing.toFixed(1) + " pts"])]);
+
+    const top = U.rows[0];
+    const real = U.rows.filter((r) => r.swing > U.noise);
+    const note = document.createElement("p");
+    note.className = "note";
+    note.style.maxWidth = "80ch";
+    note.innerHTML = real.length === 0
+      ? `Not one assumption moves the result further than sampling noise (±${U.noise.toFixed(0)} points at ` +
+        `${U.tercile.toLocaleString()} runs a tercile). The spread in this matchup is luck in the campaign itself, ` +
+        `not uncertainty about the inputs — raise the iteration count if you want to resolve it further.`
+      : `Of the nine, <strong>${real.length}</strong> move the result further than sampling noise ` +
+        `(±${U.noise.toFixed(0)} points). The largest is <strong>${esc(top.side === "a" ? aN : bN)}'s ` +
+        `${esc(top.label)}</strong>, worth <strong>${top.swing.toFixed(0)} points</strong> of win probability ` +
+        `between its low and high thirds. That is the number to go and find out, and it is a judgement call in ` +
+        `<code>js/data.js</code> rather than anything measured. Bars inside the strip are not findings.`;
+    s.appendChild(note);
+    return s;
   }
 
   /* ── Range and bearing ──────────────────────────────────────────────────── */

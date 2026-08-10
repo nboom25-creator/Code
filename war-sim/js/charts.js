@@ -9,6 +9,8 @@
  *   frontStrip()   — Hovmoller diagram of who holds what, week by week
  *   stackedArea()  — ordered parts of one whole over time
  *   sparkRows()    — small multiples on a shared timeline
+ *   endingBands()  — when the wars ended, stacked by how
+ *   tornado()      — which uncertain assumption the answer rests on
  *
  * Every one ships a hover layer, and the ones carrying numbers a reader might
  * want exactly can render themselves as a table.
@@ -697,6 +699,210 @@
     return svg;
   }
 
+  /* ── When the war ended, and how ──────────────────────────────────────────
+   * Cumulative share of runs finished by week, stacked by termination. The top
+   * edge is the share decided by then, so the empty space above it is the
+   * survival curve read the other way up — and it is the shape that matters:
+   * a cliff in the first weeks is a rout, a long shallow ramp is a grind, and
+   * a stack that never reaches the top is a war the model could not finish.
+   *
+   * Bands are grouped by who prevailed and take steps of that side's hue,
+   * because "attacker won by force" and "attacker won by concession" are parts
+   * of one whole rather than separate identities. Adjacent-pair separation was
+   * checked against the dark surface rather than eyeballed.
+   */
+  function endingBands(container, cfg) {
+    const { bands, weeks, weeksPerMonth = 4.345, height = 260 } = cfg;
+    const padL = 52, padR = 132, padT = 12, padB = 40;
+    const w = 760, h = height, iw = w - padL - padR, ih = h - padT - padB;
+    const n = weeks + 1;
+
+    const X = (i) => padL + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
+    const Y = (v) => padT + ih - (v / 100) * ih;
+
+    const svg = el("svg", { class: "chart", viewBox: `0 0 ${w} ${h}`,
+      role: "img", "aria-label": cfg.ariaLabel || "Share of simulated wars finished, by week and by how they ended" });
+
+    for (let t = 0; t <= 4; t++) {
+      const v = t * 25, y = Y(v);
+      svg.appendChild(el("line", { class: "grid", x1: padL, y1: y, x2: w - padR, y2: y }));
+      const tx = el("text", { class: "tick", x: padL - 8, y: y + 4, "text-anchor": "end" });
+      tx.textContent = v + "%";
+      svg.appendChild(tx);
+    }
+
+    // Hatch for "won but cannot hold" — the report's existing convention, and
+    // the reason that band does not need a hue of its own.
+    const defs = el("defs");
+    const pat = el("pattern", { id: "hatch-end", width: 8, height: 8,
+      patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+    pat.appendChild(el("rect", { width: 8, height: 8, fill: "var(--attacker)" }));
+    pat.appendChild(el("rect", { width: 4, height: 8, fill: "#1c5cab" }));
+    defs.appendChild(pat);
+    svg.appendChild(defs);
+
+    const drawn = bands.filter((b) => b.values[n - 1] > 0.05);
+    let base = new Array(n).fill(0);
+    const stacked = [];
+    drawn.forEach((b) => {
+      const upper = base.map((v, i) => v + (b.values[i] || 0));
+      let d = "M" + X(0) + "," + Y(base[0]);
+      for (let i = 0; i < n; i++) d += "L" + X(i) + "," + Y(upper[i]);
+      for (let i = n - 1; i >= 0; i--) d += "L" + X(i) + "," + Y(base[i]);
+      d += "Z";
+      svg.appendChild(el("path", { d,
+        fill: b.hatch ? "url(#hatch-end)" : b.color,
+        // 1.5px surface gap so bands never touch.
+        stroke: "var(--surface-1)", "stroke-width": 1.5 }));
+      stacked.push({ band: b, base: base.slice(), upper });
+      base = upper;
+    });
+
+    // Direct labels for bands with enough final height to carry one.
+    stacked.forEach(({ band, base: lo, upper }) => {
+      const share = upper[n - 1] - lo[n - 1];
+      if (share < 6) return;
+      const t = el("text", { class: "val", x: w - padR + 8, y: Y((lo[n - 1] + upper[n - 1]) / 2) + 4 });
+      t.textContent = band.name;
+      svg.appendChild(t);
+    });
+
+    /* What never resolved. This is deliberately the empty region rather than a
+     * band: runs that hit the model's horizon all "end" on the same week, so
+     * stacking them draws a vertical wall at the right edge that reads as a
+     * sudden collapse when it is really the clock running out. Left empty, the
+     * top edge of the stack stays a survival curve and the gap above it is the
+     * honest statement — this share was still being fought. */
+    const unfinished = 100 - base[n - 1];
+    if (unfinished > 6) {
+      const t = el("text", { class: "val", x: w - padR + 8, y: Y((100 + base[n - 1]) / 2) + 4 });
+      t.textContent = cfg.unresolvedLabel || "still fighting";
+      svg.appendChild(t);
+    }
+
+    svg.appendChild(el("line", { class: "axis", x1: padL, y1: padT + ih, x2: w - padR, y2: padT + ih }));
+    const months = Math.max(1, Math.floor(weeks / weeksPerMonth));
+    const mStep = Math.max(1, Math.ceil(months / 8));
+    for (let m = 0; m <= months; m += mStep) {
+      const i = Math.min(n - 1, Math.round(m * weeksPerMonth));
+      const tx = el("text", { class: "tick", x: X(i), y: padT + ih + 18, "text-anchor": "middle" });
+      tx.textContent = m;
+      svg.appendChild(tx);
+    }
+    const xl = el("text", { class: "tick", x: padL + iw / 2, y: h - 6, "text-anchor": "middle" });
+    xl.textContent = "Months elapsed";
+    svg.appendChild(xl);
+
+    const cross = el("line", { y1: padT, y2: padT + ih, stroke: "var(--text-muted)", opacity: 0 });
+    svg.appendChild(cross);
+    const hit = el("rect", { x: padL, y: padT, width: iw, height: ih, fill: "transparent",
+      style: "cursor:crosshair" });
+    hit.addEventListener("mousemove", (e) => {
+      const box = svg.getBoundingClientRect();
+      const rel = ((e.clientX - box.left) / box.width) * w;
+      const i = clampIdx(Math.round(((rel - padL) / iw) * (n - 1)), n);
+      cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i));
+      cross.setAttribute("opacity", 0.6);
+      const done = drawn.reduce((s, b) => s + (b.values[i] || 0), 0);
+      showTip(
+        `<div class="tt-h">Month ${(i / weeksPerMonth).toFixed(1)} · week ${i}</div>` +
+        `<div class="tt-r"><span>Still fighting</span><b>${(100 - done).toFixed(0)}%</b></div>` +
+        drawn.filter((b) => (b.values[i] || 0) >= 0.5).map((b) =>
+          `<div class="tt-r"><span>${b.name}</span><b>${b.values[i].toFixed(0)}%</b></div>`).join(""),
+        e.clientX, e.clientY);
+    });
+    hit.addEventListener("mouseleave", () => { cross.setAttribute("opacity", 0); hideTip(); });
+    svg.appendChild(hit);
+
+    container.innerHTML = "";
+    container.appendChild(svg);
+    return svg;
+  }
+
+  /* ── What the answer rests on ─────────────────────────────────────────────
+   * One row per resampled unknown, drawn from the win rate in the bottom third
+   * of that factor's draws to the win rate in the top third, against the
+   * overall rate as the centre line. Sorted by swing, so the assumption the
+   * result depends on is the top bar rather than something to be found by
+   * reading a table.
+   *
+   * The shaded strip through the middle is what this many runs could produce
+   * from sampling noise alone. Bars inside it are not results, and saying so on
+   * the chart is cheaper than explaining it afterwards.
+   */
+  function tornado(container, cfg) {
+    const { rows, baseline, noise = 0, aColor = "var(--attacker)", bColor = "var(--defender)" } = cfg;
+    const rowH = 32, padL = 210, padR = 64, padT = 30, padB = 34;
+    const w = 760, h = padT + rows.length * rowH + padB;
+    const iw = w - padL - padR;
+
+    // Symmetric around the baseline so bar length is comparable across rows.
+    const reach = Math.max(12, ...rows.map((r) =>
+      Math.max(Math.abs(r.low - baseline), Math.abs(r.high - baseline)))) * 1.15;
+    const lo = Math.max(0, baseline - reach), hi = Math.min(100, baseline + reach);
+    const X = (v) => padL + ((v - lo) / (hi - lo)) * iw;
+
+    const svg = el("svg", { class: "chart", viewBox: `0 0 ${w} ${h}`,
+      role: "img", "aria-label": cfg.ariaLabel || "Effect of each uncertain assumption on the attacker's chances" });
+
+    // Noise band first, so the bars sit on top of it.
+    if (noise > 0) {
+      svg.appendChild(el("rect", {
+        x: X(baseline - noise / 2), y: padT - 6,
+        width: Math.max(1, X(baseline + noise / 2) - X(baseline - noise / 2)),
+        height: rows.length * rowH + 8,
+        fill: "var(--text-muted)", opacity: 0.10 }));
+    }
+
+    for (const v of [lo, baseline, hi]) {
+      const isBase = v === baseline;
+      svg.appendChild(el("line", { class: isBase ? "axis" : "grid",
+        x1: X(v), y1: padT - 6, x2: X(v), y2: padT + rows.length * rowH + 2 }));
+      const t = el("text", { class: "tick", x: X(v), y: padT - 12, "text-anchor": "middle" });
+      t.textContent = v.toFixed(0) + "%";
+      svg.appendChild(t);
+    }
+
+    rows.forEach((r, i) => {
+      const y = padT + i * rowH, cy = y + rowH / 2;
+      const label = el("text", { class: "tick", x: padL - 12, y: cy + 4, "text-anchor": "end" });
+      label.textContent = r.label;
+      svg.appendChild(label);
+
+      // One bar per direction, so a factor that pushes both ways reads as two
+      // arms rather than one bar that has silently swallowed the baseline.
+      [["low", r.low], ["high", r.high]].forEach(([which, v]) => {
+        const x0 = X(Math.min(baseline, v)), x1 = X(Math.max(baseline, v));
+        const width = Math.max(1.5, x1 - x0);
+        const favoursAttacker = v > baseline;
+        const bar = el("rect", { x: x0, y: cy - 8, width, height: 16, rx: 4,
+          fill: favoursAttacker ? aColor : bColor,
+          stroke: "var(--surface-1)", "stroke-width": 1.5 });
+        bar.addEventListener("mouseenter", (e) => showTip(
+          `<div class="tt-h">${r.label}</div>` +
+          `<div class="tt-r"><span>${which === "low" ? "Lowest third of draws" : "Highest third of draws"}</span>` +
+          `<b>${v.toFixed(0)}%</b></div>` +
+          `<div class="tt-r"><span>Baseline</span><b>${baseline.toFixed(0)}%</b></div>` +
+          `<div class="tt-r"><span>Full swing</span><b>${r.swing.toFixed(1)} pts</b></div>`,
+          e.clientX, e.clientY));
+        bar.addEventListener("mouseleave", hideTip);
+        svg.appendChild(bar);
+      });
+
+      const sw = el("text", { class: "val", x: w - padR + 8, y: cy + 4 });
+      sw.textContent = r.swing.toFixed(0) + " pts";
+      svg.appendChild(sw);
+    });
+
+    const xl = el("text", { class: "tick", x: padL + iw / 2, y: h - 8, "text-anchor": "middle" });
+    xl.textContent = cfg.xLabel || "Attacker prevails (% of runs)";
+    svg.appendChild(xl);
+
+    container.innerHTML = "";
+    container.appendChild(svg);
+    return svg;
+  }
+
   /* ── Table fallback for any chart ─────────────────────────────────────── */
   function tableView(headers, rows) {
     const t = document.createElement("table");
@@ -709,6 +915,6 @@
 
   window.WarCharts = {
     tugBars, lineChart, waterfall, scatter, rangeBearing, frontStrip,
-    stackedArea, sparkRows, tableView, showTip, hideTip,
+    stackedArea, sparkRows, endingBands, tornado, tableView, showTip, hideTip,
   };
 })();

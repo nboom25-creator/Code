@@ -25,8 +25,14 @@
   --border-strong: rgba(255, 255, 255, 0.18);
 
   --attacker: #3987e5;   /* categorical slot 1 */
+  --attacker-2: #8fc0f5; /* second step of slot 1, for parts of one whole */
   --defender: #c98500;   /* categorical slot 4 */
-  --neutral:  #898781;   /* "neither side" — a neutral, never a series hue */
+  /* "Neither side" — a neutral, never a series hue, so it is deliberately below
+   * the chroma floor a categorical slot has to clear. It was #898781, which sat
+   * at ΔE 14.2 from the defender amber against the dark surface — under the 15
+   * floor, and the endings chart puts the two bands next to each other. This
+   * step clears both neighbours (worst pair 16.7). */
+  --neutral:  #7d8288;
   --critical: #d03b3b;   /* status: nuclear / catastrophic */
   --good:     #0ca30c;   /* status: sustainable */
   --warning:  #fab219;

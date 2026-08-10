@@ -147,7 +147,7 @@ assumption changed at a time, so you can see which of them the answer rests on.
 
 ## What the report draws
 
-Seven chart forms, all inline SVG, no libraries, every one with a hover layer
+Nine chart forms, all inline SVG, no libraries, every one with a hover layer
 and most with a table view.
 
 - **Range and bearing** — deliberately *not* a map. The model has no coastlines
@@ -174,6 +174,23 @@ and most with a table view.
 - **Where the army went** — stacked area of still fighting / wounded and out /
   captured / killed. Ordered parts of one whole, so steps of a single hue rather
   than categorical colours.
+- **When it ended, and how** — cumulative share of runs decided by each week,
+  stacked by what ended them, so the top edge of the stack is a survival curve
+  read upside down. The three shapes are distinct on sight: a shallow ramp that
+  never reaches the top is a grind nobody wins, a fast S-curve is a rout, and a
+  flat stretch followed by a cliff is a war that took months to become possible
+  and then took days. Runs that hit the model's horizon are *not* a band — they
+  all terminate on the same week and stacking them draws a wall at the right
+  edge that reads as a collapse. They are the empty space above the stack,
+  which is the honest statement: this share was still being fought.
+- **What the answer rests on** — a tornado over the nine unknowns resampled on
+  every run, each bar running from the attacker's win rate in the lowest third
+  of that assumption's draws to the rate in the highest third, sorted by swing.
+  The report has always shown a distribution without saying what the
+  distribution was made of; this says which guess to go and argue about, and
+  it is usually leadership by a wide margin. The shaded strip through the middle
+  is what that many runs could produce from sampling noise alone, so a
+  three-point bar is visibly not a finding.
 - **Tug-of-war bars** — share of combined strength by domain, ratio direct-
   labelled on every row.
 
@@ -412,3 +429,13 @@ rather than chosen by eye: attacker `#3987e5`, defender `#c98500`, critical
 ΔE 10.2, both above the floors. "Won the war but cannot hold the ground" is drawn
 in the attacker's colour with a hatch rather than a fifth hue, which would have
 failed those floors. Every chart has a table view.
+
+The endings chart needed two more slots and both were checked the same way. Its
+second attacker step is `#8fc0f5`, at ΔE 18.5 from the base — a step of one hue,
+because "won by force" and "won by concession" are parts of one whole rather than
+two identities. The neutral moved from `#898781` to `#7d8288`: the old value sat
+at ΔE 14.2 from the defender amber, under the 15 floor, which had gone unnoticed
+because no chart had previously put those two bands next to each other. The new
+one clears both its neighbours at a worst pair of 16.7. It is still deliberately
+below the chroma floor a categorical slot has to clear, because it means
+"neither side" and should read as grey.
