@@ -251,12 +251,28 @@
     return { base, tolerance, transmission };
   }
 
+  /* `months` is the horizon — the point at which the model stops and reports the
+   * war as unresolved. It is not a prediction and it is not a constraint on the
+   * war; it is where the simulation gives up.
+   *
+   * These were 60/48/30/12/36 and were doing far more work than anything called
+   * a display limit should. At a 30-month horizon the model called Russia-Poland
+   * a 77% stalemate; at 120 months the same matchup is a 97% Russian win taking
+   * around four years. Nothing about the war changed — the clock stopped in the
+   * middle of a slow advance and the leftover runs were labelled a draw. Every
+   * "stalemate" this model has ever reported was that: there is exactly one line
+   * that assigns the outcome, and it fires when the loop runs out.
+   *
+   * Raised so that truncation is the exception rather than the headline. Where
+   * it still happens the report says "unresolved after N months" and names N,
+   * which is the honest version of the same fact.
+   */
   const WAR_AIMS = {
-    conquest:  { label: "Total conquest",        territory: 0.85, commit: 0.70, occupy: true,  months: 60 },
-    regime:    { label: "Regime change",         territory: 0.45, commit: 0.65, occupy: true,  months: 48 },
-    limited:   { label: "Seize border region",   territory: 0.12, commit: 0.45, occupy: false, months: 30 },
-    punitive:  { label: "Punitive air campaign", territory: 0.00, commit: 0.22, occupy: false, months: 12 },
-    blockade:  { label: "Blockade / strangle",   territory: 0.00, commit: 0.30, occupy: false, months: 36 },
+    conquest:  { label: "Total conquest",        territory: 0.85, commit: 0.70, occupy: true,  months: 120 },
+    regime:    { label: "Regime change",         territory: 0.45, commit: 0.65, occupy: true,  months: 96 },
+    limited:   { label: "Seize border region",   territory: 0.12, commit: 0.45, occupy: false, months: 90 },
+    punitive:  { label: "Punitive air campaign", territory: 0.00, commit: 0.22, occupy: false, months: 36 },
+    blockade:  { label: "Blockade / strangle",   territory: 0.00, commit: 0.30, occupy: false, months: 72 },
   };
 
   const MOBILIZATION = {
@@ -1074,7 +1090,7 @@
       if (S.b.land / start.b.land < 1 - cohesionB) { outcome = "defenderCollapse"; break; }
       if (S.a.land / start.a.land < 1 - cohesionA) { outcome = "attackerCollapse"; break; }
     }
-    if (!outcome) outcome = "stalemate";
+    if (!outcome) outcome = "unresolved";
 
     // ── Occupation feasibility ─────────────────────────────────────────────
     let occupation = null;
@@ -1129,7 +1145,7 @@
   const OUTCOME_SIDE = {
     attackerObjective: "a", defenderCollapse: "a", defenderCapitulates: "a",
     attackerCollapse: "b", attackerWithdraws: "b",
-    stalemate: "draw", pyrrhic: "pyrrhic", nuclear: "none",
+    unresolved: "draw", pyrrhic: "pyrrhic", nuclear: "none",
   };
 
   /* ── When wars end, and how ───────────────────────────────────────────────
@@ -1144,9 +1160,9 @@
     defenderCapitulates: "concede",
     pyrrhic: "pyrrhic",
     attackerCollapse: "defender", attackerWithdraws: "defender",
-    stalemate: "stalemate", nuclear: "nuclear",
+    unresolved: "unresolved", nuclear: "nuclear",
   };
-  const ENDING_ORDER = ["force", "concede", "pyrrhic", "stalemate", "defender", "nuclear"];
+  const ENDING_ORDER = ["force", "concede", "pyrrhic", "unresolved", "defender", "nuclear"];
 
   /* Share of all runs finished by week w, per band, as running totals. The top
    * of the stack at any week is the share decided by then; what is left above
@@ -1156,7 +1172,7 @@
     const counts = {};
     ENDING_ORDER.forEach((k) => (counts[k] = new Array(maxWeeks + 1).fill(0)));
     rows.forEach((r) => {
-      counts[ENDING_BAND[r.outcome] || "stalemate"][Math.min(r.weeks, maxWeeks)]++;
+      counts[ENDING_BAND[r.outcome] || "unresolved"][Math.min(r.weeks, maxWeeks)]++;
     });
     const cumulative = {};
     ENDING_ORDER.forEach((k) => {
@@ -1279,11 +1295,15 @@
 
     return {
       attacker: A, defender: B, opts,
+      // Where the simulation stops. Reported because the share of runs that
+      // reach it is meaningless without it — "23% stalemate" is a different
+      // claim at 30 months and at 120.
+      horizonMonths: opts.maxMonths != null ? opts.maxMonths : WAR_AIMS[opts.warAim].months,
       distance: opts._distance,
       adjacent: A.borders.includes(B.id) || B.borders.includes(A.id),
       probability: {
         attacker: pct(tally.a), defender: pct(tally.b),
-        stalemate: pct(tally.draw), pyrrhic: pct(tally.pyrrhic),
+        unresolved: pct(tally.draw), pyrrhic: pct(tally.pyrrhic),
         nuclear: pct(tally.none),
       },
       outcomeBreakdown: Object.fromEntries(

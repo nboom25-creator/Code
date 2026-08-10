@@ -176,7 +176,10 @@
     const opts = [
       { k: "attacker", v: P.attacker, txt: `${aN} achieves its war aims` },
       { k: "defender", v: P.defender, txt: `${bN} holds — the attack fails` },
-      { k: "stalemate", v: P.stalemate, txt: "Stalemate or negotiated settlement" },
+      // Not a negotiated settlement — the model has no such outcome. This is
+      // the share still being fought when the simulation stopped.
+      { k: "unresolved", v: P.unresolved,
+        txt: `Still being fought after ${Math.round(R.horizonMonths)} months` },
       { k: "pyrrhic", v: P.pyrrhic, txt: `${aN} wins the war but cannot hold the ground` },
       { k: "nuclear", v: P.nuclear, txt: "Nuclear exchange — no victor" },
     ].sort((x, y) => y.v - x.v);
@@ -201,12 +204,12 @@
 
     const colors = {
       attacker: C.a, pyrrhic: C.a, defender: C.b,
-      stalemate: C.neutral, nuclear: C.crit,
+      unresolved: C.neutral, nuclear: C.crit,
     };
     const bar = [
       { k: "attacker", label: `${R.attacker.flag} wins outright`, v: P.attacker },
       { k: "pyrrhic", label: `${R.attacker.flag} wins, cannot hold`, v: P.pyrrhic, striped: true },
-      { k: "stalemate", label: "Stalemate", v: P.stalemate },
+      { k: "unresolved", label: "Undecided at the horizon", v: P.unresolved },
       { k: "defender", label: `${R.defender.flag} holds`, v: P.defender },
       { k: "nuclear", label: "☢ Nuclear exchange", v: P.nuclear },
     ];
@@ -375,7 +378,7 @@
       // identical blue squares for two different things.
       shown.map((b) => `<span><i class="swatch${b.hatch ? " striped" : ""}" ` +
         `style="background:${b.color}"></i>${b.name}</span>`).join("") +
-      (last("stalemate") > 0.05
+      (last("unresolved") > 0.05
         ? `<span><i class="swatch" style="background:transparent;box-shadow:inset 0 0 0 1px var(--border-strong)"></i>never decided</span>`
         : ""),
       (box) => endingBands(box, {
@@ -391,8 +394,8 @@
          if (w < 0) w = E.weeks;
          return [b.name, last(b.key).toFixed(1) + "%",
                  (w / M.WEEKS_PER_MONTH).toFixed(1)];
-       }).concat(last("stalemate") > 0.05
-         ? [["never decided", last("stalemate").toFixed(1) + "%", "—"]] : [])]);
+       }).concat(last("unresolved") > 0.05
+         ? [["still being fought", last("unresolved").toFixed(1) + "%", "—"]] : [])]);
 
     const decided = shown.reduce((t, b) => t + last(b.key), 0);
     const byDecision = last("concede");
@@ -401,7 +404,7 @@
     note.style.maxWidth = "80ch";
     note.innerHTML =
       (decided < 99.5
-        ? `<strong>${(100 - decided).toFixed(0)}%</strong> of runs were still being fought when the model ran out of clock — those are the stalemates. `
+        ? `<strong>${(100 - decided).toFixed(0)}%</strong> of runs had not resolved when the model stopped at ${Math.round(R.horizonMonths)} months. That is not a draw — it is the simulation giving up, and it is the only thing this model has ever meant by the word stalemate. `
         : "") +
       (byDecision >= 1
         ? `<strong>${byDecision.toFixed(0)}%</strong> ended with ${esc(bN)} conceding a position it had not yet lost on the battlefield. `
@@ -559,7 +562,7 @@
       pyrrhic: R.attacker.name + " wins but cannot hold",
       attackerCollapse: R.defender.name + " holds",
       attackerWithdraws: R.attacker.name + " withdraws",
-      stalemate: "Stalemate", nuclear: "☢ Nuclear exchange",
+      unresolved: "Undecided at the horizon", nuclear: "☢ Nuclear exchange",
     }[o] || o);
 
     const points = R.runs.map((r) => ({
@@ -699,7 +702,7 @@
       defenderCapitulates: `${R.defender.name} suing for terms with an army still in the field`,
       attackerCollapse: `${R.attacker.name} abandoning the war`,
       attackerWithdraws: `${R.attacker.name} withdrawing an undefeated army`,
-      stalemate: "an unresolved stalemate",
+      unresolved: "a war still being fought when the model stopped",
       pyrrhic: "a military victory the attacker cannot hold",
       nuclear: "nuclear use",
     }[o] || o;
@@ -1110,7 +1113,7 @@ maxAdvance    = 0.030 + 0.34 · manoeuvre²      → <b>${pct((0.030 + 0.34 * Ma
         tiles.className = "tiles";
         tiles.style.margin = "18px 0";
         tiles.innerHTML = [
-          { k: "Outcome called correctly", v: `${sum.outcomes} / ${sum.n}`, s: "attacker wins, defender holds, or stalemate" },
+          { k: "Outcome called correctly", v: `${sum.outcomes} / ${sum.n}`, s: "attacker wins, defender holds, or neither" },
           { k: "Duration within 3×", v: `${sum.durations} / ${sum.n}`, s: "the model works in whole months" },
           { k: "Casualties within 4×", v: `${sum.casualties} / ${sum.n}`, s: "several of these are disputed by a factor of two" },
           { k: "Probability on the truth", v: pct(sum.meanMass), s: "mean mass the model put on what happened" },

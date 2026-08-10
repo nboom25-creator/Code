@@ -36,7 +36,11 @@ const OUTCOME_CLASS = {
   attackerObjective: "attacker", defenderCollapse: "attacker", pyrrhic: "attacker",
   defenderCapitulates: "attacker",
   attackerCollapse: "defender", attackerWithdraws: "defender",
-  stalemate: "stalemate", nuclear: "nuclear",
+  // The model has no negotiated draw: `unresolved` means it reached its
+  // horizon with the war still running. Scored against a historical
+  // "stalemate" because that is the closest real category, but the two
+  // are not the same claim and a case that leans on it is a weak pass.
+  unresolved: "stalemate", nuclear: "nuclear",
 };
 
 /* Probability mass the model put on what actually happened. */

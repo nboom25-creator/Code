@@ -12,9 +12,10 @@ geography, munitions stocks, nuclear forces, and a set of qualitative indices.
 **It is graded.** Fifteen historical wars with known outcomes run through the same
 simulation, in the app or from a terminal, on demand. Current score: **9 of 15
 outcomes called correctly, 5 of 15 durations within 3x, 2 of 15 casualty counts
-within 4x**, with a mean 58% of probability mass on what actually happened. Six
+within 4x**, with a mean 60% of probability mass on what actually happened. Six
 of the fifteen are held out from coefficient fitting and scored separately. The
-failures are listed below rather than hidden.
+failures are listed below rather than hidden — as is the case where the backtest
+was, until recently, marking its own homework.
 
 ## Running it
 
@@ -212,17 +213,17 @@ and the model ticks weekly.
 | Gulf War 1991 | attacker, 3.1 mo | attacker, 1.5 mo | outcome ✓ duration ✓ |
 | Invasion of Iraq 2003 | attacker, 3.7 mo | attacker, 1.5 mo | outcome ✓ duration ✓, occupation correctly fails |
 | Falklands 1982 | attacker, 18.7 mo | attacker, 2.5 mo | outcome ✓ |
-| Yom Kippur 1973 | defender, 28.9 mo | defender, 0.7 mo | outcome ✓ |
+| Yom Kippur 1973 | defender, 29.4 mo | defender, 0.7 mo | outcome ✓ |
 | Six-Day War 1967 | defender | attacker, 0.2 mo | ✗ |
 | Iran–Iraq 1980–88 | defender, 24.4 mo | stalemate, 96 mo | ✗ |
 | Nagorno-Karabakh 2020 | attacker, 9.1 mo | attacker, 1.5 mo | outcome ✓ casualties ✓ |
 | Winter War 1939–40 | attacker, 1.2 mo | attacker, 3.5 mo | outcome ✓ |
 | Vietnam 1965–73 | attacker, 5.9 mo | defender, 96 mo | ✗ |
-| Korea 1950–53 | stalemate, 37.1 mo | stalemate, 37 mo | outcome ✓ duration ✓ |
+| Korea 1950–53 | defender, 83.7 mo | stalemate, 37 mo | ✗ duration ✓ |
 | Indo-Pakistani 1971 | attacker, 12.6 mo | attacker, 0.45 mo | outcome ✓ |
-| Kosovo 1999 | stalemate | attacker, 2.6 mo | ✗ |
+| Kosovo 1999 | unresolved, 35.6 mo | attacker, 2.6 mo | ✗ |
 | Russo-Georgian 2008 | attacker, 0.5 mo | attacker, 0.17 mo | outcome ✓ duration ✓ |
-| Kargil 1999 | stalemate | defender, 2.5 mo | ✗ |
+| Kargil 1999 | defender, 49.2 mo | defender, 2.5 mo | outcome ✓ |
 | Russia–Ukraine 2022– | attacker, 18.7 mo | stalemate, 48 mo | duration ✓ casualties ✓ |
 
 **What the failures say.** The model calls the *outcome* of most of these wars
@@ -250,9 +251,12 @@ The residual error is still large and the remaining failures are specific:
   power, and the Six-Day War gives Israel almost no air control in a war decided
   by destroying the Egyptian air force on the ground on the first morning. Any
   mechanism that resolves lopsided positions faster makes these worse, correctly.
-- **Kosovo and Kargil run the clock out.** Both were coercive campaigns that the
-  loser conceded; the model reports 12-month stalemates because the aim's own
-  success metric never moves enough for anyone to concede against.
+- **Kosovo still runs the clock out.** A coercive air campaign the loser
+  conceded in ten weeks; the model reaches its horizon with nothing decided,
+  because the punitive aim's own success metric — the defender's air force —
+  never falls far enough for anyone to concede against. It is the one case where
+  "unresolved" is the model's actual answer rather than an artefact of a short
+  clock, and it is still wrong.
 - **Vietnam and Korea continued because a third party made them continue.**
   China entered Korea; Iran refused the terms Iraq offered in 1982. Withdrawal
   is not a decision one side takes, it is an offer the other side has to accept,
@@ -260,6 +264,55 @@ The residual error is still large and the remaining failures are specific:
   the attacker-side version of this mechanism is switched off (below).
 
 Treat durations and casualty figures as much weaker than the outcome verdict.
+
+### The horizon was doing the work, and one case was marking its own homework
+
+Drawing the endings chart made something visible that four years of tables had
+not: for some matchups most runs never finished. They hit the simulation's
+horizon and were reported as **stalemates**. There is exactly one line in the
+model that assigns that outcome, and it fires when the loop runs out — so every
+"stalemate" this model has ever reported meant "the clock stopped", and the app
+was labelling it "Stalemate or negotiated settlement", an outcome the model
+cannot produce.
+
+How much that mattered depends entirely on the matchup, which is why it went
+unnoticed. Four of six test cases were completely insensitive to the horizon —
+they finish long before it. Two were not:
+
+| Matchup | at the shipped horizon | at 4x the horizon |
+|---|---|---|
+| Russia → Poland, border region | 77% stalemate, 23% attacker | 3% stalemate, **97% attacker** |
+| North Korea → South Korea | 61% stalemate, 39% defender | 0% stalemate, **100% defender** |
+
+Neither of those is a stalemate. Both are wars the model was resolving slowly
+and got interrupted in the middle of. The war-aim horizons — 30 months for a
+border seizure, 60 for conquest — were nominally a display limit and were in
+practice deciding headline verdicts.
+
+They are now 90 and 120, high enough that truncation is the exception; the
+outcome is renamed `unresolved`; and wherever it appears the report names the
+horizon it is relative to, because "23% stalemate" is a different claim at 30
+months than at 120.
+
+**And then the same question of the backtest.** Seven of the fifteen cases set
+their own horizon, and four set it to the war's actual duration. The Korean War
+had a horizon of 37 months against an actual 37, ran **100% of its runs into
+that clock**, and was scored correct on both outcome and duration. The model had
+not predicted a 37-month stalemate. It had been told to stop at 37 months and
+had done so. One of nine outcome passes and one of five duration passes were
+circular, in both the current model and the baseline it was measured against.
+
+Every case now uses the same war-aim horizon the live app uses. Two verdicts
+change and the headline does not:
+
+- **Korea** was fake and is now wrong: given an honest clock the model says the
+  defender wins in 84 months. It is a worse answer and a real one.
+- **Kargil** was being wrongly failed. A 12-month cap truncated it into a
+  "stalemate" it never reached on its own; allowed to run, the model gets the
+  outcome right.
+
+Net 9 of 15 either way, with mean probability mass up from 57% to 60%. The score
+did not move. What it measures did.
 
 ### What did not work, and is switched off
 
@@ -311,27 +364,36 @@ node tools/fit.js --sweeps 3 --iters 250 --reg 0.35
 The standing result here used to be that fitting improved the in-sample score
 and made the held-out score *worse* — the signature of a model whose remaining
 error is structural, where the optimiser can only buy in-sample accuracy by
-memorising. That was the stated reason the hand-set values shipped.
+memorising. That was the stated reason the hand-set values shipped, and it was
+the headline methodological claim of this project.
 
-Adding the capitulation mechanism changed the sign. Run against the same fifteen
-cases with the same search:
+**It does not survive fixing the backtest.** The Korean War was in the holdout
+set, pinned to a horizon equal to its own duration, with every run terminating
+on that clock. Its contribution to the held-out score was therefore nearly
+inert — no coefficient could move a case whose answer was set in its
+configuration. With one of six holdout cases anchored, the holdout score was
+measuring less than it appeared to.
+
+Re-run after removing the pins, as a clean A/B on identical scoring:
 
 | | fit | holdout |
 |---|---|---|
-| Model without capitulation | −17.9% | **+2.8% worse** |
-| Model with capitulation | −23.2% | **−5.2% better** |
+| Model without capitulation | −15.9% | **−8.4% better** |
+| Model with capitulation | −15.9% | **−13.6% better** |
 
-That is the strongest evidence for the diagnosis in the section above. If the
-residual error had been coefficient error all along, fitting would have helped
-from the start; if it had been entirely structural, closing one gap would not
-have made the coefficients tractable. It was structural, one identifiable piece
-of it is now closed, and the numbers respond the way that story predicts.
+Fitting now generalises in both, so "fitting does not help" was, in part, an
+artefact of a case that had been handed its answer. The capitulation mechanism
+still earns its place — it lowers the un-fitted holdout score outright and it
+roughly doubles what fitting can recover out-of-sample — but the dramatic
+version of that claim, that adding it flipped the sign of the response to
+fitting, was measured against the broken backtest and is withdrawn.
 
-Two caveats keep this from being an invitation to paste the fitted values in.
-Nine cases against seventeen coefficients is still a poor ratio, and a 5%
-out-of-sample gain is within the range a different holdout split could erase.
-The hand-set values still ship, and the fitter still exists to be argued with
-rather than obeyed.
+What follows is an open question rather than a conclusion. Nine cases against
+seventeen coefficients is still a poor ratio and these gains are within the
+range a different holdout split could move, so the hand-set values still ship.
+But the old justification for shipping them no longer holds, and "should the
+fitted values be adopted" is now a live question that wants a better validation
+scheme than six held-out wars to answer.
 
 Coefficients belonging to a mechanism that has been measured and switched off
 are frozen rather than searched. The regulariser's squared log-distance is
@@ -401,6 +463,14 @@ error. One structural cause was found and closed — every termination test was 
 integral over elapsed time, so no war could end quickly — which bought two
 scoring passes and left most of the gap in place. See the backtest section for
 what is left and where it is.
+
+**There is no negotiated peace.** A war here ends because someone achieves an
+objective, collapses, or concedes a position they can see is lost. Nothing in
+the model represents two governments arriving at terms neither of them wanted,
+which is how a great many wars actually end. When the simulation reports a war
+as `unresolved` it means it reached its horizon still running — not that it
+found a settlement. Korea and the Iran–Iraq War, the two genuine armistices in
+the backtest, are both scored against that substitute, and both are failures.
 
 **The nuclear module is deliberately crude.** It exists so the model refuses to
 report a tidy conventional victory over a nuclear-armed state facing collapse —

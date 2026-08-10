@@ -6,7 +6,7 @@
  * documented outcomes, fed through exactly the same `simulate()` the live app
  * uses. Where the model is wrong, it says so and by how much.
  *
- * TWO MODELLING CONVENTIONS, both of which matter for reading the results:
+ * THREE MODELLING CONVENTIONS, all of which matter for reading the results:
  *
  *  1. Expeditionary forces are placed at their staging base, not their capital.
  *     The 1991 coalition is modelled as the force assembled in Saudi Arabia,
@@ -18,6 +18,20 @@
  *     ground phase of Desert Storm are below its floor, and it cannot be right
  *     about them. They are included anyway — a backtest that quietly drops the
  *     cases a model handles badly is not a backtest.
+ *
+ *  3. NO CASE SETS ITS OWN HORIZON. Seven of them used to. Four set it to the
+ *     war's actual duration, and the Korean War — horizon 37 months, actual 37
+ *     months — ran 100% of its runs to that clock and was scored correct on
+ *     both outcome and duration for it. The model had not predicted a 37-month
+ *     stalemate; it had been told to stop at 37 months and had done so. Given
+ *     an honest clock it says the defender wins in 84, which is wrong, and now
+ *     scores wrong. Kosovo and Kargil had the opposite problem: a 12-month cap
+ *     truncated both into "stalemates" they never reached on their own, and
+ *     Kargil's outcome is right once it is allowed to run.
+ *
+ *     Every case now uses the war aim's own horizon, like the live app. A
+ *     backtest that hands the model the answer in the setup is measuring the
+ *     setup.
  *
  * Sources for outcomes and casualties: official histories, Correlates of War,
  * IISS, and the standard scholarly ranges. Casualty figures for several of
@@ -219,7 +233,7 @@
       blurb: "Eight years of attrition between two roughly matched, badly led armies.",
       note: "The archetypal stalemate: an attacker that culminates almost immediately and cannot be dislodged either.",
       opts: { warAim: "limited", mobilizationA: "full", mobilizationB: "full",
-              allies: false, nuclearAllowed: false, startMonth: 8, maxMonths: 96 },
+              allies: false, nuclearAllowed: false, startMonth: 8 },
       actual: { outcome: "stalemate", months: 96, killedA: 250000, killedB: 500000,
                 casualtyNote: "Both figures disputed by a factor of two or more" },
       a: H({ id: "iraq80", name: "Iraq", flag: "🇮🇶", lat: 33.3, lon: 44.4,
@@ -327,7 +341,7 @@
       blurb: "The United States wins almost every engagement and leaves anyway.",
       note: "The case the split between societal exhaustion and regime decision exists for. An accountable government cannot outlast a coercive one in a war its population has stopped supporting, however favourably the fighting goes.",
       opts: { warAim: "limited", mobilizationA: "peacetime", mobilizationB: "full",
-              allies: false, nuclearAllowed: false, startMonth: 2, maxMonths: 96 },
+              allies: false, nuclearAllowed: false, startMonth: 2 },
       actual: { outcome: "defender", months: 96, killedA: 58000, killedB: 900000,
                 casualtyNote: "North Vietnamese and NLF dead estimated 600,000-1,100,000" },
       a: H({ id: "usa65", name: "United States", flag: "🇺🇸", lat: 10.8, lon: 106.6,
@@ -363,7 +377,7 @@
       blurb: "Two near-total victories in opposite directions, ending where it started.",
       note: "Modelled from the northern invasion. The model has no way to express a war that reverses twice, so treat a stalemate verdict as the best it can do.",
       opts: { warAim: "conquest", mobilizationA: "full", mobilizationB: "full",
-              allies: false, nuclearAllowed: false, startMonth: 5, maxMonths: 37 },
+              allies: false, nuclearAllowed: false, startMonth: 5 },
       actual: { outcome: "stalemate", months: 37, killedA: 400000, killedB: 180000,
                 casualtyNote: "Chinese and North Korean dead 400,000-750,000; UN and ROK ~180,000" },
       a: H({ id: "prk50", name: "North Korea & China", flag: "🤝", lat: 39.0, lon: 125.7,
@@ -436,7 +450,7 @@
       blurb: "Seventy-eight days of NATO bombing, no ground invasion, and Yugoslavia concedes.",
       note: "Tests the punitive war aim: coercion by air alone, against an intact army that was never really defeated in the field.",
       opts: { warAim: "punitive", mobilizationA: "peacetime", mobilizationB: "full",
-              allies: false, nuclearAllowed: false, startMonth: 2, maxMonths: 12 , localSupport: 0.8 },
+              allies: false, nuclearAllowed: false, startMonth: 2 , localSupport: 0.8 },
       actual: { outcome: "attacker", months: 2.6, killedA: 2, killedB: 1200,
                 casualtyNote: "Yugoslav military dead disputed: 600-5,000" },
       a: H({ id: "nato99", name: "NATO", flag: "🤝", lat: 41.3, lon: 19.8,
@@ -472,7 +486,7 @@
       blurb: "Five days. Russia takes what it came for and stops.",
       note: "Another sub-monthly war, and a test of whether a large neighbour with a limited aim is correctly called quickly rather than grinding.",
       opts: { warAim: "limited", mobilizationA: "peacetime", mobilizationB: "full",
-              allies: false, nuclearAllowed: false, startMonth: 7, maxMonths: 12 , localSupport: 0.75 },
+              allies: false, nuclearAllowed: false, startMonth: 7 , localSupport: 0.75 },
       actual: { outcome: "attacker", months: 0.17, killedA: 67, killedB: 170 },
       a: H({ id: "rus08", name: "Russia", flag: "🇷🇺", lat: 43.0, lon: 44.7,
         pop: 143, fit: 46, gdp: 1660, ppp: 2900, bud: 58, budPpp: 150, openness: 20,
@@ -508,7 +522,7 @@
       blurb: "Pakistan seizes high ground across the line of control and is pushed back off it.",
       note: "A limited attack that fails, between two nuclear states that did not escalate. Tests terrain at its most extreme.",
       opts: { warAim: "limited", mobilizationA: "partial", mobilizationB: "partial",
-              allies: false, nuclearAllowed: true, startMonth: 4, maxMonths: 12 },
+              allies: false, nuclearAllowed: true, startMonth: 4 },
       actual: { outcome: "defender", months: 2.5, killedA: 700, killedB: 527 },
       a: H({ id: "pak99", name: "Pakistan", flag: "🇵🇰", lat: 35.3, lon: 76.0,
         pop: 138, fit: 40, gdp: 63, ppp: 220, bud: 3.3, budPpp: 11, openness: 24,
@@ -544,7 +558,7 @@
       blurb: "A limited-aim war of attrition sustained on one side by foreign materiel.",
       note: "Run at Russia's stated February 2022 aim, regime change, with materiel support to Ukraine. The test is whether the model correctly fails to reach it. Aims that shifted mid-war are outside what the model can express.",
       opts: { warAim: "regime", mobilizationA: "partial", mobilizationB: "full",
-              allies: true, nuclearAllowed: true, support: "b", startMonth: 1, maxMonths: 48 },
+              allies: true, nuclearAllowed: true, support: "b", startMonth: 1 },
       actual: { outcome: "stalemate", months: 48, killedA: 200000, killedB: 80000,
                 territoryLost: 0.19,
                 casualtyNote: "Russian dead 150,000–250,000; Ukrainian 60,000–100,000. Both contested." },
@@ -562,7 +576,11 @@
     attackerObjective: "attacker", defenderCollapse: "attacker", pyrrhic: "attacker",
     defenderCapitulates: "attacker",
     attackerCollapse: "defender", attackerWithdraws: "defender",
-    stalemate: "stalemate", nuclear: "nuclear",
+    // The model has no negotiated draw: `unresolved` means it reached its
+    // horizon with the war still running. Scored against a historical
+    // "stalemate" because that is the closest real category, but the two
+    // are not the same claim and a case that leans on it is a weak pass.
+    unresolved: "stalemate", nuclear: "nuclear",
   };
 
   function scoreCase(c, result) {
