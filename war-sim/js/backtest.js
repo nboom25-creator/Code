@@ -560,7 +560,9 @@
    */
   const OUTCOME_CLASS = {
     attackerObjective: "attacker", defenderCollapse: "attacker", pyrrhic: "attacker",
-    attackerCollapse: "defender", stalemate: "stalemate", nuclear: "nuclear",
+    defenderCapitulates: "attacker",
+    attackerCollapse: "defender", attackerWithdraws: "defender",
+    stalemate: "stalemate", nuclear: "nuclear",
   };
 
   function scoreCase(c, result) {

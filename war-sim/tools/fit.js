@@ -2,16 +2,16 @@
 /* =============================================================================
  * tools/fit.js — fit the model's free coefficients to the historical backtest.
  *
- * The dozen numbers in `K` (js/model.js) are the part of this model that is
- * genuinely arbitrary. They were originally set by hand until the results
- * looked right, which is exactly the process a backtest exists to replace.
- * This script searches them instead.
+ * The numbers in `K` (js/model.js) are the part of this model that is genuinely
+ * arbitrary. They were originally set by hand until the results looked right,
+ * which is exactly the process a backtest exists to replace. This script
+ * searches them instead.
  *
  * HOW IT AVOIDS FOOLING ITSELF
  *
  *  - Six of the fifteen wars are held out and never scored during the search.
  *    Overfitting shows up as a gap between the fitting score and the holdout
- *    score. Nine cases against twelve parameters is still a poor ratio and the
+ *    score. Nine cases against a dozen parameters is still a poor ratio and the
  *    gap should be read as a warning, not a formality.
  *
  *  - The objective is continuous — log-ratio error on duration and casualties
@@ -24,12 +24,11 @@
  *    it is sophisticated but because it is legible: every move it makes can be
  *    read off the log and argued with.
  *
- * Usage:  node tools/fit.js [--sweeps 3] [--iters 120] [--quick]
+ * Usage:  node tools/fit.js [--sweeps 3] [--iters 120] [--reg 0.35] [--quick]
  * Writes nothing. Prints the fitted K for you to paste into js/model.js.
  * ========================================================================== */
 
-const path = require("path");
-const { chromium } = require("playwright");
+const { load, massOn, runCase } = require("./harness");
 
 const args = process.argv.slice(2);
 const argv = (name, def) => {
@@ -43,8 +42,8 @@ const ITERS = argv("iters", QUICK ? 60 : 120);
 // Multiplicative steps tried for each coefficient on each sweep.
 const STEPS = QUICK ? [0.7, 1, 1.4] : [0.55, 0.75, 0.9, 1, 1.15, 1.4, 1.9];
 
-/* Regularisation toward the hand-set priors. Nine fitting cases against twelve
- * coefficients is not enough data to pin twelve numbers, and an unregularised
+/* Regularisation toward the hand-set priors. Nine fitting cases against a dozen
+ * coefficients is not enough data to pin a dozen numbers, and an unregularised
  * search proves it: bounded but unpenalised, it improved the fitting score by
  * 12% while making the held-out score 4% WORSE. That is the definition of
  * memorising the test set.
@@ -84,147 +83,149 @@ const BOUNDS = {
   cohBase:   [0.250, 0.700],   // below 25% loss it is not an army breaking
   qualExch:  [0.300, 1.100],   // a generational gap matters, but not infinitely
   biteExp:   [0.300, 0.800],
+  /* Termination by decision. A leadership that has concluded the position is
+   * hopeless decides in days to weeks, not years — Iraq accepted the 1991
+   * ceasefire within days of the ground war opening, Georgia sued for terms in
+   * five, Argentina surrendered days after the final assault on Stanley. So the
+   * monthly hazard at full hopelessness is well above 1. The upper bound is
+   * "the decision takes about a week"; below the lower bound the mechanism is
+   * slower than the attrition it is supposed to pre-empt and does nothing.
+   * The shipped value is 2.0 and the backtest is FLAT across this entire range,
+   * which is the main reason to believe the gain is not fitted. */
+  capRate:   [0.500, 5.000],
+  // How far ahead a government discounts. Shorter than a war and longer than a
+  // campaign season: nobody concedes over a reverse they expect to outlast, and
+  // nobody plans a surrender around year three.
+  capHorizon: [3.000, 15.000],
+  // How far an existential aim suppresses conceding. At 0 a state hands over
+  // its own existence as readily as a border province, which is Germany 1945
+  // ending in 1943; at 1 conquest can never be conceded at all, which is Vichy
+  // France being impossible.
+  capStake:  [0.400, 0.950],
+  // Envelopment. Both are off by default (envRate 0) and excluded from the
+  // search below; the bounds are here so that turning them on does not leave
+  // them unbounded.
+  envRatio:  [1.500, 4.000],
+  envRate:   [0.100, 1.200],
+  envPocket: [0.080, 0.400],
+  wdrRate:   [0.100, 2.000],
 };
 const clampK = (name, v) => {
   const b = BOUNDS[name];
   return b ? Math.max(b[0], Math.min(b[1], v)) : v;
 };
 
-(async () => {
-  const browser = await chromium.launch({
-    executablePath: process.env.CHROMIUM || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
-  });
-  const page = await browser.newPage();
-  page.on("pageerror", (e) => console.error("PAGE ERROR", e.message));
-  await page.goto("file://" + path.resolve(__dirname, "../index.html"));
-  await page.waitForFunction(() => window.WarBacktest && window.WarModel);
+const { WarData, WarModel, WarBacktest } = load();
+const { CASES, isHoldout } = WarBacktest;
+const M = WarModel;
 
-  // Install the objective in the page so each evaluation is one round trip.
-  await page.evaluate(() => {
-    const { CASES, isHoldout } = window.WarBacktest;
-    const M = window.WarModel;
+// Log-ratio error, bounded so one hopeless case cannot dominate the sum.
+const lr = (pred, act) => {
+  if (!(act > 0)) return 0;
+  return Math.min(3, Math.abs(Math.log(Math.max(pred, 1e-6) / act)));
+};
 
-    const OUTCOME_CLASS = {
-      attackerObjective: "attacker", defenderCollapse: "attacker", pyrrhic: "attacker",
-      attackerCollapse: "defender", stalemate: "stalemate", nuclear: "nuclear",
-    };
+function loss(which, iterations) {
+  const cases = CASES.filter((c) =>
+    which === "all" ? true : which === "holdout" ? isHoldout(c.id) : !isHoldout(c.id));
+  let total = 0;
+  for (const c of cases) {
+    const r = runCase(M, WarData, c, iterations);
+    total +=
+      1.00 * (1 - massOn(r.outcomeBreakdown, c.actual.outcome) / 100) +
+      0.60 * lr(r.expected.months, c.actual.months) +
+      0.35 * (lr(r.expected.killedA, c.actual.killedA) +
+              lr(r.expected.killedB, c.actual.killedB)) / 2;
+  }
+  return total / cases.length;
+}
 
-    // Log-ratio error, bounded so one hopeless case cannot dominate the sum.
-    const lr = (pred, act) => {
-      if (!(act > 0)) return 0;
-      return Math.min(3, Math.abs(Math.log(Math.max(pred, 1e-6) / act)));
-    };
+const PRIOR = { ...M.K };
+/* Coefficients the search is allowed to move. A coefficient whose prior is zero
+ * is a mechanism that has been deliberately switched off after being measured
+ * (see sections 7b and 11b of the model), and it is excluded for two reasons:
+ * the squared-log-distance penalty is undefined at a prior of zero, and a
+ * fitter that silently switches a disabled mechanism back on because it shaves
+ * a little off nine cases is precisely the failure this script exists to
+ * demonstrate rather than commit. */
+const NAMES = Object.keys(PRIOR).filter((n) => PRIOR[n] > 0);
+const FROZEN = Object.keys(PRIOR).filter((n) => !(PRIOR[n] > 0));
 
-    window.__loss = function (which, iterations) {
-      const cases = CASES.filter((c) =>
-        which === "all" ? true : which === "holdout" ? isHoldout(c.id) : !isHoldout(c.id));
-      let total = 0;
-      for (const c of cases) {
-        const A = c.useLive ? window.WarData.BY_ID[c.useLive[0]] : c.a;
-        const B = c.useLive ? window.WarData.BY_ID[c.useLive[1]] : c.b;
-        const r = M.simulate(A, B, { ...c.opts, iterations, seed: 424242 });
+function reg(k) {
+  let sum = 0;
+  for (const n of NAMES) {
+    const r = Math.log(Math.max(k[n], 1e-9) / PRIOR[n]);
+    sum += r * r;
+  }
+  return sum / NAMES.length;
+}
 
-        let mass = 0;
-        Object.entries(r.outcomeBreakdown).forEach(([k, v]) => {
-          if ((OUTCOME_CLASS[k] || "stalemate") === c.actual.outcome) mass += v;
-        });
+const setK = (k) => Object.assign(M.K, k);
+// Fitting score carries the penalty; the holdout score never does, so the two
+// numbers stay comparable as measurements of the same thing.
+const evaluate = (k, which) => {
+  setK(k);
+  const l = loss(which, ITERS);
+  return which !== "fit" || !LAMBDA ? l : l + LAMBDA * reg(k);
+};
+const rawEvaluate = (k, which) => { setK(k); return loss(which, ITERS); };
 
-        total +=
-          1.00 * (1 - mass / 100) +
-          0.60 * lr(r.expected.months, c.actual.months) +
-          0.35 * (lr(r.expected.killedA, c.actual.killedA) +
-                  lr(r.expected.killedB, c.actual.killedB)) / 2;
-      }
-      return total / cases.length;
-    };
+let K = { ...PRIOR };
+const t0 = process.hrtime.bigint();
+const secs = () => Number(process.hrtime.bigint() - t0) / 1e9;
 
-    window.__prior = { ...M.K };
-    window.__reg = function (k) {
-      const names = Object.keys(window.__prior);
-      let sum = 0;
-      for (const n of names) {
-        const r = Math.log(Math.max(k[n], 1e-9) / window.__prior[n]);
-        sum += r * r;
-      }
-      return sum / names.length;
-    };
-    window.__setK = (k) => Object.assign(M.K, k);
-    window.__getK = () => ({ ...M.K });
-  });
+let best = evaluate(K, "fit");
+const baseFit = rawEvaluate(K, "fit");
+const baseHold = rawEvaluate(K, "holdout");
+console.log(`regularisation lambda ${LAMBDA}`);
+console.log(`baseline   fit ${baseFit.toFixed(4)}   holdout ${baseHold.toFixed(4)}`);
+console.log(`searching ${NAMES.length} coefficients, ${SWEEPS} sweeps, ${ITERS} iterations/case`);
+if (FROZEN.length) console.log(`frozen at zero (disabled mechanisms): ${FROZEN.join(", ")}`);
+console.log();
 
-  const K0 = await page.evaluate(() => window.__getK());
-  const names = Object.keys(K0);
-  let K = { ...K0 };
+for (let sweep = 1; sweep <= SWEEPS; sweep++) {
+  for (const name of NAMES) {
+    const cur = K[name];
+    const raw = EXPONENTS.has(name)
+      ? [cur - 0.3, cur - 0.15, cur, cur + 0.15, cur + 0.3]
+      : STEPS.map((m) => cur * m);
+    const candidates = [...new Set(raw.map((v) => clampK(name, v)))];
 
-  // Fitting score carries the penalty; the holdout score never does, so the
-  // two numbers stay comparable as measurements of the same thing.
-  const evaluate = async (k, which) => {
-    await page.evaluate((kk) => window.__setK(kk), k);
-    const loss = await page.evaluate(([w, it]) => window.__loss(w, it), [which, ITERS]);
-    if (which !== "fit" || !LAMBDA) return loss;
-    const reg = await page.evaluate((kk) => window.__reg(kk), k);
-    return loss + LAMBDA * reg;
-  };
-  const rawEvaluate = async (k, which) => {
-    await page.evaluate((kk) => window.__setK(kk), k);
-    return page.evaluate(([w, it]) => window.__loss(w, it), [which, ITERS]);
-  };
-
-  const t0 = Date.now();
-  let best = await evaluate(K, "fit");
-  const baseFit = await rawEvaluate(K, "fit");
-  const baseHold = await rawEvaluate(K, "holdout");
-  console.log(`regularisation lambda ${LAMBDA}`);
-  console.log(`baseline   fit ${baseFit.toFixed(4)}   holdout ${baseHold.toFixed(4)}`);
-  console.log(`searching ${names.length} coefficients, ${SWEEPS} sweeps, ${ITERS} iterations/case\n`);
-
-  for (let sweep = 1; sweep <= SWEEPS; sweep++) {
-    for (const name of names) {
-      const cur = K[name];
-      const raw = EXPONENTS.has(name)
-        ? [cur - 0.3, cur - 0.15, cur, cur + 0.15, cur + 0.3]
-        : STEPS.map((m) => cur * m);
-      const candidates = [...new Set(raw.map((v) => clampK(name, v)))];
-
-      let bestVal = cur, bestLoss = best;
-      for (const v of candidates) {
-        if (v === cur) continue;
-        const trial = { ...K, [name]: v };
-        const loss = await evaluate(trial, "fit");
-        if (loss < bestLoss - 1e-5) { bestLoss = loss; bestVal = v; }
-      }
-      if (bestVal !== cur) {
-        const delta = ((bestLoss - best) / best) * 100;
-        console.log(
-          `sweep ${sweep}  ${name.padEnd(11)} ${cur.toFixed(4)} → ${bestVal.toFixed(4)}` +
-          `   loss ${best.toFixed(4)} → ${bestLoss.toFixed(4)} (${delta.toFixed(1)}%)`);
-        K[name] = bestVal;
-        best = bestLoss;
-      }
+    let bestVal = cur, bestLoss = best;
+    for (const v of candidates) {
+      if (v === cur) continue;
+      const l = evaluate({ ...K, [name]: v }, "fit");
+      if (l < bestLoss - 1e-5) { bestLoss = l; bestVal = v; }
     }
-    const hold = await evaluate(K, "holdout");
-    console.log(`--- sweep ${sweep} done: fit ${best.toFixed(4)}   holdout ${hold.toFixed(4)}   ` +
-                `${((Date.now() - t0) / 1000).toFixed(0)}s\n`);
+    if (bestVal !== cur) {
+      const delta = ((bestLoss - best) / best) * 100;
+      console.log(
+        `sweep ${sweep}  ${name.padEnd(11)} ${cur.toFixed(4)} → ${bestVal.toFixed(4)}` +
+        `   loss ${best.toFixed(4)} → ${bestLoss.toFixed(4)} (${delta.toFixed(1)}%)`);
+      K[name] = bestVal;
+      best = bestLoss;
+    }
   }
+  const hold = evaluate(K, "holdout");
+  console.log(`--- sweep ${sweep} done: fit ${best.toFixed(4)}   holdout ${hold.toFixed(4)}   ` +
+              `${secs().toFixed(0)}s\n`);
+}
 
-  const finalFit = await rawEvaluate(K, "fit");
-  const finalHold = await rawEvaluate(K, "holdout");
-  console.log("=".repeat(72));
-  console.log(`fit      ${baseFit.toFixed(4)} → ${finalFit.toFixed(4)}   ` +
-              `(${(((finalFit - baseFit) / baseFit) * 100).toFixed(1)}%)`);
-  console.log(`holdout  ${baseHold.toFixed(4)} → ${finalHold.toFixed(4)}   ` +
-              `(${(((finalHold - baseHold) / baseHold) * 100).toFixed(1)}%)`);
-  const gap = finalHold / finalFit;
-  console.log(`holdout/fit ratio ${gap.toFixed(2)}` +
-    (gap > 1.6 ? "  ← OVERFITTING: the gain is mostly memorisation" :
-     gap > 1.25 ? "  ← some overfitting; treat the fitted values as soft" :
-                  "  ← generalising"));
-  console.log("=".repeat(72));
-  console.log("\n  const K = {");
-  for (const n of names) {
-    console.log(`    ${(n + ":").padEnd(12)}${K[n].toFixed(4)},`);
-  }
-  console.log("  };");
-
-  await browser.close();
-})();
+const finalFit = rawEvaluate(K, "fit");
+const finalHold = rawEvaluate(K, "holdout");
+console.log("=".repeat(72));
+console.log(`fit      ${baseFit.toFixed(4)} → ${finalFit.toFixed(4)}   ` +
+            `(${(((finalFit - baseFit) / baseFit) * 100).toFixed(1)}%)`);
+console.log(`holdout  ${baseHold.toFixed(4)} → ${finalHold.toFixed(4)}   ` +
+            `(${(((finalHold - baseHold) / baseHold) * 100).toFixed(1)}%)`);
+const gap = finalHold / finalFit;
+console.log(`holdout/fit ratio ${gap.toFixed(2)}` +
+  (gap > 1.6 ? "  ← OVERFITTING: the gain is mostly memorisation" :
+   gap > 1.25 ? "  ← some overfitting; treat the fitted values as soft" :
+                "  ← generalising"));
+console.log("=".repeat(72));
+console.log("\n  const K = {");
+for (const n of Object.keys(PRIOR)) {
+  console.log(`    ${(n + ":").padEnd(12)}${(K[n] ?? PRIOR[n]).toFixed(4)},`);
+}
+console.log("  };");

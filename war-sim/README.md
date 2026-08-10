@@ -10,12 +10,11 @@ answer.
 geography, munitions stocks, nuclear forces, and a set of qualitative indices.
 
 **It is graded.** Fifteen historical wars with known outcomes run through the same
-simulation, in the app, on demand. Current score: **9 of 15 outcomes called
-correctly, 4 of 15 durations within 3x, 1 of 15 casualty counts within 4x**, with
-a mean 58% of probability mass on what actually happened. Six of the fifteen are
-held out from coefficient fitting and scored separately. The failures are listed
-below rather than hidden, and one of them is a result in its own right: **fitting
-the model's free coefficients does not improve out-of-sample accuracy.**
+simulation, in the app or from a terminal, on demand. Current score: **9 of 15
+outcomes called correctly, 5 of 15 durations within 3x, 2 of 15 casualty counts
+within 4x**, with a mean 58% of probability mass on what actually happened. Six
+of the fifteen are held out from coefficient fitting and scored separately. The
+failures are listed below rather than hidden.
 
 ## Running it
 
@@ -30,6 +29,16 @@ Or serve it if you prefer a real origin:
 
 ```bash
 python3 -m http.server -d war-sim 8000   # then visit http://localhost:8000
+```
+
+The backtest and the coefficient fitter also run headlessly, with no browser and
+no dependencies — `tools/harness.js` gives the three model files a `window` to
+hang themselves off and everything else runs in-process:
+
+```bash
+node war-sim/tools/backtest.js            # the fifteen wars, scored, ~10s
+node war-sim/tools/backtest.js --json     # machine-readable, for diffing runs
+node war-sim/tools/fit.js --quick         # coefficient search
 ```
 
 ## What the model does
@@ -70,6 +79,22 @@ casualties; the regime decides; how much of the first reaches the second is set
 by how far the government depends on consent. This is why Iran and Iraq could
 spend eight years on a war neither population chose, and why the United States
 left Vietnam having won almost every engagement.
+
+**Wars end by decision, not only by exhaustion.** Every other termination test
+here is a stock crossing a floor — will ground down by cumulative casualties,
+cohesion by cumulative losses, the objective reached by cumulative advance. All
+three are integrals over elapsed time, so by construction none of them can fire
+early, and the model was systematically too slow on exactly the wars that ended
+quickly. A defender therefore also runs a forward-looking test each week: at the
+rate the attacker is actually moving, how many weeks until it gets what it came
+for, and is there anything — an uncalled reserve, an industry replacing more than
+the front is losing, a patron still shipping, a population that will keep
+fighting whatever the state signs — that could still turn it round. A government
+holding none of those concedes, with an army still in the field. Egypt and Jordan
+had armies in June 1967; Iraq had one in February 1991. What it costs to concede
+gates the whole thing: a border province is a bad afternoon, and a war of
+conquest is the end of the state, which is why those get fought past the point
+where quitting was rational.
 
 **The population's stance is a variable.** India did not garrison East Pakistan
 in 1971 — it handed the territory to a government the population had just voted
@@ -167,48 +192,135 @@ and the model ticks weekly.
 
 | War | Model | Actual | |
 |---|---|---|---|
-| Gulf War 1991 | attacker, 4.9 mo | attacker, 1.5 mo | outcome ✓ |
-| Invasion of Iraq 2003 | attacker, 15.9 mo | attacker, 1.5 mo | outcome ✓, occupation correctly fails |
-| Falklands 1982 | attacker, 19.9 mo | attacker, 2.5 mo | outcome ✓ |
-| Yom Kippur 1973 | defender | defender, 0.7 mo | outcome ✓ |
+| Gulf War 1991 | attacker, 3.1 mo | attacker, 1.5 mo | outcome ✓ duration ✓ |
+| Invasion of Iraq 2003 | attacker, 3.7 mo | attacker, 1.5 mo | outcome ✓ duration ✓, occupation correctly fails |
+| Falklands 1982 | attacker, 18.7 mo | attacker, 2.5 mo | outcome ✓ |
+| Yom Kippur 1973 | defender, 28.9 mo | defender, 0.7 mo | outcome ✓ |
 | Six-Day War 1967 | defender | attacker, 0.2 mo | ✗ |
-| Iran–Iraq 1980–88 | defender, 25 mo | stalemate, 96 mo | ✗ |
-| Nagorno-Karabakh 2020 | attacker, 16.5 mo | attacker, 1.5 mo | outcome ✓ |
-| Winter War 1939–40 | attacker, 1.4 mo | attacker, 3.5 mo | outcome ✓ duration ✓ |
-| Vietnam 1965–73 | attacker | defender, 96 mo | ✗ |
-| Korea 1950–53 | stalemate, 37 mo | stalemate, 37 mo | outcome ✓ duration ✓ |
-| Indo-Pakistani 1971 | attacker, 18.5 mo | attacker, 0.45 mo | outcome ✓ |
+| Iran–Iraq 1980–88 | defender, 24.4 mo | stalemate, 96 mo | ✗ |
+| Nagorno-Karabakh 2020 | attacker, 9.1 mo | attacker, 1.5 mo | outcome ✓ casualties ✓ |
+| Winter War 1939–40 | attacker, 1.2 mo | attacker, 3.5 mo | outcome ✓ |
+| Vietnam 1965–73 | attacker, 5.9 mo | defender, 96 mo | ✗ |
+| Korea 1950–53 | stalemate, 37.1 mo | stalemate, 37 mo | outcome ✓ duration ✓ |
+| Indo-Pakistani 1971 | attacker, 12.6 mo | attacker, 0.45 mo | outcome ✓ |
 | Kosovo 1999 | stalemate | attacker, 2.6 mo | ✗ |
 | Russo-Georgian 2008 | attacker, 0.5 mo | attacker, 0.17 mo | outcome ✓ duration ✓ |
 | Kargil 1999 | stalemate | defender, 2.5 mo | ✗ |
-| Russia–Ukraine 2022– | attacker | stalemate | ✗ |
+| Russia–Ukraine 2022– | attacker, 18.7 mo | stalemate, 48 mo | duration ✓ casualties ✓ |
 
 **What the failures say.** The model calls the *outcome* of most of these wars
-and is poor at how long they take and how many they kill. The error is
-systematic and in one direction: short decisive campaigns run far too long, and
-because casualties accumulate per week, the casualty counts inherit that error.
-The mechanism has not been identified — supply culmination and garrison drag were
-both investigated and neither was the cause. Until it is, treat durations and
-casualty figures as much weaker than the outcome verdict.
+and remains poor at how long they take and how many they kill. The error is
+systematic and in one direction — short decisive campaigns run too long, and
+because casualties accumulate per week the casualty counts inherit it.
 
-### Fitting does not help, and that is the finding
+Part of that is now diagnosed, and the diagnosis was structural rather than a
+coefficient. Every way this model could end a war was an integral over elapsed
+time, so no war could end quickly however lopsided it got: the Gulf War needed
+4.9 months to grind Iraq's will down to a threshold it crossed in reality in
+days. Adding the forward-looking defender capitulation described above moved
+the Gulf War to 3.1 months and the 2003 invasion from 15.9 to 3.7, taking
+durations from 4/15 to 5/15 and casualties from 1/15 to 2/15 with no outcome
+lost and the holdout unchanged. The gain is flat across a 3x range of the new
+rate coefficient, which is the main reason to think it is a mechanism and not a
+fit. It also cost one case honestly: Finland now folds in 1.2 months against an
+actual 3.5, because a hopeless position is exactly what Finland's was and the
+model has no way to represent holding one anyway for a winter.
 
-`tools/fit.js` searches the twelve genuinely free coefficients (`K` in
-`js/model.js`) by coordinate descent against a continuous objective — log-ratio
-error on duration and casualties plus probability mass on the true outcome.
-It is bounded to physically defensible ranges, regularised toward the hand-set
-priors, and scored on nine cases while six are held back.
+The residual error is still large and the remaining failures are specific:
+
+- **Two cases are wrong at the input, not the mechanism.** The Iran–Iraq war is
+  modelled with the defender committing about seven times the attacker's ground
+  power, and the Six-Day War gives Israel almost no air control in a war decided
+  by destroying the Egyptian air force on the ground on the first morning. Any
+  mechanism that resolves lopsided positions faster makes these worse, correctly.
+- **Kosovo and Kargil run the clock out.** Both were coercive campaigns that the
+  loser conceded; the model reports 12-month stalemates because the aim's own
+  success metric never moves enough for anyone to concede against.
+- **Vietnam and Korea continued because a third party made them continue.**
+  China entered Korea; Iran refused the terms Iraq offered in 1982. Withdrawal
+  is not a decision one side takes, it is an offer the other side has to accept,
+  and there is no representation of the second half of that here — which is why
+  the attacker-side version of this mechanism is switched off (below).
+
+Treat durations and casualty figures as much weaker than the outcome verdict.
+
+### What did not work, and is switched off
+
+Two mechanisms were built alongside the one that shipped, measured on the same
+fifteen wars, and left in the code with their rate coefficients set to zero.
+They are documented here rather than deleted because the measurement is the
+useful part, and both are one number away from being re-run.
+
+**Envelopment** (`envRate`, model section 7b). Armies are usually destroyed by
+being cut off rather than worn down, and a front with gaps plus a decisive local
+ratio should produce a pocket in a week. It behaves correctly where it can be
+checked — the dense Korean front suppresses it exactly as force-to-space says it
+should, the open ones let it run — and it improves nothing: the aggregate score
+is unchanged and the Iran–Iraq war drops from 24.5 months to 8.1 against an
+actual 96, because that case's force ratio is wrong and the mechanism faithfully
+converts a wrong ratio into a fast collapse. Fixing the input is the honest
+repair.
+
+**Attacker withdrawal** (`wdrRate`, model section 11b). The mirror of
+capitulation: an expeditionary army that is going nowhere at a cost it can
+project gets brought home. This one is measurably wrong. Every long war in the
+set is a stalled war, and a stalled war is exactly what the test reads as
+futile, so at any rate above zero it ends Korea at 17 months instead of 37 and
+the Iran–Iraq war at 5 instead of 96, while never improving a single duration.
+Gating it on `transmission` — the regime's exposure to what the war costs, which
+is the right variable, and which does separate the United States in Vietnam from
+Iraq in 1982 — softened the damage without fixing it.
+
+An air-supremacy gate on capitulation was also tried and dropped. The argument
+is good, and air control does separate these fifteen wars cleanly (Gulf 0.85,
+Korea 0.03): a position has to be legibly hopeless before anyone concedes it,
+and losing the sky is the most legible form of that. It changed nothing at low
+capitulation rates and cost two outcomes at high ones, because the long wars it
+was meant to protect are shortened by attacker withdrawal, which it does not
+touch. A term that sounds right and does nothing is worse than no term.
+
+### Fitting used not to help. Closing a structural gap changed that.
+
+`tools/fit.js` searches the genuinely free coefficients (`K` in `js/model.js`)
+by coordinate descent against a continuous objective — log-ratio error on
+duration and casualties plus probability mass on the true outcome. It is bounded
+to physically defensible ranges, regularised toward the hand-set priors, and
+scored on nine cases while six are held back.
 
 ```
 node tools/fit.js --sweeps 3 --iters 250 --reg 0.35
 ```
 
-Across four configurations — unbounded, bounded, regularised, and with a
-duration-stratified holdout — the result is the same: **the fitting score
-improves 12–17% and the held-out score gets 6–12% worse.** The coefficients are
-not the binding constraint; the remaining error is structural. The hand-set
-values are therefore what ships, and the fitter exists to keep proving that
-rather than to tune the model.
+The standing result here used to be that fitting improved the in-sample score
+and made the held-out score *worse* — the signature of a model whose remaining
+error is structural, where the optimiser can only buy in-sample accuracy by
+memorising. That was the stated reason the hand-set values shipped.
+
+Adding the capitulation mechanism changed the sign. Run against the same fifteen
+cases with the same search:
+
+| | fit | holdout |
+|---|---|---|
+| Model without capitulation | −17.9% | **+2.8% worse** |
+| Model with capitulation | −23.2% | **−5.2% better** |
+
+That is the strongest evidence for the diagnosis in the section above. If the
+residual error had been coefficient error all along, fitting would have helped
+from the start; if it had been entirely structural, closing one gap would not
+have made the coefficients tractable. It was structural, one identifiable piece
+of it is now closed, and the numbers respond the way that story predicts.
+
+Two caveats keep this from being an invitation to paste the fitted values in.
+Nine cases against seventeen coefficients is still a poor ratio, and a 5%
+out-of-sample gain is within the range a different holdout split could erase.
+The hand-set values still ship, and the fitter still exists to be argued with
+rather than obeyed.
+
+Coefficients belonging to a mechanism that has been measured and switched off
+are frozen rather than searched. The regulariser's squared log-distance is
+undefined at a prior of zero, and a fitter that quietly switches a disabled
+mechanism back on because it shaves a little off nine cases would be committing
+the exact failure this script exists to demonstrate.
 
 Two things worth stealing from this even if you disagree with the model:
 
@@ -267,8 +379,11 @@ is calibrated against the backtest rather than measured, and the code says so
 where that is true.
 
 **Durations and casualty counts are much weaker than the outcome verdict.**
-Short decisive wars run far too long and the casualty figures inherit that error.
-See the backtest section; the cause is not yet identified.
+Short decisive wars still run too long and the casualty figures inherit that
+error. One structural cause was found and closed — every termination test was an
+integral over elapsed time, so no war could end quickly — which bought two
+scoring passes and left most of the gap in place. See the backtest section for
+what is left and where it is.
 
 **The nuclear module is deliberately crude.** It exists so the model refuses to
 report a tidy conventional victory over a nuclear-armed state facing collapse —
@@ -284,9 +399,11 @@ js/data.js        the dataset — 74 countries, alliances, chokepoints, stocks
 js/model.js       the model: force quality, projection, magazines, the campaign
                   loop, geometry, attrition, occupation, escalation, Monte Carlo
 js/backtest.js    fifteen historical wars, period force data, and the scoring
-tools/fit.js      coefficient search with a held-out validation set
-js/charts.js      two SVG chart forms with hover layers and table fallbacks
+js/charts.js      the SVG chart forms, with hover layers and table fallbacks
 js/app.js         controls and the report
+tools/harness.js  loads the model outside a browser, for the two tools below
+tools/backtest.js the fifteen wars, scored, from a terminal
+tools/fit.js      coefficient search with a held-out validation set
 ```
 
 Chart colours were checked with a palette validator against this exact surface

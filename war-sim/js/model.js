@@ -78,6 +78,13 @@
     cohBase:    0.300,   // force loss a unit absorbs before cohesion goes
     qualExch:   0.750,   // how far a technology gap widens the exchange ratio
     biteExp:    0.450,   // how slowly casualties fall off as a fight gets lopsided
+    envRatio:   2.200,   // local ratio at which a porous front starts to be cut
+    envRate:    0.000,   // monthly odds of envelopment — OFF, see section 7b
+    envPocket:  0.220,   // share of fielded force lost when a pocket closes
+    capHorizon: 7.000,   // months ahead a leadership discounts a defeat over
+    capRate:    2.000,   // monthly odds a defender concedes a lost position
+    wdrRate:    0.000,   // attacker abandonment — OFF, see section 11b
+    capStake:   0.800,   // how far an existential aim suppresses capitulation
   };
   // Symmetric multiplicative noise: 1 ± spread, triangular-ish.
   const jitter = (rng, spread) => 1 + (rng() + rng() - 1) * spread;
@@ -496,6 +503,9 @@
 
     const timeline = [];
     let tick = 0, outcome = null, nuclear = null;
+    // Smoothed rate of progress toward the attacker's war aim, and last tick's
+    // level. Both feed the forward-looking termination test in section 11b.
+    let aimRate = 0, prevAimProgress = 0;
     let seaControlA = 0.5, airControlA = 0.5;
     let landedA = 0;              // thousands of troops ashore, amphibious ops
     const woundedQueue = { a: [], b: [] };   // wounded returning to duty, by week
@@ -720,6 +730,73 @@
       woundedQueue.a[RETURN_LAG] = (woundedQueue.a[RETURN_LAG] || 0) + sa.wia * 0.55;
       woundedQueue.b[RETURN_LAG] = (woundedQueue.b[RETURN_LAG] || 0) + sb.wia * 0.55;
 
+      /* ── 7b. Envelopment ──────────────────────────────────────────────────
+       * Armies are not usually destroyed by being worn down. They are destroyed
+       * by being cut off. A front with gaps in it plus a decisive local ratio
+       * lets the attacker get behind a formation, and in the week that takes, a
+       * fighting division becomes a column of prisoners. Sinai in 1967, Kuwait
+       * in 1991 and East Pakistan in 1971 all ended that way, and not one of
+       * them ended because a casualty counter reached a threshold.
+       *
+       * This is deliberately a RATE rather than an accumulated stock. Every
+       * other way a war can end in this model — will, cohesion, territory —
+       * requires grinding an integral down to a floor, and integrals take time
+       * no matter what the battlefield looks like.
+       *
+       * IT IS OFF BY DEFAULT (`envRate: 0`), because on the backtest it does
+       * not pay for itself. It behaves correctly where it can be checked — the
+       * dense Korean front suppresses it exactly as force-to-space says it
+       * should (manoeuvre 0.22, nothing fires) and the open ones let it run —
+       * but the aggregate score does not improve, and it takes the Iran-Iraq
+       * War from 24.5 months to 8.1 against an actual 96. That case has the
+       * defender committing seven times the attacker's ground power in the
+       * model, so a mechanism that converts a lopsided ratio into a fast
+       * collapse is doing its job on an input that is itself wrong. Fixing the
+       * input is the honest repair; suppressing the mechanism to hide it is
+       * not, and neither is shipping it on and calling the result an
+       * improvement. Set `envRate` to 0.42 and re-run tools/backtest.js to see
+       * the whole result.
+       */
+      const envelopOdds = (ratio, mobility) => {
+        if (ratio <= K.envRatio) return 0;
+        const decisive = clamp((ratio - K.envRatio) / K.envRatio, 0, 1);
+        // No gaps, no envelopment: a continuous line has no flanks to turn.
+        // This is why the same odds produce Sinai on an open front and nothing
+        // at all on a full one.
+        return K.envRate * DT * decisive * Math.pow(manoeuvre, 1.4) * mobility * tempo;
+      };
+      let pocketA = 0, pocketB = 0;
+      if (K.envRate > 0) {
+        /* Getting behind an army takes fuel and, above all, air superiority:
+         * the columns doing the encircling are strung out on roads with open
+         * flanks, which is survivable only if nothing is flying overhead.
+         * Sinai, Kuwait and the road to Baghdad were all conducted under
+         * near-total air control. Two armies contesting the air do not envelop
+         * each other — without this term the mechanism cut Iraq's army apart in
+         * the Iran-Iraq war, where neither side could do anything of the kind. */
+        const airborne = (control) => Math.pow(clamp(0.12 + 0.88 * control, 0, 1), 1.3);
+        const mobilityA = clamp(S.a.fuel, 0.25, 1) * airborne(airControlA);
+        const mobilityB = clamp(S.b.fuel, 0.25, 1) * airborne(1 - airControlA);
+        if (rng() < envelopOdds(forceRatio, mobilityA)) pocketB = K.envPocket * jitter(rng, 0.45);
+        if (rng() < envelopOdds(1 / Math.max(forceRatio, 1e-6), mobilityB)) pocketA = K.envPocket * jitter(rng, 0.45);
+      }
+
+      // Encircled troops are overwhelmingly captured rather than killed, and
+      // their equipment is not damaged, it is abandoned where it stands. The
+      // wounded in a pocket go into captivity with it, so none of them are
+      // queued to return to duty.
+      const closePocket = (share, side, engaged, tech) => {
+        const caught = engaged * share;
+        const kia = caught * (0.16 - 0.05 * (tech / 100));
+        const pow = caught * 0.70;
+        side.casualties += caught; side.killed += kia; side.captured += pow;
+        side.wounded += Math.max(0, caught - kia - pow);
+        side.land *= 1 - share;
+        return caught;
+      };
+      if (pocketB > 0) mobilisedB = Math.max(0, mobilisedB - closePocket(pocketB, S.b, engagedB, B.tech));
+      if (pocketA > 0) mobilisedA = Math.max(0, mobilisedA - closePocket(pocketA, S.a, engagedA, A.tech));
+
       // Civilian deaths from strategic strike, in millions per month. An empty
       // precision magazine drives this up sharply — unguided weapons hit far
       // more of what was not aimed at.
@@ -870,6 +947,124 @@
         }
       }
 
+      /* ── 11b. Termination by decision ─────────────────────────────────────
+       * Every other way this war can end is a stock crossing a floor: will
+       * ground down by cumulative casualties, cohesion by cumulative losses,
+       * the objective reached by cumulative advance. All three are integrals
+       * over elapsed time, so by construction none of them can fire early.
+       *
+       * What was missing is the decision to quit. Wars mostly end because
+       * someone works out that the coming months look worse than terms do — a
+       * forecast, not an accumulator. Egypt and Jordan still had armies in
+       * June 1967. So did Iraq in February 1991. They stopped because
+       * continuing had no path, and a model that can only end a war by
+       * exhaustion has to spend months producing the exhaustion instead.
+       *
+       * Both branches below read only rates and current state. Nothing here
+       * depends on how long the war has already lasted, which is what lets a
+       * war end in its third week when the third week is when it was decided.
+       */
+      const horizonWeeks = K.capHorizon * WEEKS_PER_MONTH;
+      /* Where the attacker's aim stands, 0 = untouched, 1 = achieved. Each war
+       * aim is judged by the thing it is actually trying to move, which is the
+       * same quantity its own termination test below reads. Keying this to
+       * territory alone left the two coercive aims unable to end by decision at
+       * all — and a punitive air campaign is a pure coercion play whose entire
+       * theory is that the other side decides to stop. Kosovo ran the full
+       * twelve months to a stalemate for that reason. */
+      const aimProgress =
+        aim.territory > 0 ? clamp(depth / aim.territory, 0, 1)
+        : opts.warAim === "punitive" ? clamp((1 - S.b.air / Math.max(start.b.air, 1e-6)) / 0.45, 0, 1)
+        : opts.warAim === "blockade" ? clamp((1 - S.b.fuel) / 0.70, 0, 1)
+        : 0;
+      // Smoothed so a single noisy week does not read as a collapse or a halt.
+      aimRate = 0.70 * aimRate + 0.30 * Math.max(0, aimProgress - prevAimProgress);
+      prevAimProgress = aimProgress;
+      // Weeks until the attacker gets there at the rate it is actually going.
+      // Infinite if it is not going anywhere, which is itself a finding.
+      const weeksToObjective = aimRate > 1e-6 ? (1 - aimProgress) / aimRate : Infinity;
+
+      // What capitulation costs decides whether it is available at all.
+      // Conceding a border province is a bad afternoon. Conceding to a war of
+      // conquest or regime change is the end of the state and of the people
+      // deciding, so those wars get fought well past the point where quitting
+      // was the rational move. This is the difference between Georgia in 2008
+      // and Germany in 1945.
+      const survivable = clamp(1 - K.capStake * aim.territory, 0.05, 1);
+
+      if (Number.isFinite(weeksToObjective)) {
+        // How close the defeat is, on the leadership's own horizon.
+        const doom = clamp(1 - weeksToObjective / horizonWeeks, 0, 1);
+        /* Anything that could still turn it around. A government holding any
+         * of these does not sue for peace on a bad month: a reserve not yet
+         * called, an industry replacing more than the front is losing, a patron
+         * still shipping, or a population that will keep fighting whatever the
+         * state signs. The last two are why the first version had North Vietnam
+         * suing for terms in 41% of runs and Ukraine in 37%. */
+        const reserveLeft = clamp(1 - mobilisedB / Math.max(equipCapB, 1e-6), 0, 1);
+        const patron = supB > 0 ? 1 : 0;
+        const resistance = clamp(1 - localSupport, 0, 1);
+        const relief = clamp(0.40 * reserveLeft + 0.25 * clamp(S.b.industry * 5, 0, 1)
+                             + 0.35 * Math.max(patron, resistance), 0, 1);
+        /* An air-supremacy gate was tried here, on the argument that a position
+         * has to be legibly hopeless before anyone concedes it and that losing
+         * the sky is the most legible form of that. It is a good argument and
+         * air control does separate these fifteen wars cleanly — Gulf 0.85,
+         * Korea 0.03 — but it changed nothing at low capitulation rates and
+         * cost two outcomes at high ones, because the long wars it was meant to
+         * protect are shortened by the attacker-withdrawal branch below, which
+         * it does not touch. It is left out rather than kept as a term that
+         * sounds right and does nothing. */
+        const hazard = K.capRate * DT * Math.pow(doom * (1 - 0.7 * relief), 1.5) * survivable;
+        if (rng() < hazard) { outcome = "defenderCapitulates"; break; }
+      }
+
+      /* The attacker's version is not surrender, it is going home. An army that
+       * has lost no battles can still be withdrawn, and the calculation behind
+       * it is a projection too: not "what has this cost" but "what will it cost
+       * at the current burn rate to get where we said we were going". Vietnam
+       * and Afghanistan both ended with the expeditionary force undefeated in
+       * the field. A war on your own border is not optional in the same way.
+       *
+       * THIS IS OFF BY DEFAULT (`wdrRate: 0`), and unlike the defender branch
+       * above it is off because it is measurably wrong. Every long war in the
+       * backtest is a stalled war, and a stalled war is exactly what this reads
+       * as futile: at any rate above zero it ends Korea at 17 months instead of
+       * 37 and the Iran-Iraq War at 5 instead of 96, while never once improving
+       * a duration. Gating it on `transmission` — the regime's exposure to what
+       * the war costs, which is the right variable and does separate the United
+       * States in Vietnam from Iraq in 1982 — softened that without fixing it.
+       *
+       * The reason is visible in the cases rather than the coefficient. Both
+       * wars continued because a third party made them continue: China entered
+       * Korea, and Iran refused the terms Iraq offered in 1982. Withdrawal is
+       * not a decision one side takes, it is an offer the other side has to
+       * accept, and this model has no representation of the second half of
+       * that. Set `wdrRate` to 0.8 and re-run tools/backtest.js to see it. */
+      if (K.wdrRate > 0 && month >= 2) {
+        // Unreachable rather than merely slow: the objective sits beyond the
+        // horizon at the rate the war is actually moving.
+        const futile = Number.isFinite(weeksToObjective)
+          ? clamp((weeksToObjective / horizonWeeks - 1) / 2, 0, 1)
+          : 1;
+        // Casualty burn projected forward against what this society will bear,
+        // rather than what it has already spent.
+        const burn = casA / Math.max(A.fit * 1000 * willA.tolerance * tolA, 1e-6);
+        const projected = clamp(burn * Math.min(weeksToObjective, horizonWeeks * 3) / 1.5, 0, 1);
+        const optional = adjacent ? 0.55 : 1;
+        /* Whether a projected bill actually stops a war depends on who has to
+         * pay attention to it. This is the same `transmission` the will
+         * mechanism uses — how far the government depends on consent — and
+         * without it the branch cuts every long attritional war short: the
+         * first version withdrew Iraq from Iran in five months and North Korea
+         * from the South in twelve, because both were plainly stalled and
+         * bleeding. Both regimes were also almost perfectly insulated from
+         * caring. It is the reason the United States left Vietnam and Iraq did
+         * not leave Iran. */
+        const hazard = K.wdrRate * DT * futile * projected * optional * willA.transmission;
+        if (rng() < hazard) { outcome = "attackerWithdraws"; break; }
+      }
+
       // ── 12. Termination ───────────────────────────────────────────────────
       if (S.b.territory <= 1 - aim.territory && aim.territory > 0) { outcome = "attackerObjective"; break; }
       if (opts.warAim === "punitive" && month >= 3 && S.b.air / start.b.air < 0.55) { outcome = "attackerObjective"; break; }
@@ -883,7 +1078,9 @@
 
     // ── Occupation feasibility ─────────────────────────────────────────────
     let occupation = null;
-    if (aim.occupy && (outcome === "attackerObjective" || outcome === "defenderCollapse")) {
+    // A capitulation that hands you the country still leaves you holding it.
+    if (aim.occupy && (outcome === "attackerObjective" || outcome === "defenderCollapse"
+                       || outcome === "defenderCapitulates")) {
       const held = (1 - S.b.territory);
       const needed = B.pop * held * 20 * (0.75 + 0.5 * (B.urban / 100))
         * (1 - 0.85 * localSupport);
@@ -924,8 +1121,9 @@
    * Monte Carlo wrapper.
    * ====================================================================== */
   const OUTCOME_SIDE = {
-    attackerObjective: "a", defenderCollapse: "a",
-    attackerCollapse: "b", stalemate: "draw", pyrrhic: "pyrrhic", nuclear: "none",
+    attackerObjective: "a", defenderCollapse: "a", defenderCapitulates: "a",
+    attackerCollapse: "b", attackerWithdraws: "b",
+    stalemate: "draw", pyrrhic: "pyrrhic", nuclear: "none",
   };
 
   // Accepts either country ids or fully-built country objects, so the

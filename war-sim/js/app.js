@@ -427,15 +427,17 @@
       `months, or a coin flip between a rout and a five-year grind.`);
 
     const colorFor = (o) =>
-      o === "attackerObjective" || o === "defenderCollapse" ? C.a
+      o === "attackerObjective" || o === "defenderCollapse" || o === "defenderCapitulates" ? C.a
       : o === "pyrrhic" ? C.a
-      : o === "attackerCollapse" ? C.b
+      : o === "attackerCollapse" || o === "attackerWithdraws" ? C.b
       : o === "nuclear" ? C.crit : C.neutral;
     const labelFor = (o) => ({
       attackerObjective: R.attacker.name + " achieves its aims",
       defenderCollapse: R.defender.name + "'s defence collapses",
+      defenderCapitulates: R.defender.name + " sues for terms",
       pyrrhic: R.attacker.name + " wins but cannot hold",
       attackerCollapse: R.defender.name + " holds",
+      attackerWithdraws: R.attacker.name + " withdraws",
       stalemate: "Stalemate", nuclear: "☢ Nuclear exchange",
     }[o] || o);
 
@@ -573,7 +575,9 @@
     return {
       attackerObjective: `${R.attacker.name} achieving its objective`,
       defenderCollapse: `the collapse of ${R.defender.name}'s defence`,
+      defenderCapitulates: `${R.defender.name} suing for terms with an army still in the field`,
       attackerCollapse: `${R.attacker.name} abandoning the war`,
+      attackerWithdraws: `${R.attacker.name} withdrawing an undefeated army`,
       stalemate: "an unresolved stalemate",
       pyrrhic: "a military victory the attacker cannot hold",
       nuclear: "nuclear use",
