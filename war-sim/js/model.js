@@ -65,7 +65,7 @@
    * search last produced. Everything else in the model is either sourced data
    * or a documented physical assumption.
    */
-  const K = {
+  const KBASE = {
     advBase:    0.030,   // floor on monthly advance rate when a line is solid
     advMano:    0.340,   // extra advance available when the front has gaps
     lossBase:   0.045,   // monthly materiel attrition at full contact
@@ -85,9 +85,103 @@
     capRate:    2.000,   // monthly odds a defender concedes a lost position
     wdrRate:    0.000,   // attacker abandonment — OFF, see section 11b
     capStake:   0.800,   // how far an existential aim suppresses capitulation
+    /* Structural uncertainty: how far the model's own coefficients are resampled
+     * on every run. Everything above is a hand-set guess, and treating them as
+     * exact is why this model used to report 100% and be wrong a third of the
+     * time. See `structuralDraw`. */
+    structSpread: 0.350,
+    /* How badly the model may have judged the balance in this theatre, as a
+     * lognormal spread on the effective ground force ratio, drawn once per run.
+     * This is the part of structural uncertainty that resampling coefficients
+     * cannot reach: no plausible draw of `defBase` flips a seven-to-one ratio,
+     * yet net assessments of exactly that kind are wrong all the time — about
+     * doctrine, about what a force can actually do on the day, about which of
+     * two armies has quietly rotted. Zero here is the claim that the order of
+     * battle tells you the balance, which is the assumption every confident
+     * pre-war prediction in history has been built on. */
+    fogSigma:     0.800,
+    /* How often this model is simply not a description of the war in front of
+     * it. The two terms above are mechanisms — they say the coefficients and
+     * the net assessment are uncertain — and between them they recover only
+     * part of the gap, because they cannot represent a mechanism that is
+     * MISSING. Kosovo is decided by coercion this model does not implement;
+     * Korea by an intervention it cannot see; Vietnam by a politics it does not
+     * hold. In those wars no draw of any coefficient helps, and the model's
+     * error is not that it is uncertain but that it is answering a different
+     * question.
+     *
+     * This is the admission of that, and unlike everything else in `K` it is
+     * NOT a mechanism: it is a declared ignorance term. In this share of runs
+     * the model discards its own answer and reports maximum ignorance instead —
+     * outcome uniform over the three that are possible, duration uniform over
+     * the horizon, casualties scattered across an order of magnitude. It is
+     * calibrated out-of-sample and it is a fudge; it is labelled as one here
+     * because a model that reports 100% and is wrong a third of the time is a
+     * worse fudge, just an undeclared one. */
+    modelError:   0.300,
   };
+  /* What each coefficient could defensibly be, argued independently of the
+   * backtest. Two things read this: the coefficient search in tools/fit.js,
+   * which must not wander outside what is sayable, and the per-run structural
+   * draw below, which must not either. The full argument for each range is in
+   * tools/fit.js; it lives here so the two can never disagree. */
+  const K_BOUNDS = {
+    advBase:   [0.010, 0.120],  advMano:   [0.100, 1.400],
+    lossBase:  [0.020, 0.090],  casBase:   [0.010, 0.060],
+    defBase:   [1.150, 1.800],  tolScale:  [0.020, 0.150],
+    tolExp:    [1.000, 2.500],  transBase: [0.050, 0.400],
+    stallW:    [0.030, 0.200],  cohBase:   [0.250, 0.700],
+    qualExch:  [0.300, 1.100],  biteExp:   [0.300, 0.800],
+    capRate:   [0.500, 5.000],  capHorizon: [3.000, 15.000],
+    capStake:  [0.400, 0.950],  envRatio:  [1.500, 4.000],
+    envRate:   [0.100, 1.200],  envPocket: [0.080, 0.400],
+    wdrRate:   [0.100, 2.000],
+  };
+  // Exponents want additive movement — scaling an exponent by 1.3 is not a
+  // small change to it.
+  const K_EXPONENTS = new Set(["tolExp", "qualExch", "biteExp"]);
+
   // Symmetric multiplicative noise: 1 ± spread, triangular-ish.
   const jitter = (rng, spread) => 1 + (rng() + rng() - 1) * spread;
+
+  /* ── Structural uncertainty ───────────────────────────────────────────────
+   * The Monte Carlo used to sample everything a planner would be unsure about
+   * — leadership, force quality, industrial output — and then treat the
+   * model's own seventeen coefficients as exact. That is why it reported 100%:
+   * with every uncertain input agreeing, nothing was left to disagree. But the
+   * coefficients are hand-set guesses, and a model that gets six of fifteen
+   * historical outcomes wrong has no business claiming certainty about
+   * anything.
+   *
+   * So each run draws its own coefficients. The draw is clamped to the same
+   * defensible ranges the fitter is bounded by, because the claim being made is
+   * "this number is somewhere in the range we could argue for", not "this
+   * number is anything at all". A run is therefore a war fought by a slightly
+   * different model, and the spread of outcomes includes the possibility that
+   * the modelling is wrong rather than only that the inputs are.
+   *
+   * `structSpread` is the one coefficient in here that cannot be argued from
+   * first principles: it says how wrong the model thinks it might be, and the
+   * only evidence about that is the backtest. It is therefore calibrated
+   * against out-of-sample coverage rather than set by hand, and excluded from
+   * the point-accuracy search in tools/fit.js — a loss function that rewards
+   * confidence in the right answer would drive it to zero and re-break exactly
+   * what it exists to fix.
+   */
+  function structuralDraw(rng, base) {
+    const spread = base.structSpread;
+    if (!(spread > 0)) return base;
+    const k = Object.assign({}, base);
+    for (const name in K_BOUNDS) {
+      if (!(base[name] > 0)) continue;          // a switched-off mechanism stays off
+      const b = K_BOUNDS[name];
+      const drawn = K_EXPONENTS.has(name)
+        ? base[name] + (rng() + rng() - 1) * spread * 0.6
+        : base[name] * jitter(rng, spread);
+      k[name] = clamp(drawn, b[0], b[1]);
+    }
+    return k;
+  }
 
   const EARTH_R = 6371;
   function greatCircle(a, b) {
@@ -234,7 +328,7 @@
    * on consent — near-total for an accountable state, close to nil for a
    * coercive one. A regime facing its own destruction fights on regardless.
    */
-  function willProfile(c, isDefendingHome, warAim) {
+  function willProfile(c, isDefendingHome, warAim, K = KBASE) {
     let base = (c.mor * 0.6 + c.stab * 0.4) / 100;
     if (isDefendingHome) base = clamp(base + 0.28, 0, 1.15);
     // A war of choice a long way from home is the easiest kind to abandon.
@@ -339,6 +433,8 @@
    * One run of the war.
    * ====================================================================== */
   function runOnce(A, B, opts, rng) {
+    // Every `K.` below is this run's draw, not the shared table.
+    const K = structuralDraw(rng, KBASE);
     const pa = opts._pa, pb = opts._pb;
     const aim = WAR_AIMS[opts.warAim];
     const mobA = MOBILIZATION[opts.mobilizationA];
@@ -441,8 +537,8 @@
     let mobilisedA = Math.min(A.act + A.par * 0.30, equipCapA);
     let mobilisedB = Math.min(B.act + B.par * 0.50, equipCapB);
 
-    const willA = willProfile(A, false, opts.warAim);
-    const willB = willProfile(B, true, opts.warAim);
+    const willA = willProfile(A, false, opts.warAim, K);
+    const willB = willProfile(B, true, opts.warAim, K);
 
     // Competence of the war's leadership — the least predictable variable there
     // is, and historically among the most decisive. The spread is wide on
@@ -458,6 +554,14 @@
      * reported distribution includes uncertainty about the inputs and not only
      * about the war. */
     const idxA = jitter(rng, 0.14), idxB = jitter(rng, 0.14);
+    /* The theatre-level net assessment error. Lognormal so it is symmetric in
+     * ratio terms — being wrong by a factor of two in the attacker's favour is
+     * the same size of mistake as being wrong by half. Box-Muller off the same
+     * stream, so a seed still reproduces a run exactly. */
+    const fog = K.fogSigma > 0
+      ? Math.exp(K.fogSigma * Math.sqrt(-2 * Math.log(Math.max(rng(), 1e-12))) *
+                 Math.cos(2 * Math.PI * rng()))
+      : 1;
     const morA = jitter(rng, 0.16), morB = jitter(rng, 0.16);
     // Industrial output and how much a society will bear are both uncertain.
     const indA = jitter(rng, 0.25), indB = jitter(rng, 0.25);
@@ -681,7 +785,7 @@
       // Ashore, the fighting force is what got ashore — not that share of a
       // force already discounted for distance.
       const groundFracA = needsAmphib ? clamp(landedA / Math.max(poolA, 1), 0, 1) : fracA;
-      let groundA = S.a.land * groundFracA * airMultA * supplyStrain * (1 - garrisonDrag) * fireA;
+      let groundA = S.a.land * groundFracA * airMultA * supplyStrain * (1 - garrisonDrag) * fireA * fog;
       const groundB = S.b.land * fracB * airMultB * defenderEdge * urbanDrag * fireB;
       const forceRatio = groundA / Math.max(groundB, 1e-6);
 
@@ -1295,8 +1399,35 @@
         sumKiaA = 0, sumKiaB = 0, sumPowA = 0, sumPowB = 0,
         dryShellA = 0, dryShellB = 0, dryPgmA = 0, dryIntB = 0;
 
+    const horizon = opts.maxMonths != null ? opts.maxMonths : WAR_AIMS[opts.warAim].months;
     for (let i = 0; i < opts.iterations; i++) {
       const r = runOnce(A, B, opts, rng);
+      /* The declared-ignorance share. This run is one the model has no business
+       * calling, so its answer is thrown away and replaced with one that claims
+       * nothing: an outcome drawn uniformly rather than from any historical
+       * base rate, because borrowing the base rate of the fifteen backtest wars
+       * would quietly smuggle those wars into every live forecast. */
+      if (KBASE.modelError > 0 && rng() < KBASE.modelError) {
+        const pick = ["attackerObjective", "attackerCollapse", "unresolved"][Math.floor(rng() * 3)];
+        r.outcome = pick;
+        /* Duration is scattered around what was simulated rather than drawn
+         * flat across the horizon. Uniform-over-the-horizon was the first
+         * attempt and it is a terrible prior: with a 90-month clock it has a
+         * mean of 45 months, so it dragged the Russo-Georgian War from a
+         * fortnight to over a year and made every short war's expected duration
+         * meaningless. Wars are overwhelmingly short with a long tail, and a
+         * wide lognormal around the model's own answer says "I could be out by
+         * a large factor" without claiming a border skirmish might last eight
+         * years. */
+        r.months = clamp(r.months * Math.exp((rng() + rng() + rng() - 1.5) * 1.6), 0.25, horizon);
+        r.weeks = Math.max(1, Math.round(r.months * WEEKS_PER_MONTH));
+        // An order of magnitude either way, which is about the width of the
+        // historical disagreement over casualties in a war nobody modelled.
+        const scale = Math.exp((rng() * 2 - 1) * Math.log(10));
+        r.killedA *= scale; r.killedB *= scale;
+        r.casualtiesA *= scale; r.casualtiesB *= scale;
+        r.occupation = null;
+      }
       tally[OUTCOME_SIDE[r.outcome]]++;
       byOutcome[r.outcome] = (byOutcome[r.outcome] || 0) + 1;
       if (r.nuclear) nuclearRuns++;
@@ -1432,7 +1563,8 @@
     seasonTempo, multiFrontTax, SEASON,
     greatCircle, deployFraction, amphibiousLift, qualityMult, trainingMult,
     experienceMult, c4Mult, willProfile,
-    WAR_AIMS, MOBILIZATION, rngFactory, WEEKS_PER_MONTH, DT, K,
+    WAR_AIMS, MOBILIZATION, rngFactory, WEEKS_PER_MONTH, DT,
+    K: KBASE, K_BOUNDS, K_EXPONENTS,
     quantile, pit,
   };
 })();

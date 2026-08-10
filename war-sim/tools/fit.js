@@ -66,58 +66,28 @@ const EXPONENTS = new Set(["tolExp", "qualExch", "biteExp"]);
  *
  * Each range is what the quantity could defensibly be, argued independently of
  * the backtest. The fit is then the best available answer WITHIN what is
- * physically sayable, which is the only kind worth having. */
-const BOUNDS = {
-  // An offensive against an intact line is slow; against a collapsed one it is
-  // limited by fuel trucks, not by the enemy. 2003 covered 500 km in three
-  // weeks, so the upper bound has to allow most of a country in a month.
-  advBase:   [0.010, 0.120],
-  advMano:   [0.100, 1.400],
-  lossBase:  [0.020, 0.090],   // monthly materiel attrition at full contact
-  casBase:   [0.010, 0.060],   // monthly casualties, share of engaged
-  defBase:   [1.150, 1.800],   // the 1.5:1 planning rule, give or take
-  tolScale:  [0.020, 0.150],   // casualty tolerance ceiling
-  tolExp:    [1.000, 2.500],
-  transBase: [0.050, 0.400],   // even a dictatorship feels some of it
-  stallW:    [0.030, 0.200],
-  cohBase:   [0.250, 0.700],   // below 25% loss it is not an army breaking
-  qualExch:  [0.300, 1.100],   // a generational gap matters, but not infinitely
-  biteExp:   [0.300, 0.800],
-  /* Termination by decision. A leadership that has concluded the position is
-   * hopeless decides in days to weeks, not years — Iraq accepted the 1991
-   * ceasefire within days of the ground war opening, Georgia sued for terms in
-   * five, Argentina surrendered days after the final assault on Stanley. So the
-   * monthly hazard at full hopelessness is well above 1. The upper bound is
-   * "the decision takes about a week"; below the lower bound the mechanism is
-   * slower than the attrition it is supposed to pre-empt and does nothing.
-   * The shipped value is 2.0 and the backtest is FLAT across this entire range,
-   * which is the main reason to believe the gain is not fitted. */
-  capRate:   [0.500, 5.000],
-  // How far ahead a government discounts. Shorter than a war and longer than a
-  // campaign season: nobody concedes over a reverse they expect to outlast, and
-  // nobody plans a surrender around year three.
-  capHorizon: [3.000, 15.000],
-  // How far an existential aim suppresses conceding. At 0 a state hands over
-  // its own existence as readily as a border province, which is Germany 1945
-  // ending in 1943; at 1 conquest can never be conceded at all, which is Vichy
-  // France being impossible.
-  capStake:  [0.400, 0.950],
-  // Envelopment. Both are off by default (envRate 0) and excluded from the
-  // search below; the bounds are here so that turning them on does not leave
-  // them unbounded.
-  envRatio:  [1.500, 4.000],
-  envRate:   [0.100, 1.200],
-  envPocket: [0.080, 0.400],
-  wdrRate:   [0.100, 2.000],
-};
+ * physically sayable, which is the only kind worth having.
+ *
+ * The ranges themselves live in js/model.js, because the per-run structural
+ * draw samples within them too and the two must not be able to disagree. */
+const { WarData, WarModel, WarBacktest } = load();
+const { CASES, isHoldout } = WarBacktest;
+const M = WarModel;
+
+const BOUNDS = M.K_BOUNDS;
+
+/* The three dispersion coefficients are frozen. They do not describe the war,
+ * they describe how wrong this model might be about it, and the objective below
+ * is a point-accuracy loss that rewards confidence in the right answer — it
+ * would drive all three to zero and restore exactly the overconfidence they
+ * exist to correct. They are calibrated against out-of-sample coverage instead;
+ * see the calibration section of the README. */
+const FROZEN_BY_HAND = new Set(["structSpread", "fogSigma", "modelError"]);
 const clampK = (name, v) => {
   const b = BOUNDS[name];
   return b ? Math.max(b[0], Math.min(b[1], v)) : v;
 };
 
-const { WarData, WarModel, WarBacktest } = load();
-const { CASES, isHoldout } = WarBacktest;
-const M = WarModel;
 
 // Log-ratio error, bounded so one hopeless case cannot dominate the sum.
 const lr = (pred, act) => {
@@ -148,8 +118,8 @@ const PRIOR = { ...M.K };
  * fitter that silently switches a disabled mechanism back on because it shaves
  * a little off nine cases is precisely the failure this script exists to
  * demonstrate rather than commit. */
-const NAMES = Object.keys(PRIOR).filter((n) => PRIOR[n] > 0);
-const FROZEN = Object.keys(PRIOR).filter((n) => !(PRIOR[n] > 0));
+const NAMES = Object.keys(PRIOR).filter((n) => PRIOR[n] > 0 && !FROZEN_BY_HAND.has(n));
+const FROZEN = Object.keys(PRIOR).filter((n) => !NAMES.includes(n));
 
 function reg(k) {
   let sum = 0;
@@ -180,7 +150,7 @@ const baseHold = rawEvaluate(K, "holdout");
 console.log(`regularisation lambda ${LAMBDA}`);
 console.log(`baseline   fit ${baseFit.toFixed(4)}   holdout ${baseHold.toFixed(4)}`);
 console.log(`searching ${NAMES.length} coefficients, ${SWEEPS} sweeps, ${ITERS} iterations/case`);
-if (FROZEN.length) console.log(`frozen at zero (disabled mechanisms): ${FROZEN.join(", ")}`);
+if (FROZEN.length) console.log(`frozen: ${FROZEN.join(", ")}`);
 console.log();
 
 for (let sweep = 1; sweep <= SWEEPS; sweep++) {

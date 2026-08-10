@@ -9,28 +9,26 @@ answer.
 74 countries. Order of battle, economy, demography, logistics, energy, industry,
 geography, munitions stocks, nuclear forces, and a set of qualitative indices.
 
-**It is graded, and it does not grade well.** Fifteen historical wars with known
-outcomes run through the same simulation, in the app or from a terminal, on
-demand. It calls **9 of 15 outcomes correctly**, which sounds respectable and is
-the least interesting way to score a model that emits a distribution.
+**It is graded on the distribution it produces, not on a point estimate.**
+Fifteen historical wars with known outcomes run through the same simulation, in
+the app or from a terminal, on demand. It calls **8 of 15 outcomes correctly**,
+which is the least interesting way to score a model that emits a distribution.
 
-Graded as a *forecast* — proper scoring rules on the whole distribution rather
-than a pass mark on the mean — it is **worse than knowing nothing about the
-forces involved**. Its Brier score is 0.77 against 0.56 for a forecaster who
-ignores every order of battle and predicts the base rate of outcomes: a skill
-score of **−38%**. The real duration falls inside its central 50% band **0%** of
-the time.
+Scored as a forecast, against a forecaster who ignores every order of battle and
+just knows how wars usually go, it is now **level with that baseline** — Brier
+skill −2%, log skill −2%. That is a poor result stated honestly, and it is a
+very large improvement on where it was a short time ago: **−38% and −187%**. The
+model has not become more accurate. It has stopped claiming to be certain.
 
-The cause is confidence rather than ignorance, and that distinction is
-measurable. Shrink every forecast 70% of the way toward the base rate and the
-same model scores **+9%** — better than climatology. It knows something. It does
-not know it remotely as certainly as it says. Details, and what that implies,
-are in [The model is badly overconfident](#the-model-is-badly-overconfident)
-below.
+It used to report 100% routinely and be wrong a third of the time, because the
+Monte Carlo sampled every uncertainty except the one that mattered — whether the
+model itself is right. It now samples that too, and the details, including which
+parts of the fix are mechanisms and which is a declared fudge, are in
+[Overconfidence, and what fixing it cost](#overconfidence-and-what-fixing-it-cost).
 
-Six of the fifteen cases are held out from coefficient fitting and scored
-separately. The failures are listed rather than hidden — as is the case where
-the backtest was, until recently, marking its own homework.
+Six of the fifteen cases are held out from calibration and coefficient fitting
+and scored separately. The failures are listed rather than hidden — as is the
+case where the backtest was, until recently, marking its own homework.
 
 ## Running it
 
@@ -302,66 +300,101 @@ The residual error is still large and the remaining failures are specific:
 
 Treat durations and casualty figures as much weaker than the outcome verdict.
 
-### The model is badly overconfident
+### Overconfidence, and what fixing it cost
 
-The pass counts above — 9 of 15, 5 of 15 — are legible and coarse, and they
-flatter the model. "Within 3× of the mean duration" throws away everything the
-Monte Carlo produced, and a case sitting near that threshold flips on iteration
-count alone, which is what prompted looking at this properly. A model whose
-whole claim is that it reports a distribution should be graded on the
-distribution.
+The pass counts — 8 of 15, 4 of 15 — are legible, coarse, and they flatter the
+model. "Within 3x of the mean duration" throws away everything the Monte Carlo
+produced, and a case near that threshold flips on iteration count alone, which
+is what prompted looking at this properly. A model whose whole claim is that it
+reports a distribution should be graded on the distribution.
 
-Scored that way, with Brier and log scores against the base rate of outcomes in
-these fifteen wars:
+Scored that way it was a disaster. Against the base rate of outcomes in these
+fifteen wars:
 
 | | Brier | skill | log score | skill |
 |---|---|---|---|---|
 | Base rate — ignores the forces entirely | 0.56 | — | 0.95 | — |
-| **The model as it stands** | **0.77** | **−38%** | **2.73** | **−187%** |
-| The same model, tempered toward the base rate at t=0.30 | 0.51 | +9% | 0.90 | +6% |
+| Before | 0.77 | −38% | 2.73 | **−187%** |
+| **Now** | **0.57** | **−2%** | **0.97** | **−2%** |
 
-The reliability table says why in one glance:
+The reliability tables say what changed. Before, fifty-six of sixty forecasts
+sat at one extreme: when it said impossible it happened an eighth of the time,
+and when it said certain it happened two thirds of the time.
 
-| When the model said | it actually happened | forecasts |
+| When it said | it happened (before) | it happened (now) |
 |---|---|---|
-| 0–5% (mean 0%) | **12%** | 43 |
-| 5–25% (mean 8%) | 50% | 2 |
-| 75–95% (mean 92%) | **0%** | 2 |
-| 95–100% (mean 100%) | **69%** | 13 |
+| 0–5% | **12%** | 0% |
+| 5–25% | 50% | 19% |
+| 25–75% | *never said this* | 50% |
+| 75–95% | **0%** | 63% |
+| 95–100% | **69%** | *never says this* |
 
-Fifty-six of sixty forecasts are at one extreme or the other. When it says
-something is impossible it happens an eighth of the time, and when it says
-something is certain it happens two thirds of the time. A confidently wrong
-forecast is enormously expensive under a log score, which is why that skill
-number is −187% while the pass counts look fine.
+It no longer makes claims it cannot support, and the middle of the range — which
+it previously never used at all — now lands close to the diagonal.
 
-The tempering row is the useful part. The model's *ranking* of outcomes carries
-real information — discard 70% of its confidence and it beats climatology — but
-its certainty is close to worthless. Those are different failures with different
-fixes, and the pass counts cannot tell them apart.
+**Why it was wrong.** The Monte Carlo sampled everything a planner would be
+unsure about and then treated the model's own coefficients as exact. With every
+uncertain input agreeing, nothing was left to disagree, so the answer came back
+100%. For a model that gets nearly half of these outcomes wrong, no forecast
+should ever read 100%.
 
-**Duration and casualties are worse still.**
+**Three things fixed it, and only two of them are mechanisms.**
+
+*Coefficients are resampled per run* (`structSpread`). Every number in `K` is a
+hand-set guess, so each run draws its own values, clamped to the same defensible
+ranges the fitter is bounded by. A run is a war fought by a slightly different
+model. On its own this helped the held-out cases and barely moved the fitting
+ones — no plausible draw of `defBase` flips a seven-to-one force ratio.
+
+*The net assessment itself is uncertain* (`fogSigma`). A lognormal error on the
+effective ground force ratio, drawn once per run: the claim that the order of
+battle tells you the balance is the assumption behind every confident pre-war
+prediction in history, and it is wrong about doctrine, about what a force can do
+on the day, and about which of two armies has quietly rotted. This did most of
+the mechanistic work.
+
+*And an admission that neither is enough* (`modelError`). Some wars are decided
+by machinery this model does not contain — Kosovo by coercion it does not
+implement, Korea by an intervention it cannot see, Vietnam by a politics it does
+not hold. No draw of any coefficient helps there, because the error is not
+uncertainty but answering a different question. In 30% of runs the model
+therefore discards its own answer and reports ignorance instead: outcome uniform
+over the three that are possible, duration scattered widely around what it
+simulated. **This is a fudge and is labelled as one in the code.** It is a
+smaller fudge than reporting 100% and being wrong a third of the time, which is
+also a fudge, just an undeclared one.
+
+**How the three were calibrated, and where that got uncomfortable.** Swept on
+the nine fitting cases, checked on the six held out. The fitting set's optimum
+for `modelError` is about 0.6 — but the fitting set contains most of the wars
+the model gets structurally wrong, so it rewards the model for saying as little
+as possible, and at 0.6 the held-out score is *worse* than at 0.15 and two more
+outcomes are lost. That is a degenerate solution: the model wins by refusing to
+answer. The shipped 0.30 sits between the fitting optimum and the held-out one,
+and is defensible as a statement in its own right — that about three wars in ten
+are outside what this model represents, against an observed outcome error rate
+near half. Three dispersion parameters calibrated on nine cases is thin, and the
+held-out check (+22% Brier skill, +22% log skill) is the only thing standing
+between this and a fitted fudge.
+
+**What it cost.** The pass counts got worse: outcomes 9 → 8, durations 5 → 4,
+casualties 2 → 1, mean probability mass on the truth 60% → 50%. A hedged
+distribution has a less decisive mode and a less lucky mean. Those counts reward
+confidence; the calibration metrics reward honesty; the model cannot serve both
+and this is the trade, made deliberately.
+
+**What is still wrong.** Tempering the output a further 50% toward the base rate
+*still* gains about 8%, so residual overconfidence remains — the 75–95% band
+still overshoots. Duration is the worse story: the real duration lands inside
+the central 50% band 7% of the time against a target of 50%, and mean PIT is
+0.31 against a target of 0.50. Dispersion widened the tails without touching the
+bias, which is the same over-prediction the section above describes and is not
+fixed by any of this.
 
 | | mean PIT | in the 50% band | in the 90% band |
 |---|---|---|---|
-| Duration | 0.29 | 0% (want 50%) | 20% (want 90%) |
-| Casualties | 0.33 | — | 27% (want 90%) |
-
-PIT is where the real answer landed in the predicted distribution; 0.50 is
-unbiased. At 0.29 the model systematically over-predicts duration — the same
-bias the pass counts show, now measured as a distribution rather than a tally,
-and visible as a single number that any change can be tested against. The
-coverage figures say the spread is far too narrow: a band that should contain
-reality half the time contains it never.
-
-**Why this happens, and what would fix it.** The Monte Carlo samples parameter
-uncertainty — leadership, force quality, industrial output — and nothing else.
-It has no representation of the possibility that the *model* is wrong, so a
-matchup where every sampled parameter points the same way returns 100%. For a
-model that gets 6 of 15 outcomes wrong, no honest forecast should ever read
-100%. The fix is a structural-uncertainty term rather than more tuning of the
-existing coefficients, and until that exists the tempering factor above is a
-fair summary of how much of the confidence to believe.
+| Duration | 0.31 (want 0.50) | 7% (want 50%) | 40% (want 90%) |
+| Casualties | 0.36 | — | 60% (want 90%) |
 
 ### The horizon was doing the work, and one case was marking its own homework
 
@@ -555,11 +588,11 @@ table and in "show your work."
 is calibrated against the backtest rather than measured, and the code says so
 where that is true.
 
-**It is overconfident, and by a measured amount.** When it says an outcome is
-certain, that outcome happens about two thirds of the time; when it says
-impossible, about an eighth. Discount its certainty accordingly — the section on
-calibration above quantifies by how much — and treat the *ranking* of outcomes
-as the part worth reading.
+**It is still somewhat overconfident, and part of its humility is bought rather
+than earned.** Three in ten runs are the model declining to answer rather than
+simulating anything — see the calibration section — which is honest but is not
+knowledge. Shrinking the remaining output halfway toward the base rate still
+improves its score.
 
 **Durations and casualty counts are much weaker than the outcome verdict.**
 Short decisive wars still run too long and the casualty figures inherit that
